@@ -73,13 +73,17 @@ Project dependencies: `Host → Server.* → {Network, Database, Data, Scripting
 Each milestone means adding one "working vertical slice".
 
 - [x] **M0: Scaffolding** — solution, projects, build/test, documentation.
-- [ ] **M1: Network core** — crypto (AES-OFB / shanda), PacketReader/Writer, opcode loader
-      + unit tests. **← current**
-- [ ] **M2: Hello handshake** — accept TCP → send Hello → client syncs encryption. Confirm
-      handshake byte-match with RirePE.
-- [ ] **M3: Login authentication** — handle `CP_CheckPassword`, reply
-      `LP_CheckPasswordResult`. Login screen → ID/PW auth passes. **(near-term key goal)**
-- [ ] **M4: World / channel select** — world list, channel select, character list.
+- [x] **M1: Network core** — crypto (AES-OFB / shanda), PacketReader/Writer, opcode loader,
+      Hello builder + 21 unit tests (all green). Golden-vector cross-check vs Java is
+      deferred (see Backlog improvements).
+- [x] **M2: Hello handshake wire-up** — Pipelines codec + `MapleSession` + `MapleListener`;
+      accept TCP → send Hello → client syncs encryption. Verified via in-memory + loopback
+      integration tests. Handshake byte-match vs a real client/RirePE still to be confirmed.
+- [x] **M3: Login authentication** — `LoginHandler` parses `CP_CheckPassword`, `LoginService`
+      auto-registers/authenticates, replies `LP_CheckPasswordResult` (exact JMS v186 success
+      layout). End-to-end encrypted login test green. Runnable `Cronus.Server.Host` binds the
+      login port.
+- [ ] **M4: World / channel select** — world list, channel select, character list. **← current**
 - [ ] **M5: Character select → channel migrate** — MigrateCommand to the channel server.
 - [ ] **M6: Map entry** — spawn the character into a field, sync movement.
 - [ ] **M7: Basic gameplay** — inventory, NPC dialogue (Jint scripts), simple combat.
@@ -91,23 +95,33 @@ parity is on the order of half a year.
 
 ## 5. Backlog (work and improvements)
 
-### In progress (M1)
-- [x] Solution/project scaffolding, docs, .gitignore, LICENSE
-- [ ] `Cronus.Common`: `Region`, `MapleVersion`, `ServerConfig` (JMS/186/MS932/region=3)
-- [ ] `Cronus.Network.Crypto.AesOfbCipher`: AES-OFB crypt / header write+read / check /
+### Done (M1)
+- [x] Solution/project scaffolding, docs, .gitignore, .gitattributes, LICENSE
+- [x] `Cronus.Common`: `Region`, `ServerConfig` (JMS/186/MS932/region=3), `CodePage`
+- [x] `Cronus.Network.Crypto.AesOfbCipher`: AES-OFB crypt / header write+read / check /
       IV advance (funnyShit) / multiplyBytes
-- [ ] `Cronus.Network.Crypto.ShandaCipher`: encryptData / decryptData (unused by JMS, ported)
-- [ ] `Cronus.Network.Packets.PacketWriter` / `PacketReader` (LE + MS932)
-- [ ] `Cronus.Network.Packets.OpcodeTable`: .properties loader (`@HEX` and `BASE ± offset`)
-- [ ] opcode data `data/opcodes/JMS_v186_*.properties`
-- [ ] `Cronus.Network.Tests`: crypto round-trip, header write/read, opcode resolution
+- [x] `Cronus.Network.Crypto.ShandaCipher`: encrypt / decrypt (unused by JMS, ported)
+- [x] `Cronus.Network.Packets.PacketWriter` / `PacketReader` (LE + MS932)
+- [x] `Cronus.Network.Packets.OpcodeTable`: .properties loader (`@HEX`, decimal, `BASE ± offset`)
+- [x] `Cronus.Network.Handshake`: plaintext Hello builder
+- [x] opcode data `data/opcodes/JMS_v186_*.properties`
+- [x] `Cronus.Network.Tests`: 21 tests — crypto round-trip (+multi-block, +IV lockstep),
+      header write/read/check, shanda round-trip, opcode resolution, packet primitives, Hello
 
-### Next (M2–M3)
-- [ ] `MapleCodec` (Pipelines-based encoder/decoder)
-- [ ] `MapleSession` (holds IV pair, sends Hello, dispatches receives)
-- [ ] TCP listener (Login/Channel)
-- [ ] `Cronus.Server.Login`: Hello → CheckPassword handler
-- [ ] Account auth (interim: in-memory or simple SQLite/MySQL)
+### Done (M2–M3)
+- [x] `MapleSession` (Pipelines codec: holds IV pair, sends Hello, frames/dispatches)
+- [x] `IPacketHandler` / `PacketHandlerBase` dispatch
+- [x] `MapleListener` (TCP acceptor, one server session per connection)
+- [x] `Cronus.Server.Login`: `LoginHandler` (CP_CheckPassword) + `LoginPackets`
+      (LP_CheckPasswordResult, JMS v186 layout)
+- [x] Account auth interim: `InMemoryAccountRepository` + `LoginService` (auto-register)
+- [x] `Cronus.Server.Host`: runnable console host binding the login port (arg = port)
+
+### Next (M4)
+- [ ] World/channel model + `LP_WorldInformation` / `CP_WorldInfoRequest`
+- [ ] `CP_SelectWorld` → `LP_SelectWorldResult`, `CP_ViewAllChar` → character list
+- [ ] `LP_MigrateCommand` to hand off to the channel server
+- [ ] Persist accounts/characters (introduce `Cronus.Database`, EF Core + MySQL)
 
 ### Improvements / tech debt (ongoing)
 - [ ] **Add golden vectors**: run the Java build, capture handshake→login real bytes with

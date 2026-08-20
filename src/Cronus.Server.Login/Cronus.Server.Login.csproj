@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cronus.Common\Cronus.Common.csproj" />
+    <ProjectReference Include="..\Cronus.Network\Cronus.Network.csproj" />
+  </ItemGroup>
+
+</Project>

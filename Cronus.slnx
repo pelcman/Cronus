@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Cronus.Common/Cronus.Common.csproj" />
+    <Project Path="src/Cronus.Network/Cronus.Network.csproj" />
+    <Project Path="src/Cronus.Server.Host/Cronus.Server.Host.csproj" />
+    <Project Path="src/Cronus.Server.Login/Cronus.Server.Login.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cronus.Network.Tests/Cronus.Network.Tests.csproj" />
+    <Project Path="tests/Cronus.Server.Login.Tests/Cronus.Server.Login.Tests.csproj" />
+  </Folder>
+</Solution>
