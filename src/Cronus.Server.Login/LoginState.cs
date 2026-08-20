@@ -1,3 +1,5 @@
+using Cronus.Domain;
+
 namespace Cronus.Server.Login;
 
 /// <summary>

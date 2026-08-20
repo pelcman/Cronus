@@ -70,19 +70,27 @@ registry), structured so it can later be split behind gRPC. Physical World-serve
 and gRPC are out of initial scope.
 
 ```
-Cronus.sln
+Cronus.slnx
 ├─ src/
-│  ├─ Cronus.Common          … Region / MapleVersion / ServerConfig / constants / code page
-│  ├─ Cronus.Network         … ★ hand-written core: crypto, framing, PacketReader/Writer, opcodes
-│  ├─ Cronus.Database        … EF Core + Pomelo (MySQL). Reuse JMSv186's sql/ schema
-│  ├─ Cronus.Data            … wz_xml loader (≒ Maple2.File.Ingest / odin.provider.WzXML)
-│  ├─ Cronus.Scripting       … Jint. Reuse existing JS scripts (NPC/quest)
-│  ├─ Cronus.Server.Login    … login server
-│  ├─ Cronus.Server.Channel  … channel / game logic
-│  └─ Cronus.Server.Host     … entry point (DI composition, config, startup)
+│  ├─ Cronus.Common          … Region / ServerConfig / constants / code page
+│  ├─ Cronus.Domain          … Account, IAccountRepository (ports); in-memory adapter
+│  ├─ Cronus.Network         … ★ hand-written core: crypto, framing, PacketReader/Writer,
+│  │                            opcodes, MapleSession, MapleListener
+│  ├─ Cronus.Database        … EF Core + Pomelo (MySQL): CronusDbContext, DbAccountRepository
+│  ├─ Cronus.Data            … wz_xml loader (≒ Maple2.File.Ingest / odin.provider.WzXML) [later]
+│  ├─ Cronus.Scripting       … Jint. Reuse existing JS scripts (NPC/quest) [later]
+│  ├─ Cronus.Server.Login    … login server (LoginHandler/Service/Packets, World)
+│  ├─ Cronus.Server.Channel  … channel / game logic [later]
+│  └─ Cronus.Server.Host     … entry point (config, startup); MySQL via CRONUS_DB env var
 └─ tests/
-   └─ Cronus.Network.Tests   … crypto round-trip + packet header + opcode verification
+   ├─ Cronus.Network.Tests       … crypto round-trip, header, opcode, session, listener
+   ├─ Cronus.Server.Login.Tests  … login + world-select flow (end-to-end, encrypted)
+   └─ Cronus.Database.Tests      … repository + login-over-DB (EF Core InMemory provider)
 ```
+
+Dependency direction: `Server.* → {Network, Database, Domain, Common}`, `Database → Domain`,
+`Login → Domain`. `Network` depends only on `Common` (knows nothing about game logic).
+`Domain` holds the ports (repository interfaces) so infrastructure depends inward.
 
 ### JMSv186 (Java) → Cronus (C#) mapping
 
@@ -165,7 +173,12 @@ dotnet build Cronus.sln -c Debug
 # Run tests (crypto round-trip, etc.)
 dotnet test tests/Cronus.Network.Tests
 
-# Run the host (once implemented)
+# Run the host (login server; default port 8484, or pass a port)
+dotnet run --project src/Cronus.Server.Host          # in-memory accounts
+dotnet run --project src/Cronus.Server.Host 9595     # custom port
+
+# Persist accounts in MySQL: set a connection string (else it uses in-memory)
+$env:CRONUS_DB = "server=localhost;database=cronus;user=root;password=..."
 dotnet run --project src/Cronus.Server.Host
 ```
 

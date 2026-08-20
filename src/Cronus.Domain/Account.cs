@@ -1,12 +1,12 @@
-namespace Cronus.Server.Login;
+namespace Cronus.Domain;
 
-/// <summary>A player account. Interim model backing the login flow before the DB layer lands.</summary>
+/// <summary>A player account. Shared domain entity persisted by the database layer.</summary>
 public sealed class Account
 {
-    public required int Id { get; init; }
+    public int Id { get; set; }
 
     /// <summary>The MapleID / login name (without any trailing gender-mode underscore).</summary>
-    public required string LoginId { get; init; }
+    public required string LoginId { get; set; }
 
     /// <summary>Password verifier. Interim: stored as-is; TODO replace with a real hash.</summary>
     public required string Password { get; set; }
