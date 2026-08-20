@@ -1,4 +1,5 @@
 using Cronus.Domain;
+using Microsoft.EntityFrameworkCore;
 
 namespace Cronus.Database;
 
@@ -17,6 +18,7 @@ public sealed class DbCharacterRepository : ICharacterRepository
     {
         using CronusDbContext db = _contextFactory();
         return db.Characters
+            .Include(c => c.EquippedItems)
             .Where(c => c.AccountId == accountId && c.WorldId == worldId)
             .OrderBy(c => c.Id)
             .ToList();
@@ -25,7 +27,9 @@ public sealed class DbCharacterRepository : ICharacterRepository
     public Character? Find(int characterId)
     {
         using CronusDbContext db = _contextFactory();
-        return db.Characters.FirstOrDefault(c => c.Id == characterId);
+        return db.Characters
+            .Include(c => c.EquippedItems)
+            .FirstOrDefault(c => c.Id == characterId);
     }
 
     public bool NameExists(string name)
