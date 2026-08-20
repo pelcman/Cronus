@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Cronus.Common;
+using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
@@ -24,6 +25,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly ChannelPackets _packets;
     private readonly ICharacterRepository _characters;
     private readonly FieldRegistry _fields;
+    private readonly IMapProvider _maps;
     private readonly int _channelId;
 
     /// <summary>LP_TransferFieldReqIgnored reason: the portal is disabled.</summary>
@@ -44,11 +46,13 @@ public sealed class ChannelHandler : PacketHandlerBase
         ICharacterRepository characters,
         ServerConfig config,
         FieldRegistry? fields = null,
+        IMapProvider? maps = null,
         int channelId = 0)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
         _fields = fields ?? new FieldRegistry();
+        _maps = maps ?? new InMemoryMapProvider(Array.Empty<MapData>());
         _channelId = channelId;
 
         _opMigrateIn = clientOpcodes.Get(ClientOpcode.MigrateIn);
@@ -181,22 +185,47 @@ public sealed class ChannelHandler : PacketHandlerBase
         int targetMapId = packet.ReadInt();
         string portalName = packet.ReadString();
 
-        // Portal-by-name needs wz map data (portal graph) — not loaded yet. Refuse politely so
-        // the client unfreezes; direct map ids (e.g. /map-style transfers) work now.
-        if (targetMapId < 0 || !string.IsNullOrEmpty(portalName))
+        // A direct map id (portal name empty) is a /map-style jump: honor it as-is.
+        if (string.IsNullOrEmpty(portalName))
+        {
+            if (targetMapId < 0)
+            {
+                await session.SendAsync(_packets.TransferFieldReqIgnored(TransferDisabledPortal)).ConfigureAwait(false);
+                return;
+            }
+
+            await MovePlayerToMapAsync(session, targetMapId, spawnPortal: 0).ConfigureAwait(false);
+            return;
+        }
+
+        // Portal-by-name: look up the portal on the current map and follow its link.
+        MapData? currentMap = _maps.GetMap(_player.Character.MapId);
+        PortalData? portal = currentMap?.FindPortal(portalName);
+        if (portal is null || !portal.LinksToMap)
         {
             await session.SendAsync(_packets.TransferFieldReqIgnored(TransferDisabledPortal)).ConfigureAwait(false);
             return;
         }
 
-        await MovePlayerToMapAsync(session, targetMapId).ConfigureAwait(false);
+        int spawn = ResolveSpawnPortal(portal.TargetMapId, portal.TargetName);
+        await MovePlayerToMapAsync(session, portal.TargetMapId, spawn).ConfigureAwait(false);
+    }
+
+    /// <summary>Finds the spawn portal id in the destination map by its target-portal name.</summary>
+    private int ResolveSpawnPortal(int targetMapId, string targetPortalName)
+    {
+        MapData? target = _maps.GetMap(targetMapId);
+        PortalData? spawn = string.IsNullOrEmpty(targetPortalName)
+            ? target?.SpawnPortal
+            : target?.FindPortal(targetPortalName) ?? target?.SpawnPortal;
+        return spawn?.Id ?? 0;
     }
 
     /// <summary>
     /// Moves the bound player to another map: leave + announce, switch fields, SetField
     /// (map-change branch), then exchange enter-field packets in the new map.
     /// </summary>
-    private async ValueTask MovePlayerToMapAsync(MapleSession session, int targetMapId)
+    private async ValueTask MovePlayerToMapAsync(MapleSession session, int targetMapId, int spawnPortal)
     {
         FieldPlayer player = _player!;
         Field oldField = _field!;
@@ -205,7 +234,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         await oldField.BroadcastAsync(_packets.UserLeaveField(player.Character.Id)).ConfigureAwait(false);
 
         player.Character.MapId = targetMapId;
-        player.Character.Portal = 0;
+        player.Character.Portal = (byte)spawnPortal;
 
         await session.SendAsync(_packets.SetFieldChangeMap(player.Character, _channelId)).ConfigureAwait(false);
 

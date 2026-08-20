@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Cronus.Common/Cronus.Common.csproj" />
+    <Project Path="src/Cronus.Data/Cronus.Data.csproj" />
     <Project Path="src/Cronus.Database/Cronus.Database.csproj" />
     <Project Path="src/Cronus.Domain/Cronus.Domain.csproj" />
     <Project Path="src/Cronus.Network/Cronus.Network.csproj" />
@@ -9,6 +10,7 @@
     <Project Path="src/Cronus.Server.Login/Cronus.Server.Login.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Cronus.Data.Tests/Cronus.Data.Tests.csproj" />
     <Project Path="tests/Cronus.Database.Tests/Cronus.Database.Tests.csproj" />
     <Project Path="tests/Cronus.Network.Tests/Cronus.Network.Tests.csproj" />
     <Project Path="tests/Cronus.Server.Channel.Tests/Cronus.Server.Channel.Tests.csproj" />
