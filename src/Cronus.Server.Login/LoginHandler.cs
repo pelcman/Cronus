@@ -22,6 +22,7 @@ public sealed class LoginHandler : PacketHandlerBase
     private readonly ICharacterRepository _characters;
     private readonly IPEndPoint _channelEndpoint;
     private readonly int _characterSlots;
+    private readonly int _startMapId;
 
     private readonly int _opCheckPassword;
     private readonly int _opWorldInfoRequest;
@@ -40,7 +41,8 @@ public sealed class LoginHandler : PacketHandlerBase
         WorldRegistry? worlds = null,
         ICharacterRepository? characters = null,
         IPEndPoint? channelEndpoint = null,
-        int characterSlots = 3)
+        int characterSlots = 3,
+        int startMapId = 100000000)
     {
         _loginService = loginService;
         _packets = new LoginPackets(serverOpcodes, config);
@@ -48,6 +50,7 @@ public sealed class LoginHandler : PacketHandlerBase
         _characters = characters ?? new InMemoryCharacterRepository();
         _channelEndpoint = channelEndpoint ?? new IPEndPoint(IPAddress.Loopback, 7575);
         _characterSlots = characterSlots;
+        _startMapId = startMapId;
 
         _opCheckPassword = clientOpcodes.Get(ClientOpcode.CheckPassword);
         _opWorldInfoRequest = clientOpcodes.Get(ClientOpcode.WorldInfoRequest);
@@ -208,6 +211,7 @@ public sealed class LoginHandler : PacketHandlerBase
             Dex = 5,
             Int = 4,
             Luk = 4,
+            MapId = _startMapId,
         };
 
         Character created = _characters.Create(character);

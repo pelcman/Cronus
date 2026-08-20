@@ -1,0 +1,27 @@
+<imgdir name="100000000.img">
+  <imgdir name="info">
+    <int name="returnMap" value="100000000"/>
+  </imgdir>
+  <imgdir name="portal">
+    <imgdir name="0">
+      <string name="pn" value="sp"/>
+      <int name="pt" value="0"/>
+      <int name="x" value="0"/>
+      <int name="y" value="0"/>
+      <int name="tm" value="999999999"/>
+      <string name="tn" value=""/>
+    </imgdir>
+  </imgdir>
+  <imgdir name="life">
+    <imgdir name="0">
+      <string name="type" value="n"/>
+      <int name="id" value="9010000"/>
+      <int name="x" value="80"/>
+      <int name="y" value="0"/>
+      <int name="fh" value="1"/>
+      <int name="f" value="0"/>
+      <int name="rx0" value="60"/>
+      <int name="rx1" value="100"/>
+    </imgdir>
+  </imgdir>
+</imgdir>
