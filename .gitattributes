@@ -1,0 +1,24 @@
+# Normalize line endings: repo stores LF, checkout as-is per core.autocrlf.
+* text=auto
+
+# Source and text files
+*.cs text
+*.csproj text
+*.slnx text
+*.props text
+*.targets text
+*.json text
+*.md text
+*.properties text
+*.yml text
+*.yaml text
+*.editorconfig text
+*.gitattributes text
+*.gitignore text
+
+# Binary assets (never normalize)
+*.wz binary
+*.nx binary
+*.img binary
+*.png binary
+*.dll binary
