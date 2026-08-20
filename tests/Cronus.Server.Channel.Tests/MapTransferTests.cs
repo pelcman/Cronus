@@ -165,6 +165,46 @@ public class MapTransferTests
         Assert.Equal(104040000, hero.MapId); // character state updated
     }
 
+    // Verifies the transfer is persisted (a DB-backed repo would otherwise lose the new map).
+    private sealed class CountingRepository : ICharacterRepository
+    {
+        private readonly InMemoryCharacterRepository _inner = new();
+        public int SaveCount { get; private set; }
+
+        public IReadOnlyList<Character> ListByAccount(int accountId, int worldId) => _inner.ListByAccount(accountId, worldId);
+        public Character? Find(int characterId) => _inner.Find(characterId);
+        public bool NameExists(string name) => _inner.NameExists(name);
+        public Character Create(Character character) => _inner.Create(character);
+        public bool Delete(int characterId) => _inner.Delete(characterId);
+        public void Save(Character character) { SaveCount++; _inner.Save(character); }
+    }
+
+    [Fact]
+    public async Task Transfer_PersistsNewMap()
+    {
+        var repo = new CountingRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Saver", MapId = 100000000, Hp = 50,
+        });
+
+        var fields = new FieldRegistry();
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        await client.RequestTransferAsync(mapId: 104040000, portalName: string.Empty);
+        await client.MapChanged.Task.WaitAsync(cts.Token);
+
+        Assert.True(repo.SaveCount >= 1); // the transfer flushed the character
+        Assert.Equal(104040000, hero.MapId);
+    }
+
     [Fact]
     public async Task MapCommand_MovesPlayer()
     {
