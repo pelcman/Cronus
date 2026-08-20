@@ -238,13 +238,19 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await session.SendAsync(_packets.StatChanged(_player.Character, StatFlag.Meso)).ConfigureAwait(false);
                 break;
 
+            case "notice" when parts.Length >= 2:
+                await _field!.BroadcastAsync(_packets.BroadcastNotice(command["notice ".Length..].Trim()))
+                    .ConfigureAwait(false);
+                break;
+
             case "pos":
                 await ReplyAsync(session, $"pos: ({_player!.X}, {_player.Y}) map {_player.Character.MapId}")
                     .ConfigureAwait(false);
                 break;
 
             case "help":
-                await ReplyAsync(session, "commands: !map <id>, !meso <n>, !pos, !help").ConfigureAwait(false);
+                await ReplyAsync(session, "commands: !map <id>, !meso <n>, !notice <msg>, !pos, !help")
+                    .ConfigureAwait(false);
                 break;
 
             default:

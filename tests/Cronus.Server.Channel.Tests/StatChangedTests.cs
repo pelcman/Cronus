@@ -35,6 +35,24 @@ public class StatChangedTests
     }
 
     [Fact]
+    public void BroadcastNotice_Layout()
+    {
+        var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
+
+        byte[] notice = packets.BroadcastNotice("hello world");
+        var reader = new PacketReader(notice, ServerConfig.Jms186.CodePage);
+        Assert.Equal(ServerOps.Get(ServerOpcode.BroadcastMsg), reader.ReadHeader());
+        Assert.Equal(0, reader.ReadByte()); // BM_NOTICE
+        Assert.Equal("hello world", reader.ReadString());
+        Assert.Equal(0, reader.Remaining);
+
+        byte[] alert = packets.BroadcastNotice("!", alert: true);
+        var alertReader = new PacketReader(alert, ServerConfig.Jms186.CodePage);
+        alertReader.ReadHeader();
+        Assert.Equal(1, alertReader.ReadByte()); // BM_ALERT
+    }
+
+    [Fact]
     public void StatChanged_MultipleStats_WrittenInBitOrder()
     {
         var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
