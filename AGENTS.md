@@ -101,8 +101,12 @@ Each milestone means adding one "working vertical slice".
 - [x] **M7c: WZ data (`Cronus.Data`)** — WzData XML parser (wz_xml format), MapData/PortalData,
       WzMapProvider (on-demand load from a wz_xml tree via CRONUS_WZ) + InMemoryMapProvider.
       Portal graph now drives map transfer.
-- [ ] **M8: Gameplay content** — starter equipment + item serialization, NPC dialogue (Jint
-      scripting), NPC/mob spawn packets, simple combat. **← current**
+- [x] **M8a: NPC dialogue scripting (`Cronus.Scripting`)** — Jint engine running OdinMS-style
+      JS scripts; NpcConversation (blocking-thread `cm`: sendNext/sendOk/askYesNo/askMenu/
+      askText); CP_UserSelectNpc → run script, CP_UserScriptMessageAnswer → advance;
+      LP_ScriptMessage encoder. Folder/dictionary script sources; sample script.
+- [ ] **M8b: Gameplay content** — starter equipment + item serialization, NPC/mob spawn
+      packets (LP_NpcEnterField/LP_MobEnterField from wz life data), simple combat. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

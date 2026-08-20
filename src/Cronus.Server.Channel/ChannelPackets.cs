@@ -86,6 +86,46 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_ScriptMessage</c> for an NPC dialog line (ports <c>ResCScriptMan.ScriptMessage</c>,
+    /// JMS v186 path). <paramref name="param"/> is the v186+ speaker byte (0). SM_SAY includes the
+    /// prev/next flags; SM_ASKMENU/ASKYESNO/ASKTEXT/ASKACCEPT carry just the text (plus the
+    /// ASKTEXT default/min/max fields).
+    /// </summary>
+    public byte[] ScriptMessage(int npcId, int messageType, string text, bool prev, bool next)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ScriptMessage);
+        w.WriteByte(4);              // nSpeakerTypeID (unused)
+        w.WriteInt(npcId);           // nSpeakerTemplateID
+        w.WriteByte(messageType);    // nMsgType
+        w.WriteByte(0);              // param (JMS >= 180)
+
+        switch (messageType)
+        {
+            case 0: // SM_SAY
+                w.WriteString(text);
+                w.WriteBool(prev);
+                w.WriteBool(next);
+                break;
+            case 2: // SM_ASKYESNO
+            case 5: // SM_ASKMENU
+            case 13: // SM_ASKACCEPT
+                w.WriteString(text);
+                break;
+            case 3: // SM_ASKTEXT
+                w.WriteString(text);
+                w.WriteString(string.Empty); // default
+                w.WriteShort(0);             // min length
+                w.WriteShort(0);             // max length
+                break;
+            default:
+                w.WriteString(text);
+                break;
+        }
+
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {

@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cronus.Server.Channel\Cronus.Server.Channel.csproj" />
     <ProjectReference Include="..\..\src\Cronus.Data\Cronus.Data.csproj" />
+    <ProjectReference Include="..\..\src\Cronus.Scripting\Cronus.Scripting.csproj" />
     <ProjectReference Include="..\..\src\Cronus.Server.Login\Cronus.Server.Login.csproj" />
     <ProjectReference Include="..\..\src\Cronus.Domain\Cronus.Domain.csproj" />
     <ProjectReference Include="..\..\src\Cronus.Network\Cronus.Network.csproj" />

@@ -4,6 +4,7 @@ using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
+using Cronus.Scripting;
 
 namespace Cronus.Server.Channel;
 
@@ -22,23 +23,27 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// </summary>
     private const int MovePrefixLength = 4 + 4 + 1 + (4 * 4) + 4;
 
+    /// <summary>LP_TransferFieldReqIgnored reason: the portal is disabled.</summary>
+    private const byte TransferDisabledPortal = 1;
+
     private readonly ChannelPackets _packets;
     private readonly ICharacterRepository _characters;
     private readonly FieldRegistry _fields;
     private readonly IMapProvider _maps;
+    private readonly NpcScriptEngine? _npcScripts;
     private readonly int _channelId;
-
-    /// <summary>LP_TransferFieldReqIgnored reason: the portal is disabled.</summary>
-    private const byte TransferDisabledPortal = 1;
 
     private readonly int _opMigrateIn;
     private readonly int _opAliveAck;
     private readonly int _opUserMove;
     private readonly int _opUserChat;
     private readonly int _opTransferField;
+    private readonly int _opSelectNpc;
+    private readonly int _opScriptAnswer;
 
     private FieldPlayer? _player;
     private Field? _field;
+    private NpcConversation? _conversation;
 
     public ChannelHandler(
         OpcodeTable clientOpcodes,
@@ -47,12 +52,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         ServerConfig config,
         FieldRegistry? fields = null,
         IMapProvider? maps = null,
+        NpcScriptEngine? npcScripts = null,
         int channelId = 0)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
         _fields = fields ?? new FieldRegistry();
         _maps = maps ?? new InMemoryMapProvider(Array.Empty<MapData>());
+        _npcScripts = npcScripts;
         _channelId = channelId;
 
         _opMigrateIn = clientOpcodes.Get(ClientOpcode.MigrateIn);
@@ -60,6 +67,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
         _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
+        _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
+        _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
     }
 
     /// <summary>The character bound to this session after a successful migrate-in.</summary>
@@ -83,6 +92,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleTransferFieldAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opSelectNpc)
+        {
+            HandleSelectNpc(session, packet);
+        }
+        else if (opcode == _opScriptAnswer)
+        {
+            HandleScriptAnswer(packet);
+        }
         else if (opcode == _opAliveAck)
         {
             // Keep-alive acknowledged; nothing to do.
@@ -91,6 +108,9 @@ public sealed class ChannelHandler : PacketHandlerBase
 
     public override async ValueTask OnDisconnectedAsync(MapleSession session, Exception? error)
     {
+        _conversation?.End();
+        _conversation = null;
+
         if (_player is not null && _field is not null)
         {
             _field.Leave(_player.Character.Id);
@@ -170,6 +190,58 @@ public sealed class ChannelHandler : PacketHandlerBase
         byte[] chat = _packets.UserChat(
             _player.Character.Id, isGm: false, message, onlyBalloon);
         await _field.BroadcastAsync(chat).ConfigureAwait(false);
+    }
+
+    private void HandleSelectNpc(MapleSession session, PacketReader packet)
+    {
+        // One conversation at a time; ignore a new NPC while a script is still running.
+        if (_player is null || _npcScripts is null || _conversation is { IsEnded: false })
+        {
+            return;
+        }
+
+        // JMS v186 CP_UserSelectNpc: [npcObjectId:4][x:2][y:2]
+        int npcId = packet.ReadInt();
+
+        var dialog = new ChannelNpcDialog(session, _packets);
+        _conversation = _npcScripts.Start(npcId, dialog, _player.Character);
+    }
+
+    private void HandleScriptAnswer(PacketReader packet)
+    {
+        NpcConversation? conversation = _conversation;
+        if (conversation is null || conversation.IsEnded)
+        {
+            _conversation = null;
+            return;
+        }
+
+        // JMS v186 CP_UserScriptMessageAnswer: [nMsgType:1][action:1][payload by type]
+        int messageType = packet.ReadByte();
+        int action = (sbyte)packet.ReadByte();
+        int selection = -1;
+        string text = string.Empty;
+
+        if (action != 0)
+        {
+            switch (messageType)
+            {
+                case 5:  // SM_ASKMENU
+                    selection = packet.ReadInt();
+                    break;
+                case 3:  // SM_ASKTEXT
+                    text = packet.ReadString();
+                    break;
+                case 8:  // SM_ASKAVATAR
+                    selection = packet.ReadByte();
+                    break;
+                case 15: // SM_ASKSLIDEMENU
+                    selection = packet.ReadInt();
+                    break;
+            }
+        }
+
+        conversation.Advance(messageType, action, selection, text);
     }
 
     private async ValueTask HandleTransferFieldAsync(MapleSession session, PacketReader packet)
