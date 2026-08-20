@@ -142,8 +142,12 @@ Each milestone means adding one "working vertical slice".
 - [x] **M9h: Skills** — CP_UserSkillUpRequest spends SP to raise a skill (LP_StatChanged(Sp) +
       LP_ChangeSkillRecordResult); skill records written into CharacterData. Closes the
       level → SP → skill progression loop. (wz skill max-levels + DB persistence are follow-ups.)
-- [ ] **M10: Combat depth & content** — item drops (wz drop tables), mob movement/AI,
-      magic/ranged attacks, quest/skill DB persistence, wz skill data. **← current**
+- [x] **M9i: Mob control/movement** — one client is delegated a mob's AI
+      (LP_MobChangeController on entry); CP_MobMove is acked (LP_MobCtrlAck) and relayed
+      (LP_MobMove); control hands off to a remaining player on disconnect/transfer and clears
+      on death; server tracks mob position from the path.
+- [ ] **M10: Combat depth & content** — item drops (wz drop tables), magic/ranged attacks,
+      quest/skill DB persistence, wz skill data. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

@@ -24,6 +24,7 @@ public static class ClientOpcode
     public const string UserMeleeAttack = "CP_UserMeleeAttack";
     public const string DropPickUpRequest = "CP_DropPickUpRequest";
     public const string UserSkillUpRequest = "CP_UserSkillUpRequest";
+    public const string MobMove = "CP_MobMove";
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
     public const string UserSelectNpc = "CP_UserSelectNpc";
     public const string UserScriptMessageAnswer = "CP_UserScriptMessageAnswer";
@@ -61,6 +62,9 @@ public static class ServerOpcode
     public const string NpcEnterField = "LP_NpcEnterField";
     public const string MobEnterField = "LP_MobEnterField";
     public const string MobLeaveField = "LP_MobLeaveField";
+    public const string MobChangeController = "LP_MobChangeController";
+    public const string MobMove = "LP_MobMove";
+    public const string MobCtrlAck = "LP_MobCtrlAck";
     public const string DropEnterField = "LP_DropEnterField";
     public const string DropLeaveField = "LP_DropLeaveField";
 }

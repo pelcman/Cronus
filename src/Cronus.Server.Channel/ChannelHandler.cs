@@ -40,6 +40,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opMeleeAttack;
     private readonly int _opDropPickUp;
     private readonly int _opSkillUp;
+    private readonly int _opMobMove;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
@@ -72,6 +73,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opMeleeAttack = clientOpcodes.Get(ClientOpcode.UserMeleeAttack);
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
+        _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
@@ -106,6 +108,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleSkillUpAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opMobMove)
+        {
+            await HandleMobMoveAsync(session, packet).ConfigureAwait(false);
+        }
         else if (opcode == _opTransferField)
         {
             await HandleTransferFieldAsync(session, packet).ConfigureAwait(false);
@@ -134,8 +140,42 @@ public sealed class ChannelHandler : PacketHandlerBase
             _characters.Save(_player.Character); // persist last known map/stats on logout
             _field.Leave(_player.Character.Id);
             await _field.BroadcastAsync(_packets.UserLeaveField(_player.Character.Id)).ConfigureAwait(false);
+            await ReleaseControlledMobsAsync(_field, _player.Character.Id).ConfigureAwait(false);
             _player = null;
             _field = null;
+        }
+    }
+
+    /// <summary>
+    /// Releases mobs controlled by a departing player, handing them to another player in the
+    /// field when one is present (they receive LP_MobChangeController).
+    /// </summary>
+    private async ValueTask ReleaseControlledMobsAsync(Field field, int departingCharacterId)
+    {
+        FieldPlayer? successor = field.Players.FirstOrDefault();
+
+        foreach (FieldMob mob in field.Mobs)
+        {
+            if (mob.ControllerId != departingCharacterId)
+            {
+                continue;
+            }
+
+            if (successor is null || mob.IsDead)
+            {
+                mob.ControllerId = -1;
+                continue;
+            }
+
+            mob.ControllerId = successor.Character.Id;
+            try
+            {
+                await successor.Session.SendAsync(_packets.MobChangeController(mob)).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                mob.ControllerId = -1; // successor is going away too
+            }
         }
     }
 
@@ -179,9 +219,22 @@ public sealed class ChannelHandler : PacketHandlerBase
             await session.SendAsync(_packets.NpcEnterField(npc)).ConfigureAwait(false);
         }
 
+        int characterId = _player!.Character.Id;
         foreach (FieldMob mob in field.Mobs)
         {
+            if (mob.IsDead)
+            {
+                continue;
+            }
+
             await session.SendAsync(_packets.MobEnterField(mob)).ConfigureAwait(false);
+
+            // Uncontrolled mobs are delegated to this client (client-side AI simulation).
+            if (mob.ControllerId is -1 || mob.ControllerId == characterId)
+            {
+                mob.ControllerId = characterId;
+                await session.SendAsync(_packets.MobChangeController(mob)).ConfigureAwait(false);
+            }
         }
     }
 
@@ -236,6 +289,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
             if (mob.IsDead)
             {
+                mob.ControllerId = -1;
                 await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
                 await GrantKillExpAsync(session, mob.Exp).ConfigureAwait(false);
                 await DropMesoAsync(mob).ConfigureAwait(false);
@@ -254,6 +308,65 @@ public sealed class ChannelHandler : PacketHandlerBase
         int meso = Math.Max(1, mob.MaxHp / 5); // placeholder formula
         FieldDrop drop = _field.AddMesoDrop(meso, mob.X, mob.Y, mob);
         await _field.BroadcastAsync(_packets.DropEnterFieldMeso(drop)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Byte length of the JMS v186 CP_MobMove fields between the skill int and the CMovePath:
+    /// int ×2 (JMS &gt;= 186), byte, int, 0xFFDDCC ×2, int.
+    /// </summary>
+    private const int MobMoveMidLength = 4 + 4 + 1 + 4 + 4 + 4 + 4;
+
+    private async ValueTask HandleMobMoveAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_MobMove:
+        //   [mobOid:4][moveId:2][nextAttack:1][left:1][mobSkill:4][mid fields][movePath raw]
+        int mobOid = packet.ReadInt();
+        short moveId = packet.ReadShort();
+        bool nextAttackPossible = packet.ReadBool();
+        byte left = packet.ReadByte();
+        int mobSkill = packet.ReadInt();
+
+        if (packet.Remaining <= MobMoveMidLength)
+        {
+            return;
+        }
+
+        packet.Skip(MobMoveMidLength);
+        byte[] movePath = packet.ReadRemaining();
+
+        FieldMob? mob = _field.FindMob(mobOid);
+        if (mob is null || mob.IsDead)
+        {
+            return;
+        }
+
+        // Only the assigned controller may steer the mob; adopt it if it has none.
+        int characterId = _player.Character.Id;
+        if (mob.ControllerId is -1)
+        {
+            mob.ControllerId = characterId;
+        }
+        else if (mob.ControllerId != characterId)
+        {
+            return;
+        }
+
+        // Track the path origin as the mob's position (same convention as player movement).
+        if (movePath.Length >= 4)
+        {
+            mob.X = (short)(movePath[0] | (movePath[1] << 8));
+            mob.Y = (short)(movePath[2] | (movePath[3] << 8));
+        }
+
+        await session.SendAsync(_packets.MobCtrlAck(mob, moveId, aggro: false)).ConfigureAwait(false);
+        await _field.BroadcastAsync(
+            _packets.MobMove(mob.ObjectId, nextAttackPossible, left, mobSkill, movePath),
+            exceptCharacterId: characterId).ConfigureAwait(false);
     }
 
     private async ValueTask HandleSkillUpAsync(MapleSession session, PacketReader packet)
@@ -512,6 +625,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         oldField.Leave(player.Character.Id);
         await oldField.BroadcastAsync(_packets.UserLeaveField(player.Character.Id)).ConfigureAwait(false);
+        await ReleaseControlledMobsAsync(oldField, player.Character.Id).ConfigureAwait(false);
 
         player.Character.MapId = targetMapId;
         player.Character.Portal = (byte)spawnPortal;
