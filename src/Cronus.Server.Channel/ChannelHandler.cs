@@ -37,6 +37,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opAliveAck;
     private readonly int _opUserMove;
     private readonly int _opUserChat;
+    private readonly int _opMeleeAttack;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
@@ -66,6 +67,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opAliveAck = clientOpcodes.Get(ClientOpcode.AliveAck);
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
         _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
+        _opMeleeAttack = clientOpcodes.Get(ClientOpcode.UserMeleeAttack);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
@@ -87,6 +89,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opUserChat)
         {
             await HandleUserChatAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opMeleeAttack)
+        {
+            await HandleMeleeAttackAsync(packet).ConfigureAwait(false);
         }
         else if (opcode == _opTransferField)
         {
@@ -189,6 +195,33 @@ public sealed class ChannelHandler : PacketHandlerBase
         await _field.BroadcastAsync(
             _packets.UserMove(_player.Character.Id, movePath),
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleMeleeAttackAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        AttackInfo attack = AttackParser.ParseMelee(packet);
+
+        foreach (AttackTarget target in attack.Targets)
+        {
+            FieldMob? mob = _field.FindMob(target.MobObjectId);
+            if (mob is null || mob.IsDead)
+            {
+                continue;
+            }
+
+            long damage = target.TotalDamage;
+            mob.Damage(damage > int.MaxValue ? int.MaxValue : (int)damage);
+
+            if (mob.IsDead)
+            {
+                await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
+            }
+        }
     }
 
     private async ValueTask HandleUserChatAsync(MapleSession session, PacketReader packet)

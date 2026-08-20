@@ -227,6 +227,18 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_MobLeaveField</c> (ports <c>ResCMobPool.MobLeaveField</c>): the mob's object
+    /// id and a dead-type animation (1 = killed / fade out).
+    /// </summary>
+    public byte[] MobLeaveField(int objectId, byte deadType = 1)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MobLeaveField);
+        w.WriteInt(objectId);
+        w.WriteByte(deadType);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {
