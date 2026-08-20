@@ -15,4 +15,5 @@ public enum LoginResult
     NotRegistered = 5,
     DbFail = 6,
     AlreadyConnected = 7,
+    NotConnectableWorld = 8,
 }
