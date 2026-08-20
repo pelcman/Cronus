@@ -40,11 +40,12 @@ var loginListener = new MapleListener(
             characters: characters, channelEndpoint: channelEndpoint),
         "login"));
 
+var fields = new FieldRegistry();
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, channelId: 0),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, channelId: 0),
         "channel"));
 
 using var cts = new CancellationTokenSource();

@@ -7,36 +7,54 @@ using Cronus.Network.Packets;
 namespace Cronus.Server.Channel;
 
 /// <summary>
-/// Handles channel-stage packets for one connection (ports <c>PacketHandler_Game</c> /
-/// <c>ReqCClientSocket.OnMigrateIn</c>, JMS v186 path). On <c>CP_MigrateIn</c>, loads the
-/// selected character and replies with <c>LP_SetField</c> to enter the game.
+/// Handles channel-stage packets for one connection (ports <c>PacketHandler_Game</c> paths for
+/// JMS v186). Flow: <c>CP_MigrateIn</c> loads the character, replies <c>LP_SetField</c>, and
+/// joins the character's field; afterwards movement (<c>CP_UserMove</c>) and chat
+/// (<c>CP_UserChat</c>) relay to everyone else in the same field, and disconnecting announces
+/// <c>LP_UserLeaveField</c>.
 /// </summary>
 public sealed class ChannelHandler : PacketHandlerBase
 {
+    /// <summary>
+    /// Byte length of the JMS v186 CP_UserMove prefix before the CMovePath buffer:
+    /// int(-1) ×2, one byte, int(-1) ×2 + int ×2, then one trailing int (JMS >= 164).
+    /// </summary>
+    private const int MovePrefixLength = 4 + 4 + 1 + (4 * 4) + 4;
+
     private readonly ChannelPackets _packets;
     private readonly ICharacterRepository _characters;
+    private readonly FieldRegistry _fields;
     private readonly int _channelId;
 
     private readonly int _opMigrateIn;
     private readonly int _opAliveAck;
+    private readonly int _opUserMove;
+    private readonly int _opUserChat;
+
+    private FieldPlayer? _player;
+    private Field? _field;
 
     public ChannelHandler(
         OpcodeTable clientOpcodes,
         OpcodeTable serverOpcodes,
         ICharacterRepository characters,
         ServerConfig config,
+        FieldRegistry? fields = null,
         int channelId = 0)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
+        _fields = fields ?? new FieldRegistry();
         _channelId = channelId;
 
         _opMigrateIn = clientOpcodes.Get(ClientOpcode.MigrateIn);
         _opAliveAck = clientOpcodes.Get(ClientOpcode.AliveAck);
+        _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
+        _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
     }
 
     /// <summary>The character bound to this session after a successful migrate-in.</summary>
-    public Character? Player { get; private set; }
+    public Character? Player => _player?.Character;
 
     public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader packet)
     {
@@ -44,9 +62,28 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleMigrateInAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opUserMove)
+        {
+            await HandleUserMoveAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opUserChat)
+        {
+            await HandleUserChatAsync(packet).ConfigureAwait(false);
+        }
         else if (opcode == _opAliveAck)
         {
             // Keep-alive acknowledged; nothing to do.
+        }
+    }
+
+    public override async ValueTask OnDisconnectedAsync(MapleSession session, Exception? error)
+    {
+        if (_player is not null && _field is not null)
+        {
+            _field.Leave(_player.Character.Id);
+            await _field.BroadcastAsync(_packets.UserLeaveField(_player.Character.Id)).ConfigureAwait(false);
+            _player = null;
+            _field = null;
         }
     }
 
@@ -58,15 +95,83 @@ public sealed class ChannelHandler : PacketHandlerBase
         Character? character = _characters.Find(characterId);
         if (character is null)
         {
-            // Unknown character: nothing sensible to enter with. Drop the request.
             return;
         }
 
-        Player = character;
+        var player = new FieldPlayer(character, session);
+        _player = player;
         session.UserData = character;
 
         (int, int, int) seeds = (RandomSeed(), RandomSeed(), RandomSeed());
         await session.SendAsync(_packets.SetFieldEnterGame(character, _channelId, seeds)).ConfigureAwait(false);
+
+        // Join the field: tell the newcomer about everyone already there, and vice versa.
+        Field field = _fields.Get(character.MapId);
+        foreach (FieldPlayer other in field.Players)
+        {
+            await session.SendAsync(_packets.UserEnterField(other)).ConfigureAwait(false);
+        }
+
+        field.Enter(player);
+        _field = field;
+        await field.BroadcastAsync(_packets.UserEnterField(player), exceptCharacterId: character.Id)
+            .ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleUserMoveAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_UserMove: fixed prefix then the raw CMovePath buffer, which is relayed
+        // verbatim (ResCUserRemote.UserMove re-emits the parsed bytes unchanged).
+        if (packet.Remaining <= MovePrefixLength)
+        {
+            return;
+        }
+
+        packet.Skip(MovePrefixLength);
+        byte[] movePath = packet.ReadRemaining();
+
+        UpdatePositionFromMovePath(_player, movePath);
+
+        await _field.BroadcastAsync(
+            _packets.UserMove(_player.Character.Id, movePath),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleUserChatAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186: [timestamp:4][message:str][onlyBalloon:1]
+        packet.ReadInt();
+        string message = packet.ReadString();
+        bool onlyBalloon = packet.Remaining > 0 && packet.ReadBool();
+
+        byte[] chat = _packets.UserChat(
+            _player.Character.Id, isGm: false, message, onlyBalloon);
+        await _field.BroadcastAsync(chat).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Extracts the start position from a CMovePath buffer:
+    /// <c>[startX:2][startY:2]...</c> (CMovePath::Decode reads the head as the origin point).
+    /// </summary>
+    private static void UpdatePositionFromMovePath(FieldPlayer player, byte[] movePath)
+    {
+        if (movePath.Length < 4)
+        {
+            return;
+        }
+
+        player.X = (short)(movePath[0] | (movePath[1] << 8));
+        player.Y = (short)(movePath[2] | (movePath[3] << 8));
     }
 
     private static int RandomSeed() => RandomNumberGenerator.GetInt32(int.MaxValue);
