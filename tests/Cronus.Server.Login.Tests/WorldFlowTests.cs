@@ -50,10 +50,9 @@ public class WorldFlowTests
         {
             if (opcode == _opCheckPwResult)
             {
-                if (packet.ReadByte() == (int)LoginResult.Success)
-                {
-                    await SendAsync(session, ClientOpcode.WorldInfoRequest);
-                }
+                // JMS v186 pushes the world list right after login; the client waits for it
+                // rather than requesting it.
+                _ = packet.ReadByte();
             }
             else if (opcode == _opWorldInfo)
             {

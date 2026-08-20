@@ -213,6 +213,18 @@ public sealed class LoginPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_JMS_SetMapLogin</c> telling the client which login-screen map to render
+    /// (ports <c>ResCLogin.SetMapLogin</c>, JMS v186 / pre-Big-Bang). Without this the JMS login
+    /// screen stays black.
+    /// </summary>
+    public byte[] SetMapLogin(string mapName = "MapLogin")
+    {
+        PacketWriter w = NewPacket(ServerOpcode.JmsSetMapLogin);
+        w.WriteString(mapName);
+        return w.ToArray();
+    }
+
     private PacketWriter NewPacket(string opcodeName)
     {
         int opcode = _serverOps.Get(opcodeName);

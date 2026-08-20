@@ -38,14 +38,25 @@ var channelEndpoint = new IPEndPoint(IPAddress.Loopback, channelPort);
 byte[] keepAlive = new PacketWriter(
     serverOps.Get(ServerOpcode.AliveReq), config.PacketHeaderSize, config.CodePage).ToArray();
 
+// Wire diagnostics: log every packet the server sends (opcode + length + hex).
+MapleSession.DebugOnSend = (role, body) =>
+{
+    ReadOnlySpan<byte> b = body.Span;
+    int opcode = b.Length >= 2 ? b[0] | (b[1] << 8) : -1;
+    Console.WriteLine($"[send:{role}] opcode 0x{opcode:X4} ({b.Length} bytes): {Convert.ToHexString(b)}");
+};
+
+int startMap = int.TryParse(Environment.GetEnvironmentVariable("CRONUS_STARTMAP"), out int sm) ? sm : 100000000;
+Console.WriteLine($"[map] new characters start in map {startMap}");
+
 var loginListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, loginPort),
     config,
     () => new LoggingHandler(
         new LoginHandler(clientOps, serverOps, loginService, config,
-            characters: characters, channelEndpoint: channelEndpoint),
+            characters: characters, channelEndpoint: channelEndpoint, startMapId: startMap),
         "login"),
-    keepAlive);
+    keepAlive: null); // keep-alive disabled during login diagnosis
 
 // Map data from a wz_xml tree if CRONUS_WZ points at one, else no static map data (portal-by-
 // name transfers degrade to "disabled portal"; direct map-id jumps still work; no NPCs spawn).

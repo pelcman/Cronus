@@ -24,7 +24,7 @@ public class HandshakeTests
         var reader = new PacketReader(hello, ServerConfig.Jms186.CodePage);
         reader.Skip(2); // size prefix
         Assert.Equal(186, reader.ReadShort());
-        Assert.Equal("0", reader.ReadString()); // sub-version
+        Assert.Equal("1", reader.ReadString()); // sub-version (JMS v186.1)
         Assert.Equal(recvIv, reader.ReadBytes(4));
         Assert.Equal(sendIv, reader.ReadBytes(4));
         Assert.Equal((byte)Region.Jms, reader.ReadByte());

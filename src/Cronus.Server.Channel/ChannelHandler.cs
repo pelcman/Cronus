@@ -197,6 +197,12 @@ public sealed class ChannelHandler : PacketHandlerBase
         (int, int, int) seeds = (RandomSeed(), RandomSeed(), RandomSeed());
         await session.SendAsync(_packets.SetFieldEnterGame(character, _channelId, seeds)).ConfigureAwait(false);
 
+        // Post-SetField initialization the JMS v186 client requires to finish entering the field
+        // (ports the ResCClientSocket.OnMigrateIn sequence): forced-stat reset, key map, macros.
+        await session.SendAsync(_packets.ForcedStatReset()).ConfigureAwait(false);
+        await session.SendAsync(_packets.FuncKeyMappedInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.MacroSysDataInit()).ConfigureAwait(false);
+
         // Join the field: tell the newcomer about everyone already there, and vice versa.
         Field field = _fields.Get(character.MapId);
         foreach (FieldPlayer other in field.Players)
