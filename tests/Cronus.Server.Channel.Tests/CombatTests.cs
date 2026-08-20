@@ -65,6 +65,7 @@ public class CombatTests
         private readonly int _opMobEnter = ServerOps.Get(ServerOpcode.MobEnterField);
         private readonly int _opMobLeave = ServerOps.Get(ServerOpcode.MobLeaveField);
 
+        private readonly int _opStat = ServerOps.Get(ServerOpcode.StatChanged);
         private int _mobOid = -1;
         private bool _setField;
 
@@ -75,6 +76,8 @@ public class CombatTests
         }
 
         public TaskCompletionSource<(int Oid, byte DeadType)> MobKilled { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<int> ExpGained { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override async ValueTask OnConnectedAsync(MapleSession session)
@@ -106,6 +109,12 @@ public class CombatTests
                 byte deadType = p.ReadByte();
                 MobKilled.TrySetResult((oid, deadType));
             }
+            else if (opcode == _opStat)
+            {
+                p.ReadByte();          // unlock
+                p.ReadInt();           // mask (Exp)
+                ExpGained.TrySetResult(p.ReadInt());
+            }
         }
 
         private async ValueTask MaybeAttack(MapleSession session)
@@ -129,7 +138,9 @@ public class CombatTests
             Portals = Array.Empty<PortalData>(),
             Mobs = new[] { new MobSpawn { TemplateId = 100100, X = 0, Y = 0, MaxHp = 50 } },
         };
-        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        // wz mob stats override the spawn placeholder: 50 HP, 25 exp.
+        var mobData = new InMemoryMobProvider(new[] { new MobData { TemplateId = 100100, MaxHp = 50, Exp = 25 } });
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }), mobData);
 
         // Two hits of 40 each = 80 > 50 HP -> dead.
         var client = new Fighter(hero.Id, new[] { 40, 40 });
@@ -147,12 +158,15 @@ public class CombatTests
         _ = clientSession.RunAsync(cts.Token);
 
         (int oid, byte deadType) = await client.MobKilled.Task.WaitAsync(cts.Token);
+        int exp = await client.ExpGained.Task.WaitAsync(cts.Token);
 
         FieldMob mob = Assert.Single(fields.Get(100000000).Mobs);
         Assert.Equal(mob.ObjectId, oid);
         Assert.Equal(1, deadType);
         Assert.True(mob.IsDead);
         Assert.Equal(0, mob.Hp);
+        Assert.Equal(25, exp);          // mob exp granted
+        Assert.Equal(25, hero.Exp);
     }
 
     [Fact]

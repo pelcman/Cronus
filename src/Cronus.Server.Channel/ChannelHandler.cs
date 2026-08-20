@@ -92,7 +92,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
         else if (opcode == _opMeleeAttack)
         {
-            await HandleMeleeAttackAsync(packet).ConfigureAwait(false);
+            await HandleMeleeAttackAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opTransferField)
         {
@@ -197,7 +197,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
     }
 
-    private async ValueTask HandleMeleeAttackAsync(PacketReader packet)
+    private async ValueTask HandleMeleeAttackAsync(MapleSession session, PacketReader packet)
     {
         if (_player is null || _field is null)
         {
@@ -220,8 +220,22 @@ public sealed class ChannelHandler : PacketHandlerBase
             if (mob.IsDead)
             {
                 await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
+                await GrantKillExpAsync(session, mob.Exp).ConfigureAwait(false);
             }
         }
+    }
+
+    private async ValueTask GrantKillExpAsync(MapleSession session, int exp)
+    {
+        if (exp <= 0 || _player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        c.Exp = (int)Math.Clamp((long)c.Exp + exp, 0, int.MaxValue);
+        _characters.Save(c);
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Exp)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleUserChatAsync(MapleSession session, PacketReader packet)

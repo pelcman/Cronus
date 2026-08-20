@@ -126,8 +126,10 @@ Each milestone means adding one "working vertical slice".
       FieldMob HP; damage application; LP_MobLeaveField on death. (The attack packet layout is
       ported from source — validate against a live capture; magic/shoot/body attacks, exp/drops,
       and the LP_UserMeleeAttack mirror to other players are follow-ups.)
-- [ ] **M10: Combat depth & content** — mob wz HP/stats, exp on kill, drops, mob movement/AI,
-      magic/ranged attacks, quests. **← current**
+- [x] **M9c: Mob wz stats + exp on kill** — `Cronus.Data` mob provider (Mob/{id}.img.xml →
+      maxHP/exp/level); FieldMob HP/exp from wz; killing a mob grants exp (LP_StatChanged).
+- [ ] **M10: Combat depth & content** — drops, mob movement/AI, magic/ranged attacks,
+      the LP_UserMeleeAttack mirror, quests. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
