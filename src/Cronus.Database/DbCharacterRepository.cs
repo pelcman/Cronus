@@ -42,4 +42,11 @@ public sealed class DbCharacterRepository : ICharacterRepository
         db.SaveChanges();
         return character;
     }
+
+    public void Save(Character character)
+    {
+        using CronusDbContext db = _contextFactory();
+        db.Characters.Update(character);
+        db.SaveChanges();
+    }
 }

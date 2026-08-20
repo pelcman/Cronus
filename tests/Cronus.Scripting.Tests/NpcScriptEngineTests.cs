@@ -148,6 +148,51 @@ public class NpcScriptEngineTests
         Assert.Null(engine.Start(123, new RecordingDialog(), null));
     }
 
+    private sealed class FakePlayer : INpcPlayer
+    {
+        public int Meso;
+        public int SaveCount;
+
+        public string getName() => "Hero";
+        public int getLevel() => 10;
+        public int getMapId() => 100000000;
+        public int getMeso() => Meso;
+        public void gainMeso(int amount)
+        {
+            Meso = Math.Max(0, Meso + amount);
+            SaveCount++;
+        }
+    }
+
+    [Fact]
+    public void ScriptCanReadAndMutatePlayer()
+    {
+        const int npcId = 9000003;
+        const string script = """
+            function start() {
+                if (player.getLevel() >= 10) {
+                    player.gainMeso(1000);
+                    cm.sendOk(player.getName() + " now has " + player.getMeso() + " mesos.");
+                }
+            }
+            """;
+
+        var engine = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+        var dialog = new RecordingDialog();
+        var player = new FakePlayer { Meso = 500 };
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation cm = engine.Start(npcId, dialog, player)!;
+
+        Prompt ok = dialog.Take(cts.Token);
+        Assert.Equal("Hero now has 1500 mesos.", ok.Text);
+        Assert.Equal(1500, player.Meso);
+        Assert.Equal(1, player.SaveCount);
+
+        cm.Advance(messageType: 0, action: 1, selection: -1, text: string.Empty);
+    }
+
     private static void WaitUntilEnded(NpcConversation cm, CancellationToken ct)
     {
         while (!cm.IsEnded)

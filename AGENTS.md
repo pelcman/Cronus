@@ -111,6 +111,9 @@ Each milestone means adding one "working vertical slice".
 - [x] **M8c: Mob spawning** — wz `life` mob placements → MapData.Mobs; Field.Mobs (own
       object-id base); LP_MobEnterField (control-normal, 16-byte temp-stat mask, pre-BB
       CMob::Init) on entry.
+- [x] **M8d: Script player API + GM commands** — NPC scripts get `player`
+      (getName/getLevel/getMapId/getMeso/gainMeso, persisted via ICharacterRepository.Save);
+      chat `!map/!pos/!help` GM commands.
 - [ ] **M9: Combat & content** — mob HP/aggro/movement, CP_UserMeleeAttack → damage,
       starter equipment + item serialization, quests. **← current**
 
