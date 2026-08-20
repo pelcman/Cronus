@@ -21,6 +21,9 @@ public sealed class FieldMob
 
     public int Hp { get; set; } = 100;
 
+    /// <summary>Experience granted on kill (from mob wz data; 0 if unknown).</summary>
+    public int Exp { get; init; }
+
     public bool IsDead => Hp <= 0;
 
     /// <summary>Applies damage, returns the new HP (clamped at 0).</summary>
@@ -86,11 +89,11 @@ public sealed class Field
     private readonly Dictionary<int, FieldPlayer> _players = new();
     private readonly object _gate = new();
 
-    public Field(int mapId, MapData? mapData = null)
+    public Field(int mapId, MapData? mapData = null, IMobProvider? mobs = null)
     {
         MapId = mapId;
         Npcs = BuildNpcs(mapData);
-        Mobs = BuildMobs(mapData);
+        Mobs = BuildMobs(mapData, mobs);
     }
 
     public int MapId { get; }
@@ -129,7 +132,7 @@ public sealed class Field
         return null;
     }
 
-    private static IReadOnlyList<FieldMob> BuildMobs(MapData? mapData)
+    private static IReadOnlyList<FieldMob> BuildMobs(MapData? mapData, IMobProvider? mobProvider)
     {
         if (mapData is null || mapData.Mobs.Count == 0)
         {
@@ -145,6 +148,10 @@ public sealed class Field
                 continue;
             }
 
+            // Prefer wz mob stats; fall back to the spawn's placeholder HP.
+            MobData? stats = mobProvider?.GetMob(spawn.TemplateId);
+            int maxHp = stats?.MaxHp ?? spawn.MaxHp;
+
             mobs.Add(new FieldMob
             {
                 ObjectId = oid++,
@@ -152,8 +159,9 @@ public sealed class Field
                 X = (short)spawn.X,
                 Y = (short)spawn.Y,
                 Foothold = spawn.Foothold,
-                MaxHp = spawn.MaxHp,
-                Hp = spawn.MaxHp,
+                MaxHp = maxHp,
+                Hp = maxHp,
+                Exp = stats?.Exp ?? 0,
             });
         }
 
@@ -252,8 +260,13 @@ public sealed class FieldRegistry
     private readonly Dictionary<int, Field> _fields = new();
     private readonly object _gate = new();
     private readonly IMapProvider? _maps;
+    private readonly IMobProvider? _mobs;
 
-    public FieldRegistry(IMapProvider? maps = null) => _maps = maps;
+    public FieldRegistry(IMapProvider? maps = null, IMobProvider? mobs = null)
+    {
+        _maps = maps;
+        _mobs = mobs;
+    }
 
     public Field Get(int mapId)
     {
@@ -261,7 +274,7 @@ public sealed class FieldRegistry
         {
             if (!_fields.TryGetValue(mapId, out Field? field))
             {
-                field = new Field(mapId, _maps?.GetMap(mapId));
+                field = new Field(mapId, _maps?.GetMap(mapId), _mobs);
                 _fields[mapId] = field;
             }
 

@@ -45,7 +45,8 @@ var loginListener = new MapleListener(
 // Map data from a wz_xml tree if CRONUS_WZ points at one, else no static map data (portal-by-
 // name transfers degrade to "disabled portal"; direct map-id jumps still work; no NPCs spawn).
 IMapProvider maps = CreateMapProvider();
-var fields = new FieldRegistry(maps);
+IMobProvider mobs = CreateMobProvider();
+var fields = new FieldRegistry(maps, mobs);
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js, if configured.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
@@ -94,6 +95,17 @@ static IMapProvider CreateMapProvider()
 
     Console.WriteLine($"[wz] Loading map data on demand from {wzRoot}");
     return new WzMapProvider(wzRoot);
+}
+
+static IMobProvider CreateMobProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
+    {
+        return new InMemoryMobProvider(Array.Empty<MobData>());
+    }
+
+    return new WzMobProvider(wzRoot);
 }
 
 static NpcScriptEngine? CreateNpcScriptEngine()
