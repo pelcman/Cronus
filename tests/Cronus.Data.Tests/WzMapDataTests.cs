@@ -74,11 +74,11 @@ public class WzMapDataTests
     }
 
     [Fact]
-    public void ParsesNpcLifeOnly()
+    public void ParsesNpcAndMobLife()
     {
         MapData map = MapData.FromWz(100000000, Parse(MapXml));
 
-        NpcSpawn npc = Assert.Single(map.Npcs); // the mob ("m") is skipped
+        NpcSpawn npc = Assert.Single(map.Npcs);
         Assert.Equal(9010000, npc.TemplateId);
         Assert.Equal(120, npc.X);
         Assert.Equal(-60, npc.Y);
@@ -87,6 +87,11 @@ public class WzMapDataTests
         Assert.Equal(100, npc.Rx0);
         Assert.Equal(140, npc.Rx1);
         Assert.False(npc.Hidden);
+
+        MobSpawn mob = Assert.Single(map.Mobs);
+        Assert.Equal(100100, mob.TemplateId);
+        Assert.Equal(300, mob.X);
+        Assert.Equal(0, mob.Y);
     }
 
     [Fact]

@@ -159,6 +159,11 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await session.SendAsync(_packets.NpcEnterField(npc)).ConfigureAwait(false);
         }
+
+        foreach (FieldMob mob in field.Mobs)
+        {
+            await session.SendAsync(_packets.MobEnterField(mob)).ConfigureAwait(false);
+        }
     }
 
     private async ValueTask HandleUserMoveAsync(PacketReader packet)

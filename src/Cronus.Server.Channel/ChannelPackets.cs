@@ -147,6 +147,39 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_MobEnterField</c> spawning a monster (ports <c>ResCMobPool.MobEnterField</c>
+    /// + <c>CMob_Init</c>, JMS v186 path: control-normal, a 16-byte all-zero temporary-stat mask,
+    /// and the pre-BB init tail — no temporary stats, MOBAPPEAR_NORMAL).
+    /// </summary>
+    public byte[] MobEnterField(FieldMob mob)
+    {
+        const int spawnStance = 5;
+
+        PacketWriter w = NewPacket(ServerOpcode.MobEnterField);
+        w.WriteInt(mob.ObjectId);     // dwMobID (runtime oid)
+        w.WriteByte(1);               // 1 = control normal
+        w.WriteInt(mob.TemplateId);   // mob template
+
+        // CMob::SetTemporaryStat — JMS v186 mask is 4 ints, all zero (no buffs).
+        for (int i = 0; i < 4; i++)
+        {
+            w.WriteInt(0);
+        }
+
+        // CMob::Init
+        w.WriteShort(mob.X);
+        w.WriteShort(mob.Y);
+        w.WriteByte(spawnStance);            // m_nMoveAction
+        w.WriteShort((short)mob.Foothold);   // current foothold
+        w.WriteShort((short)mob.Foothold);   // origin foothold
+        w.WriteByte(unchecked((byte)-1));    // nAppearType = MOBAPPEAR_NORMAL
+        w.WriteByte(unchecked((byte)-1));    // m_nTeamForMCarnival
+        w.WriteInt(0);                       // nEffectItemID (JMS >= 146)
+        w.WriteInt(0);                       // m_nPhase (JMS >= 165)
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {

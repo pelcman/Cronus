@@ -4,6 +4,20 @@ using Cronus.Network;
 
 namespace Cronus.Server.Channel;
 
+/// <summary>A spawned monster in a field: a runtime object id bound to a wz template + placement.</summary>
+public sealed class FieldMob
+{
+    public required int ObjectId { get; init; }
+
+    public required int TemplateId { get; init; }
+
+    public short X { get; init; }
+
+    public short Y { get; init; }
+
+    public int Foothold { get; init; }
+}
+
 /// <summary>A spawned NPC in a field: a runtime object id bound to a wz template + placement.</summary>
 public sealed class FieldNpc
 {
@@ -52,8 +66,9 @@ public sealed class FieldPlayer
 /// </summary>
 public sealed class Field
 {
-    /// <summary>Object-id base for NPCs, kept clear of DB character ids.</summary>
+    /// <summary>Object-id bases, kept clear of DB character ids and of each other.</summary>
     private const int NpcObjectIdBase = 1_000_000;
+    private const int MobObjectIdBase = 2_000_000;
 
     private readonly Dictionary<int, FieldPlayer> _players = new();
     private readonly object _gate = new();
@@ -62,12 +77,16 @@ public sealed class Field
     {
         MapId = mapId;
         Npcs = BuildNpcs(mapData);
+        Mobs = BuildMobs(mapData);
     }
 
     public int MapId { get; }
 
     /// <summary>NPCs spawned on this field (from wz life data); empty when no map data.</summary>
     public IReadOnlyList<FieldNpc> Npcs { get; }
+
+    /// <summary>Monsters spawned on this field (from wz life data); empty when no map data.</summary>
+    public IReadOnlyList<FieldMob> Mobs { get; }
 
     /// <summary>Finds a spawned NPC by its runtime object id.</summary>
     public FieldNpc? FindNpc(int objectId)
@@ -81,6 +100,35 @@ public sealed class Field
         }
 
         return null;
+    }
+
+    private static IReadOnlyList<FieldMob> BuildMobs(MapData? mapData)
+    {
+        if (mapData is null || mapData.Mobs.Count == 0)
+        {
+            return Array.Empty<FieldMob>();
+        }
+
+        var mobs = new List<FieldMob>(mapData.Mobs.Count);
+        int oid = MobObjectIdBase;
+        foreach (MobSpawn spawn in mapData.Mobs)
+        {
+            if (spawn.Hidden)
+            {
+                continue;
+            }
+
+            mobs.Add(new FieldMob
+            {
+                ObjectId = oid++,
+                TemplateId = spawn.TemplateId,
+                X = (short)spawn.X,
+                Y = (short)spawn.Y,
+                Foothold = spawn.Foothold,
+            });
+        }
+
+        return mobs;
     }
 
     private static IReadOnlyList<FieldNpc> BuildNpcs(MapData? mapData)

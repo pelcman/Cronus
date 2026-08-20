@@ -108,8 +108,11 @@ Each milestone means adding one "working vertical slice".
 - [x] **M8b: NPC spawning** — wz `life` NPC placements parsed into MapData; FieldRegistry
       populates fields with NPCs (runtime object ids); LP_NpcEnterField on entry/transfer;
       CP_UserSelectNpc resolves object id → template id → script.
-- [ ] **M8c: Gameplay content** — mob spawn (LP_MobEnterField), starter equipment + item
-      serialization, simple combat, quests. **← current**
+- [x] **M8c: Mob spawning** — wz `life` mob placements → MapData.Mobs; Field.Mobs (own
+      object-id base); LP_MobEnterField (control-normal, 16-byte temp-stat mask, pre-BB
+      CMob::Init) on entry.
+- [ ] **M9: Combat & content** — mob HP/aggro/movement, CP_UserMeleeAttack → damage,
+      starter equipment + item serialization, quests. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
