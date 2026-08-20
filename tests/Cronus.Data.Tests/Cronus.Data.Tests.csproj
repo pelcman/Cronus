@@ -16,4 +16,11 @@
     <ProjectReference Include="..\..\src\Cronus.Data\Cronus.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Ship the sample wz tree so the loader can be exercised against real files. -->
+    <None Include="..\..\data\sample-wz\**\*.xml" Link="sample-wz\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

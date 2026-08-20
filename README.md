@@ -33,7 +33,7 @@ A playable slice is up and running (all through the real encrypted protocol):
 - **Field** — multiplayer enter/leave, movement relay, chat, map transfer (portals)
 - **NPC dialogue** — JavaScript scripts (Jint) drive `LP_ScriptMessage` conversations
 
-59 tests, all green. See the roadmap and design notes in
+70 tests, all green. See the roadmap and design notes in
 [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md).
 
 > These tests prove internal consistency, not yet fidelity to the real Nexon client.
@@ -75,6 +75,19 @@ Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
 
 To connect a real client, point a JMS v186 client at the host via EmuClient's localhost
 redirect. Accounts auto-register on first login.
+
+### Try the bundled sample content
+
+A minimal map (100000000) with one talkable NPC and a matching script ship in the repo:
+
+```powershell
+$env:CRONUS_WZ = "data/sample-wz"
+$env:CRONUS_SCRIPTS = "scripts"
+dotnet run --project src/Cronus.Server.Host
+```
+
+New characters start in that map; the NPC (9010000) runs
+[scripts/npc/9010000.js](scripts/npc/9010000.js) when clicked.
 
 ### Docker (with MySQL persistence)
 
