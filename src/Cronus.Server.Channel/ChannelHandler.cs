@@ -232,13 +232,19 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await MovePlayerToMapAsync(session, mapId, spawnPortal: 0).ConfigureAwait(false);
                 break;
 
+            case "meso" when parts.Length >= 2 && int.TryParse(parts[1], out int amount):
+                _player!.Character.Meso = (int)Math.Clamp((long)_player.Character.Meso + amount, 0, int.MaxValue);
+                _characters.Save(_player.Character);
+                await session.SendAsync(_packets.StatChanged(_player.Character, StatFlag.Meso)).ConfigureAwait(false);
+                break;
+
             case "pos":
                 await ReplyAsync(session, $"pos: ({_player!.X}, {_player.Y}) map {_player.Character.MapId}")
                     .ConfigureAwait(false);
                 break;
 
             case "help":
-                await ReplyAsync(session, "commands: !map <id>, !pos, !help").ConfigureAwait(false);
+                await ReplyAsync(session, "commands: !map <id>, !meso <n>, !pos, !help").ConfigureAwait(false);
                 break;
 
             default:
@@ -265,7 +271,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         int templateId = _field?.FindNpc(objectId)?.TemplateId ?? objectId;
 
         var dialog = new ChannelNpcDialog(session, _packets);
-        var player = new ChannelPlayer(_player.Character, _characters);
+        var player = new ChannelPlayer(_player.Character, _characters, session, _packets);
         _conversation = _npcScripts.Start(templateId, dialog, player);
     }
 

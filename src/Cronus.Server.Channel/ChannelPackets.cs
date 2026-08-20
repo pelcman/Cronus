@@ -180,6 +180,38 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_StatChanged</c> for the changed stats in <paramref name="flags"/> (ports
+    /// <c>ResCWvsContext.StatChanged</c> + <c>EncodeChangeStat</c>, JMS v186 pre-BB path: 4-byte
+    /// mask, 16-bit HP/MP, no pet/extra tail). Values are written in ascending bit order.
+    /// </summary>
+    public byte[] StatChanged(Character c, StatFlag flags, bool unlock = true)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.StatChanged);
+        w.WriteByte(unlock ? (byte)1 : (byte)0); // bExclRequestSent
+        w.WriteInt((int)flags);                  // statmask (JMS < 302 = 4 bytes)
+
+        if (flags.HasFlag(StatFlag.Skin)) w.WriteByte(c.SkinColor);
+        if (flags.HasFlag(StatFlag.Face)) w.WriteInt(c.Face);
+        if (flags.HasFlag(StatFlag.Hair)) w.WriteInt(c.Hair);
+        if (flags.HasFlag(StatFlag.Level)) w.WriteByte(c.Level);
+        if (flags.HasFlag(StatFlag.Job)) w.WriteShort(c.Job);
+        if (flags.HasFlag(StatFlag.Str)) w.WriteShort(c.Str);
+        if (flags.HasFlag(StatFlag.Dex)) w.WriteShort(c.Dex);
+        if (flags.HasFlag(StatFlag.Int)) w.WriteShort(c.Int);
+        if (flags.HasFlag(StatFlag.Luk)) w.WriteShort(c.Luk);
+        if (flags.HasFlag(StatFlag.Hp)) w.WriteShort(c.Hp);       // pre-BB: 16-bit
+        if (flags.HasFlag(StatFlag.MaxHp)) w.WriteShort(c.MaxHp);
+        if (flags.HasFlag(StatFlag.Mp)) w.WriteShort(c.Mp);
+        if (flags.HasFlag(StatFlag.MaxMp)) w.WriteShort(c.MaxMp);
+        if (flags.HasFlag(StatFlag.Ap)) w.WriteShort(c.Ap);
+        if (flags.HasFlag(StatFlag.Sp)) w.WriteShort(c.Sp);
+        if (flags.HasFlag(StatFlag.Exp)) w.WriteInt(c.Exp);
+        if (flags.HasFlag(StatFlag.Fame)) w.WriteShort(c.Fame);
+        if (flags.HasFlag(StatFlag.Meso)) w.WriteInt(c.Meso);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {

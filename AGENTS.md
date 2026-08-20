@@ -113,7 +113,9 @@ Each milestone means adding one "working vertical slice".
       CMob::Init) on entry.
 - [x] **M8d: Script player API + GM commands** — NPC scripts get `player`
       (getName/getLevel/getMapId/getMeso/gainMeso, persisted via ICharacterRepository.Save);
-      chat `!map/!pos/!help` GM commands.
+      chat `!map/!meso/!pos/!help` GM commands.
+- [x] **M8e: LP_StatChanged** — stat-change encoder (StatFlag + EncodeChangeStat, JMS v186
+      pre-BB), so gainMeso / `!meso` update the client UI immediately.
 - [ ] **M9: Combat & content** — mob HP/aggro/movement, CP_UserMeleeAttack → damage,
       starter equipment + item serialization, quests. **← current**
 
