@@ -135,8 +135,12 @@ Each milestone means adding one "working vertical slice".
       CP_DropPickUpRequest picks it up (LP_DropLeaveField + LP_StatChanged meso). Field drop pool.
 - [x] **M9f: Attack mirror** — LP_UserMeleeAttack relays a player's swing + per-target damage
       (critical flag) to everyone else in the field (multiplayer combat is now visible).
+- [x] **M9g: Quests (script-driven)** — Character started/completed quest state; NPC script
+      API (cm/player hasQuest/isQuestDone/startQuest/completeQuest); quest records written into
+      the CharacterData blob (survive relog visibly). Quest DB persistence + live LP_QuestRecord
+      updates are follow-ups.
 - [ ] **M10: Combat depth & content** — item drops (wz drop tables), mob movement/AI,
-      magic/ranged attacks, quests. **← current**
+      magic/ranged attacks, quest DB persistence + live updates. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

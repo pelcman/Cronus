@@ -30,4 +30,16 @@ public interface INpcPlayer
 
     /// <summary>Restores HP and MP to full and notifies the client.</summary>
     void heal();
+
+    /// <summary>True if the quest is currently started (in progress).</summary>
+    bool hasQuest(int questId);
+
+    /// <summary>True if the quest has been completed.</summary>
+    bool isQuestDone(int questId);
+
+    /// <summary>Marks a quest as started.</summary>
+    void startQuest(int questId);
+
+    /// <summary>Marks a quest as completed (removing it from started).</summary>
+    void completeQuest(int questId);
 }

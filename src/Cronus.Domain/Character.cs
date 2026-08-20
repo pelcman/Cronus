@@ -60,4 +60,10 @@ public sealed class Character
 
     /// <summary>Equipped items (negative positions); persisted via the items table.</summary>
     public List<InventoryItem> EquippedItems { get; set; } = new();
+
+    /// <summary>Started quests: quest id → progress/custom data. In-memory (EF-ignored) for now.</summary>
+    public Dictionary<int, string> StartedQuests { get; set; } = new();
+
+    /// <summary>Completed quests: quest id → completion time (Windows FILETIME). EF-ignored for now.</summary>
+    public Dictionary<int, long> CompletedQuests { get; set; } = new();
 }
