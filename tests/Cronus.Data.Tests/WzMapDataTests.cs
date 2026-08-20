@@ -30,6 +30,24 @@ public class WzMapDataTests
               <string name="tn" value="west00"/>
             </imgdir>
           </imgdir>
+          <imgdir name="life">
+            <imgdir name="0">
+              <string name="type" value="n"/>
+              <int name="id" value="9010000"/>
+              <int name="x" value="120"/>
+              <int name="y" value="-60"/>
+              <int name="fh" value="7"/>
+              <int name="f" value="1"/>
+              <int name="rx0" value="100"/>
+              <int name="rx1" value="140"/>
+            </imgdir>
+            <imgdir name="1">
+              <string name="type" value="m"/>
+              <int name="id" value="100100"/>
+              <int name="x" value="300"/>
+              <int name="y" value="0"/>
+            </imgdir>
+          </imgdir>
         </imgdir>
         """;
 
@@ -53,6 +71,22 @@ public class WzMapDataTests
         Assert.Equal(104040000, east.TargetMapId);
         Assert.Equal("west00", east.TargetName);
         Assert.True(east.LinksToMap);
+    }
+
+    [Fact]
+    public void ParsesNpcLifeOnly()
+    {
+        MapData map = MapData.FromWz(100000000, Parse(MapXml));
+
+        NpcSpawn npc = Assert.Single(map.Npcs); // the mob ("m") is skipped
+        Assert.Equal(9010000, npc.TemplateId);
+        Assert.Equal(120, npc.X);
+        Assert.Equal(-60, npc.Y);
+        Assert.Equal(7, npc.Foothold);
+        Assert.Equal(0, npc.Facing); // wz f=1 -> packet 0
+        Assert.Equal(100, npc.Rx0);
+        Assert.Equal(140, npc.Rx1);
+        Assert.False(npc.Hidden);
     }
 
     [Fact]

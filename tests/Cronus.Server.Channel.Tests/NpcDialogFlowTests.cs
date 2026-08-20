@@ -1,5 +1,6 @@
 using System.IO.Pipelines;
 using Cronus.Common;
+using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
@@ -39,8 +40,14 @@ public class NpcDialogFlowTests
             _npcId = npcId;
         }
 
+        private readonly int _opNpcEnter = ServerOps.Get(ServerOpcode.NpcEnterField);
+
         public MapleSession? Session { get; private set; }
         public System.Collections.Concurrent.BlockingCollection<ScriptPrompt> Prompts { get; } = new();
+        public System.Collections.Concurrent.BlockingCollection<(int ObjectId, int TemplateId)> SpawnedNpcs { get; } = new();
+
+        /// <summary>When set, select this object id on spawn instead of the raw template id.</summary>
+        public bool SelectSpawnedNpc { get; init; }
 
         public override async ValueTask OnConnectedAsync(MapleSession session)
         {
@@ -58,12 +65,20 @@ public class NpcDialogFlowTests
         {
             if (opcode == _opSetField)
             {
-                // Select the NPC once we're in the game.
-                var w = NewPacket(session, ClientOpcode.UserSelectNpc);
-                w.WriteInt(_npcId);
-                w.WriteShort(0);
-                w.WriteShort(0);
-                await session.SendAsync(w.ToArray());
+                if (!SelectSpawnedNpc)
+                {
+                    await SelectNpcAsync(session, _npcId);
+                }
+            }
+            else if (opcode == _opNpcEnter)
+            {
+                int oid = p.ReadInt();
+                int template = p.ReadInt();
+                SpawnedNpcs.Add((oid, template));
+                if (SelectSpawnedNpc)
+                {
+                    await SelectNpcAsync(session, oid);
+                }
             }
             else if (opcode == _opScript)
             {
@@ -81,6 +96,15 @@ public class NpcDialogFlowTests
 
                 Prompts.Add(new ScriptPrompt(npcId, messageType, text, prev, next));
             }
+        }
+
+        private async ValueTask SelectNpcAsync(MapleSession session, int npcObjectId)
+        {
+            var w = NewPacket(session, ClientOpcode.UserSelectNpc);
+            w.WriteInt(npcObjectId);
+            w.WriteShort(0);
+            w.WriteShort(0);
+            await session.SendAsync(w.ToArray());
         }
 
         public async ValueTask AnswerAsync(int messageType, int action, int selection = -1, string text = "")
@@ -149,5 +173,53 @@ public class NpcDialogFlowTests
         Assert.Equal(0, ok.MessageType);
         Assert.Equal("You chose yes.", ok.Text);
         Assert.False(ok.Next);
+    }
+
+    [Fact]
+    public async Task NpcSpawnsFromMapData_AndSelectByObjectIdRunsScript()
+    {
+        const int npcTemplate = 9010000;
+        const string script = """
+            function start() { cm.sendOk("Hi from " + 9010000 + "!"); }
+            """;
+
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Seeker", MapId = 100000000 });
+
+        // One NPC placed on the map; its runtime object id differs from the template id.
+        var map = new MapData
+        {
+            MapId = 100000000,
+            Portals = Array.Empty<PortalData>(),
+            Npcs = new[] { new NpcSpawn { TemplateId = npcTemplate, X = 120, Y = -60, Foothold = 7 } },
+        };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var scripts = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcTemplate] = script }));
+
+        var client = new NpcClient(hero.Id, npcTemplate) { SelectSpawnedNpc = true };
+        var handler = new ChannelHandler(
+            ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, npcScripts: scripts);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        // The NPC spawned with a runtime object id distinct from its template id.
+        (int oid, int template) = client.SpawnedNpcs.Take(cts.Token);
+        Assert.Equal(npcTemplate, template);
+        Assert.NotEqual(template, oid);
+
+        // Selecting it by object id resolves to the template's script.
+        ScriptPrompt prompt = client.Prompts.Take(cts.Token);
+        Assert.Equal(0, prompt.MessageType);
+        Assert.Equal("Hi from 9010000!", prompt.Text);
     }
 }

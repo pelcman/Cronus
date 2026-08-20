@@ -1,7 +1,28 @@
+using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network;
 
 namespace Cronus.Server.Channel;
+
+/// <summary>A spawned NPC in a field: a runtime object id bound to a wz template + placement.</summary>
+public sealed class FieldNpc
+{
+    public required int ObjectId { get; init; }
+
+    public required int TemplateId { get; init; }
+
+    public short X { get; init; }
+
+    public short Y { get; init; }
+
+    public int Facing { get; init; }
+
+    public int Foothold { get; init; }
+
+    public int Rx0 { get; init; }
+
+    public int Rx1 { get; init; }
+}
 
 /// <summary>A player present in a field: the character plus their live session and position.</summary>
 public sealed class FieldPlayer
@@ -31,12 +52,68 @@ public sealed class FieldPlayer
 /// </summary>
 public sealed class Field
 {
+    /// <summary>Object-id base for NPCs, kept clear of DB character ids.</summary>
+    private const int NpcObjectIdBase = 1_000_000;
+
     private readonly Dictionary<int, FieldPlayer> _players = new();
     private readonly object _gate = new();
 
-    public Field(int mapId) => MapId = mapId;
+    public Field(int mapId, MapData? mapData = null)
+    {
+        MapId = mapId;
+        Npcs = BuildNpcs(mapData);
+    }
 
     public int MapId { get; }
+
+    /// <summary>NPCs spawned on this field (from wz life data); empty when no map data.</summary>
+    public IReadOnlyList<FieldNpc> Npcs { get; }
+
+    /// <summary>Finds a spawned NPC by its runtime object id.</summary>
+    public FieldNpc? FindNpc(int objectId)
+    {
+        foreach (FieldNpc npc in Npcs)
+        {
+            if (npc.ObjectId == objectId)
+            {
+                return npc;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<FieldNpc> BuildNpcs(MapData? mapData)
+    {
+        if (mapData is null || mapData.Npcs.Count == 0)
+        {
+            return Array.Empty<FieldNpc>();
+        }
+
+        var npcs = new List<FieldNpc>(mapData.Npcs.Count);
+        int oid = NpcObjectIdBase;
+        foreach (NpcSpawn spawn in mapData.Npcs)
+        {
+            if (spawn.Hidden)
+            {
+                continue;
+            }
+
+            npcs.Add(new FieldNpc
+            {
+                ObjectId = oid++,
+                TemplateId = spawn.TemplateId,
+                X = (short)spawn.X,
+                Y = (short)spawn.Y,
+                Facing = spawn.Facing,
+                Foothold = spawn.Foothold,
+                Rx0 = spawn.Rx0,
+                Rx1 = spawn.Rx1,
+            });
+        }
+
+        return npcs;
+    }
 
     public IReadOnlyList<FieldPlayer> Players
     {
@@ -92,11 +169,14 @@ public sealed class Field
     }
 }
 
-/// <summary>Fields by map id, created on demand.</summary>
+/// <summary>Fields by map id, created on demand (NPCs populated from the map provider).</summary>
 public sealed class FieldRegistry
 {
     private readonly Dictionary<int, Field> _fields = new();
     private readonly object _gate = new();
+    private readonly IMapProvider? _maps;
+
+    public FieldRegistry(IMapProvider? maps = null) => _maps = maps;
 
     public Field Get(int mapId)
     {
@@ -104,7 +184,7 @@ public sealed class FieldRegistry
         {
             if (!_fields.TryGetValue(mapId, out Field? field))
             {
-                field = new Field(mapId);
+                field = new Field(mapId, _maps?.GetMap(mapId));
                 _fields[mapId] = field;
             }
 

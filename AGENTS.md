@@ -105,8 +105,11 @@ Each milestone means adding one "working vertical slice".
       JS scripts; NpcConversation (blocking-thread `cm`: sendNext/sendOk/askYesNo/askMenu/
       askText); CP_UserSelectNpc → run script, CP_UserScriptMessageAnswer → advance;
       LP_ScriptMessage encoder. Folder/dictionary script sources; sample script.
-- [ ] **M8b: Gameplay content** — starter equipment + item serialization, NPC/mob spawn
-      packets (LP_NpcEnterField/LP_MobEnterField from wz life data), simple combat. **← current**
+- [x] **M8b: NPC spawning** — wz `life` NPC placements parsed into MapData; FieldRegistry
+      populates fields with NPCs (runtime object ids); LP_NpcEnterField on entry/transfer;
+      CP_UserSelectNpc resolves object id → template id → script.
+- [ ] **M8c: Gameplay content** — mob spawn (LP_MobEnterField), starter equipment + item
+      serialization, simple combat, quests. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
