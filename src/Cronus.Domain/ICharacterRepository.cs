@@ -17,6 +17,9 @@ public interface ICharacterRepository
 
     /// <summary>Persists changes to an existing character.</summary>
     void Save(Character character);
+
+    /// <summary>Deletes a character; returns true if it existed.</summary>
+    bool Delete(int characterId);
 }
 
 /// <summary>Thread-safe in-memory character store for local development and tests.</summary>
@@ -46,4 +49,6 @@ public sealed class InMemoryCharacterRepository : ICharacterRepository
 
     // The stored instance is the same reference callers mutate, so there is nothing to flush.
     public void Save(Character character) => _characters[character.Id] = character;
+
+    public bool Delete(int characterId) => _characters.TryRemove(characterId, out _);
 }

@@ -29,6 +29,7 @@ public sealed class LoginHandler : PacketHandlerBase
     private readonly int _opViewAllChar;
     private readonly int _opCheckDuplicatedId;
     private readonly int _opCreateNewCharacter;
+    private readonly int _opDeleteCharacter;
     private readonly int _opSelectCharacter;
 
     public LoginHandler(
@@ -54,6 +55,7 @@ public sealed class LoginHandler : PacketHandlerBase
         _opViewAllChar = clientOpcodes.Get(ClientOpcode.ViewAllChar);
         _opCheckDuplicatedId = clientOpcodes.Get(ClientOpcode.CheckDuplicatedId);
         _opCreateNewCharacter = clientOpcodes.Get(ClientOpcode.CreateNewCharacter);
+        _opDeleteCharacter = clientOpcodes.Get(ClientOpcode.DeleteCharacter);
         _opSelectCharacter = clientOpcodes.Get(ClientOpcode.SelectCharacter);
     }
 
@@ -82,6 +84,10 @@ public sealed class LoginHandler : PacketHandlerBase
         else if (opcode == _opCreateNewCharacter)
         {
             await HandleCreateNewCharacterAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opDeleteCharacter)
+        {
+            await HandleDeleteCharacterAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opSelectCharacter)
         {
@@ -206,6 +212,20 @@ public sealed class LoginHandler : PacketHandlerBase
 
         Character created = _characters.Create(character);
         await session.SendAsync(_packets.CreateNewCharacterSuccess(created)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleDeleteCharacterAsync(MapleSession session, PacketReader packet)
+    {
+        // JMS v186 CP_DeleteCharacter: [characterId:4] (the MapleID prefix arrives at JMS >= 188).
+        int characterId = packet.ReadInt();
+
+        // Only allow deleting a character that belongs to the logged-in account.
+        bool owned = session.UserData is LoginState state
+            && _characters.Find(characterId) is { } c
+            && c.AccountId == state.Account.Id;
+
+        bool success = owned && _characters.Delete(characterId);
+        await session.SendAsync(_packets.DeleteCharacterResult(characterId, success)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleSelectCharacterAsync(MapleSession session, PacketReader packet)
