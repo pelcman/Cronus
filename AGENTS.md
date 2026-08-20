@@ -118,10 +118,10 @@ Each milestone means adding one "working vertical slice".
       pre-BB), so gainMeso / `!meso` update the client UI immediately.
 - [x] **M8f: Character deletion** — CP_DeleteCharacter → LP_DeleteCharacterResult with
       account-ownership check; ICharacterRepository.Delete (in-memory + EF). Completes CRUD.
-- [x] **M9a: Item/equipment serialization** — InventoryItem model; ItemEncoder (RawEncode +
-      equip/bundle body, JMS v186); AvatarLook renders equipped items; CharacterData
-      InventoryInfo encodes the equipped tab; new characters get the starter equips the client
-      sends. Item DB persistence is a follow-up (equipment is in-memory / EF-ignored for now).
+- [x] **M9a: Item/equipment serialization + persistence** — InventoryItem model; ItemEncoder
+      (RawEncode + equip/bundle body, JMS v186); AvatarLook renders equipped items;
+      CharacterData InventoryInfo encodes the equipped tab; new characters get the starter
+      equips the client sends; items persist via an `items` table (EF Include/cascade).
 - [ ] **M9b: Combat** — mob HP/aggro/movement, CP_UserMeleeAttack → damage (needs a live
       capture to validate the variadic attack packet). **← current**
 

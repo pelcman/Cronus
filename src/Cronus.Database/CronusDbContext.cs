@@ -19,6 +19,8 @@ public sealed class CronusDbContext : DbContext
 
     public DbSet<Character> Characters => Set<Character>();
 
+    public DbSet<InventoryItem> Items => Set<InventoryItem>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
@@ -38,6 +40,16 @@ public sealed class CronusDbContext : DbContext
         character.Property(c => c.Name).HasMaxLength(13).IsRequired();
         character.HasIndex(c => c.Name).IsUnique();
         character.HasIndex(c => new { c.AccountId, c.WorldId });
-        character.Ignore(c => c.EquippedItems); // item persistence is a follow-up
+        character.HasMany(c => c.EquippedItems)
+            .WithOne()
+            .HasForeignKey(i => i.CharacterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var item = modelBuilder.Entity<InventoryItem>();
+        item.ToTable("items");
+        item.HasKey(i => i.Id);
+        item.Property(i => i.Id).ValueGeneratedOnAdd();
+        item.HasIndex(i => i.CharacterId);
+        item.Property(i => i.Owner).HasMaxLength(13);
     }
 }

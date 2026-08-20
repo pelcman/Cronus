@@ -97,6 +97,28 @@ public class DbAccountRepositoryTests
     }
 
     [Fact]
+    public void CharacterRepository_PersistsEquippedItems()
+    {
+        Func<CronusDbContext> factory = InMemoryFactory();
+        var repo = new DbCharacterRepository(factory);
+
+        var hero = new Character { AccountId = 1, WorldId = 0, Name = "Knight" };
+        hero.EquippedItems.Add(new InventoryItem { ItemId = 1302000, Position = -11, Watk = 17 });
+        hero.EquippedItems.Add(new InventoryItem { ItemId = 1040002, Position = -5 });
+        Character created = repo.Create(hero);
+
+        // Reload through a fresh context: equipment must come back.
+        Character? loaded = repo.Find(created.Id);
+        Assert.NotNull(loaded);
+        Assert.Equal(2, loaded!.EquippedItems.Count);
+
+        InventoryItem weapon = loaded.EquippedItems.Single(i => i.Position == -11);
+        Assert.Equal(1302000, weapon.ItemId);
+        Assert.Equal(17, weapon.Watk);
+        Assert.All(loaded.EquippedItems, i => Assert.Equal(created.Id, i.CharacterId));
+    }
+
+    [Fact]
     public void CharacterRepository_Delete()
     {
         var repo = new DbCharacterRepository(InMemoryFactory());
