@@ -73,10 +73,11 @@ Project dependencies: `Host → Server.* → {Network, Database, Data, Scripting
 Each milestone means adding one "working vertical slice".
 
 - [x] **M0: Scaffolding** — solution, projects, build/test, documentation.
-- [ ] **M1: Network core** — crypto (AES-OFB / shanda), PacketReader/Writer, opcode loader
-      + unit tests. **← current**
-- [ ] **M2: Hello handshake** — accept TCP → send Hello → client syncs encryption. Confirm
-      handshake byte-match with RirePE.
+- [x] **M1: Network core** — crypto (AES-OFB / shanda), PacketReader/Writer, opcode loader,
+      Hello builder + 21 unit tests (all green). Golden-vector cross-check vs Java is
+      deferred (see Backlog improvements).
+- [ ] **M2: Hello handshake wire-up** — accept TCP → send Hello → client syncs encryption.
+      Pipelines codec + session. Confirm handshake byte-match with RirePE. **← current**
 - [ ] **M3: Login authentication** — handle `CP_CheckPassword`, reply
       `LP_CheckPasswordResult`. Login screen → ID/PW auth passes. **(near-term key goal)**
 - [ ] **M4: World / channel select** — world list, channel select, character list.
@@ -91,16 +92,18 @@ parity is on the order of half a year.
 
 ## 5. Backlog (work and improvements)
 
-### In progress (M1)
-- [x] Solution/project scaffolding, docs, .gitignore, LICENSE
-- [ ] `Cronus.Common`: `Region`, `MapleVersion`, `ServerConfig` (JMS/186/MS932/region=3)
-- [ ] `Cronus.Network.Crypto.AesOfbCipher`: AES-OFB crypt / header write+read / check /
+### Done (M1)
+- [x] Solution/project scaffolding, docs, .gitignore, .gitattributes, LICENSE
+- [x] `Cronus.Common`: `Region`, `ServerConfig` (JMS/186/MS932/region=3), `CodePage`
+- [x] `Cronus.Network.Crypto.AesOfbCipher`: AES-OFB crypt / header write+read / check /
       IV advance (funnyShit) / multiplyBytes
-- [ ] `Cronus.Network.Crypto.ShandaCipher`: encryptData / decryptData (unused by JMS, ported)
-- [ ] `Cronus.Network.Packets.PacketWriter` / `PacketReader` (LE + MS932)
-- [ ] `Cronus.Network.Packets.OpcodeTable`: .properties loader (`@HEX` and `BASE ± offset`)
-- [ ] opcode data `data/opcodes/JMS_v186_*.properties`
-- [ ] `Cronus.Network.Tests`: crypto round-trip, header write/read, opcode resolution
+- [x] `Cronus.Network.Crypto.ShandaCipher`: encrypt / decrypt (unused by JMS, ported)
+- [x] `Cronus.Network.Packets.PacketWriter` / `PacketReader` (LE + MS932)
+- [x] `Cronus.Network.Packets.OpcodeTable`: .properties loader (`@HEX`, decimal, `BASE ± offset`)
+- [x] `Cronus.Network.Handshake`: plaintext Hello builder
+- [x] opcode data `data/opcodes/JMS_v186_*.properties`
+- [x] `Cronus.Network.Tests`: 21 tests — crypto round-trip (+multi-block, +IV lockstep),
+      header write/read/check, shanda round-trip, opcode resolution, packet primitives, Hello
 
 ### Next (M2–M3)
 - [ ] `MapleCodec` (Pipelines-based encoder/decoder)
