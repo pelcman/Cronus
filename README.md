@@ -1,5 +1,7 @@
 # Cronus
 
+[![CI](https://github.com/pelcman/Cronus/actions/workflows/ci.yml/badge.svg)](https://github.com/pelcman/Cronus/actions/workflows/ci.yml)
+
 An open-source private-server emulator for the Japanese version of MapleStory
 (JMS / JapanMS **v186**). The network core and game logic are implemented in
 **C# / .NET 10**.

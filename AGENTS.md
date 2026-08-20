@@ -177,7 +177,7 @@ parity is on the order of half a year.
 - [ ] Warn on undefined opcodes (@FFFF) at startup.
 - [ ] Externalize ports / DB connection / data paths via appsettings.json.
 - [ ] Docker Compose (bundled MySQL) — reference Maple2's compose.yml.
-- [ ] CI (GitHub Actions: build + test).
+- [x] CI (GitHub Actions: build + test on push/PR to main).
 
 ---
 
