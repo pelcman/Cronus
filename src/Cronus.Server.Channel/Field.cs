@@ -4,6 +4,25 @@ using Cronus.Network;
 
 namespace Cronus.Server.Channel;
 
+/// <summary>A meso drop lying on the field.</summary>
+public sealed class FieldDrop
+{
+    public required int ObjectId { get; init; }
+
+    public required int Meso { get; init; }
+
+    public short X { get; init; }
+
+    public short Y { get; init; }
+
+    /// <summary>The mob the drop came from (drop-from position + source id).</summary>
+    public int SourceObjectId { get; init; }
+
+    public short SourceX { get; init; }
+
+    public short SourceY { get; init; }
+}
+
 /// <summary>A spawned monster in a field: a runtime object id bound to a wz template + placement.</summary>
 public sealed class FieldMob
 {
@@ -85,8 +104,11 @@ public sealed class Field
     /// <summary>Object-id bases, kept clear of DB character ids and of each other.</summary>
     private const int NpcObjectIdBase = 1_000_000;
     private const int MobObjectIdBase = 2_000_000;
+    private const int DropObjectIdBase = 3_000_000;
 
     private readonly Dictionary<int, FieldPlayer> _players = new();
+    private readonly Dictionary<int, FieldDrop> _drops = new();
+    private int _nextDropOid = DropObjectIdBase;
     private readonly object _gate = new();
 
     public Field(int mapId, MapData? mapData = null, IMobProvider? mobs = null)
@@ -216,6 +238,35 @@ public sealed class Field
         lock (_gate)
         {
             _players[player.Character.Id] = player;
+        }
+    }
+
+    /// <summary>Registers a meso drop and returns it (assigns the object id).</summary>
+    public FieldDrop AddMesoDrop(int meso, short x, short y, FieldMob source)
+    {
+        lock (_gate)
+        {
+            var drop = new FieldDrop
+            {
+                ObjectId = _nextDropOid++,
+                Meso = meso,
+                X = x,
+                Y = y,
+                SourceObjectId = source.ObjectId,
+                SourceX = source.X,
+                SourceY = source.Y,
+            };
+            _drops[drop.ObjectId] = drop;
+            return drop;
+        }
+    }
+
+    /// <summary>Removes a drop by object id (e.g. on pickup); returns it if it was present.</summary>
+    public FieldDrop? RemoveDrop(int objectId)
+    {
+        lock (_gate)
+        {
+            return _drops.Remove(objectId, out FieldDrop? drop) ? drop : null;
         }
     }
 

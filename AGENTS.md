@@ -131,8 +131,10 @@ Each milestone means adding one "working vertical slice".
 - [x] **M9d: Level-up** — pre-BB exp table (SharedExpTable), CharacterProgression (level-ups
       on exp gain: HP/MP/AP/SP gains, SP only for jobs, remainder carried); kill/script exp
       route through it and send the full LP_StatChanged.
-- [ ] **M10: Combat depth & content** — drops, mob movement/AI, magic/ranged attacks,
-      the LP_UserMeleeAttack mirror, quests. **← current**
+- [x] **M9e: Meso drops** — killed mobs drop meso (LP_DropEnterField, placeholder amount);
+      CP_DropPickUpRequest picks it up (LP_DropLeaveField + LP_StatChanged meso). Field drop pool.
+- [ ] **M10: Combat depth & content** — item drops (wz drop tables), mob movement/AI,
+      magic/ranged attacks, the LP_UserMeleeAttack mirror, quests. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

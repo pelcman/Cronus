@@ -38,6 +38,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opUserMove;
     private readonly int _opUserChat;
     private readonly int _opMeleeAttack;
+    private readonly int _opDropPickUp;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
@@ -68,6 +69,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
         _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
         _opMeleeAttack = clientOpcodes.Get(ClientOpcode.UserMeleeAttack);
+        _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
@@ -93,6 +95,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opMeleeAttack)
         {
             await HandleMeleeAttackAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opDropPickUp)
+        {
+            await HandleDropPickUpAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opTransferField)
         {
@@ -221,8 +227,51 @@ public sealed class ChannelHandler : PacketHandlerBase
             {
                 await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
                 await GrantKillExpAsync(session, mob.Exp).ConfigureAwait(false);
+                await DropMesoAsync(mob).ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>Drops meso from a killed mob (placeholder amount until wz drop tables load).</summary>
+    private async ValueTask DropMesoAsync(FieldMob mob)
+    {
+        if (_field is null)
+        {
+            return;
+        }
+
+        int meso = Math.Max(1, mob.MaxHp / 5); // placeholder formula
+        FieldDrop drop = _field.AddMesoDrop(meso, mob.X, mob.Y, mob);
+        await _field.BroadcastAsync(_packets.DropEnterFieldMeso(drop)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleDropPickUpAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_DropPickUpRequest: [unk:1][updateTime:4][x:2][y:2][objectId:4]
+        packet.ReadByte();
+        packet.ReadInt();
+        packet.ReadShort();
+        packet.ReadShort();
+        int dropOid = packet.ReadInt();
+
+        FieldDrop? drop = _field.RemoveDrop(dropOid);
+        if (drop is null)
+        {
+            return; // already taken
+        }
+
+        await _field.BroadcastAsync(_packets.DropLeaveFieldPickup(dropOid, _player.Character.Id))
+            .ConfigureAwait(false);
+
+        Character c = _player.Character;
+        c.Meso = (int)Math.Clamp((long)c.Meso + drop.Meso, 0, int.MaxValue);
+        _characters.Save(c);
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
     }
 
     private async ValueTask GrantKillExpAsync(MapleSession session, int exp)

@@ -66,6 +66,7 @@ public class CombatTests
         private readonly int _opMobLeave = ServerOps.Get(ServerOpcode.MobLeaveField);
 
         private readonly int _opStat = ServerOps.Get(ServerOpcode.StatChanged);
+        private readonly int _opDropEnter = ServerOps.Get(ServerOpcode.DropEnterField);
         private int _mobOid = -1;
         private bool _setField;
 
@@ -78,6 +79,8 @@ public class CombatTests
         public TaskCompletionSource<(int Oid, byte DeadType)> MobKilled { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<int> ExpGained { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<int> MesoGained { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override async ValueTask OnConnectedAsync(MapleSession session)
@@ -109,11 +112,32 @@ public class CombatTests
                 byte deadType = p.ReadByte();
                 MobKilled.TrySetResult((oid, deadType));
             }
+            else if (opcode == _opDropEnter)
+            {
+                p.ReadByte();          // enter type
+                int dropOid = p.ReadInt();
+                // Request pickup of the meso drop.
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.DropPickUpRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteByte(0);
+                w.WriteInt(0);
+                w.WriteShort(0);
+                w.WriteShort(0);
+                w.WriteInt(dropOid);
+                await session.SendAsync(w.ToArray());
+            }
             else if (opcode == _opStat)
             {
                 p.ReadByte();          // unlock
-                p.ReadInt();           // mask (Exp)
-                ExpGained.TrySetResult(p.ReadInt());
+                int mask = p.ReadInt();
+                int value = p.ReadInt();
+                if ((mask & 0x10000) != 0)       // Exp
+                {
+                    ExpGained.TrySetResult(value);
+                }
+                else if ((mask & 0x40000) != 0)  // Meso
+                {
+                    MesoGained.TrySetResult(value);
+                }
             }
         }
 
@@ -167,6 +191,11 @@ public class CombatTests
         Assert.Equal(0, mob.Hp);
         Assert.Equal(10, exp);          // mob exp granted (no level-up)
         Assert.Equal(10, hero.Exp);
+
+        // The kill dropped meso (50 HP / 5 = 10), which the client picked up.
+        int meso = await client.MesoGained.Task.WaitAsync(cts.Token);
+        Assert.Equal(10, meso);
+        Assert.Equal(10, hero.Meso);
     }
 
     [Fact]
