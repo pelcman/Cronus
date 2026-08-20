@@ -53,6 +53,39 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_SetField</c> for a map change (bCharacterData = false): the target map,
+    /// spawn portal, and current HP instead of the full character blob.
+    /// </summary>
+    public byte[] SetFieldChangeMap(Character character, int channelId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SetField);
+
+        w.WriteShort(0);                  // ClientOptMan (JMS >= 186): no entries
+        w.WriteInt(channelId);            // m_nChannelID
+        w.WriteByte(0);                   // (JMS >= 146)
+        w.WriteInt(0);                    // m_dwOldDriverID (JMS >= 180)
+        w.WriteByte(1);                   // portal count
+        w.WriteByte(0);                   // bCharacterData = false
+        w.WriteShort(0);                  // nNotifierCheck
+
+        w.WriteByte(0);                   // clear stat / revive flag (JMS >= 180)
+        w.WriteInt(character.MapId);      // dwPosMap
+        w.WriteByte(character.Portal);    // nPortal
+        w.WriteShort(character.Hp);       // nHP (16-bit, pre-Big-Bang)
+
+        w.WriteLong(CharacterDataEncoder.FileTimeNow()); // ftServer
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_TransferFieldReqIgnored</c> (1 = disabled portal, etc.).</summary>
+    public byte[] TransferFieldReqIgnored(byte reason)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TransferFieldReqIgnored);
+        w.WriteByte(reason);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {
