@@ -14,6 +14,9 @@ public interface ICharacterRepository
     bool NameExists(string name);
 
     Character Create(Character character);
+
+    /// <summary>Persists changes to an existing character.</summary>
+    void Save(Character character);
 }
 
 /// <summary>Thread-safe in-memory character store for local development and tests.</summary>
@@ -40,4 +43,7 @@ public sealed class InMemoryCharacterRepository : ICharacterRepository
         _characters[character.Id] = character;
         return character;
     }
+
+    // The stored instance is the same reference callers mutate, so there is nothing to flush.
+    public void Save(Character character) => _characters[character.Id] = character;
 }

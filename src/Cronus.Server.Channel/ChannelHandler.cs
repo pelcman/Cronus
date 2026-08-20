@@ -265,7 +265,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         int templateId = _field?.FindNpc(objectId)?.TemplateId ?? objectId;
 
         var dialog = new ChannelNpcDialog(session, _packets);
-        _conversation = _npcScripts.Start(templateId, dialog, _player.Character);
+        var player = new ChannelPlayer(_player.Character, _characters);
+        _conversation = _npcScripts.Start(templateId, dialog, player);
     }
 
     private void HandleScriptAnswer(PacketReader packet)
