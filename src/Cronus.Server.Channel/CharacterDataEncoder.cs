@@ -1,3 +1,4 @@
+using System.Linq;
 using Cronus.Domain;
 using Cronus.Network.Packets;
 using Cronus.Server.Login;
@@ -37,7 +38,7 @@ public static class CharacterDataEncoder
         w.WriteInt(0);                    // pachinko: tama
         w.WriteInt(0);                    // pachinko: reserved
 
-        WriteInventoryInfo(w);
+        WriteInventoryInfo(w, c);
 
         // [0x100] skills (none yet)
         w.WriteShort(0);
@@ -77,10 +78,11 @@ public static class CharacterDataEncoder
     }
 
     /// <summary>
-    /// Writes InventoryInfo(datamask = -1) with empty inventories (JMS v186 layout).
-    /// Slot terminators: 2 bytes for equip-typed sections, 1 byte for the rest.
+    /// Writes InventoryInfo(datamask = -1) (JMS v186 layout): the equipped items followed by
+    /// empty inventory tabs. Slot-section terminators are 2 bytes for equip-typed sections,
+    /// 1 byte for the rest.
     /// </summary>
-    private static void WriteInventoryInfo(PacketWriter w)
+    private static void WriteInventoryInfo(PacketWriter w, Character c)
     {
         // [0x80] slot limits: EQUIP / USE / SETUP / ETC / CASH
         for (int i = 0; i < 5; i++)
@@ -92,12 +94,19 @@ public static class CharacterDataEncoder
         w.WriteInt(0);
         w.WriteInt(0);
 
-        // [0x04] equip sections: equipped, equipped avatars, equip inventory,
-        // and the JMS >= 180 (-1000..-1099) block — all empty, 2-byte terminators.
-        for (int i = 0; i < 4; i++)
+        // [0x04] equipped items (positions -1..-99), sorted by slot, then the terminator.
+        foreach (InventoryItem item in c.EquippedItems
+                     .Where(i => i.Position is > -100 and < 0)
+                     .OrderBy(i => -i.Position))
         {
-            w.WriteShort(0);
+            ItemEncoder.WriteSlot(w, item);
+            ItemEncoder.WriteItem(w, item);
         }
+
+        w.WriteShort(0);   // end of equipped items
+        w.WriteShort(0);   // end of equipped avatars (none)
+        w.WriteShort(0);   // end of equip inventory (none)
+        w.WriteShort(0);   // end of JMS >= 180 (-1000..) block (none)
 
         // [0x08/0x10/0x20/0x40] USE, SETUP, ETC, CASH — empty, 1-byte terminators.
         for (int i = 0; i < 4; i++)

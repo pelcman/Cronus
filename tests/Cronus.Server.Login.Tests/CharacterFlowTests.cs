@@ -164,13 +164,17 @@ public class CharacterFlowTests
             p.ReadShort();                // subcategory
             p.Skip(8 + 4 + 4 + 4);        // JMS pre-BB tail
 
-            // --- AvatarLook (JMS v186, no equips) ---
+            // --- AvatarLook (JMS v186) ---
             p.ReadByte();                 // gender
             p.ReadByte();                 // skin
             p.ReadInt();                  // face
             p.ReadByte();                 // ignored
             p.ReadInt();                  // hair
-            Assert.Equal(0xFF, p.ReadByte()); // visible equips terminator
+            while (p.ReadByte() != 0xFF)  // visible equips: [slot][itemId] until 0xFF
+            {
+                p.ReadInt();
+            }
+
             Assert.Equal(0xFF, p.ReadByte()); // masked equips terminator
             p.ReadInt();                  // weapon sticker
             p.ReadInt();                  // pet 1

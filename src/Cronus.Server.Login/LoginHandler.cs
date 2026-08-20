@@ -182,7 +182,10 @@ public sealed class LoginHandler : PacketHandlerBase
         packet.ReadShort();         // job sub-type (dual blade / cannoneer)
         int face = packet.ReadInt();
         int hair = packet.ReadInt();
-        // Remaining starter-equip ids are consumed but not persisted yet.
+        int top = packet.ReadInt();
+        int bottom = packet.ReadInt();
+        int shoes = packet.ReadInt();
+        int weapon = packet.ReadInt();
 
         if (!IsNameValid(name))
         {
@@ -214,6 +217,8 @@ public sealed class LoginHandler : PacketHandlerBase
             MapId = _startMapId,
         };
 
+        AddStarterEquips(character, top, bottom, shoes, weapon);
+
         Character created = _characters.Create(character);
         await session.SendAsync(_packets.CreateNewCharacterSuccess(created)).ConfigureAwait(false);
     }
@@ -239,6 +244,26 @@ public sealed class LoginHandler : PacketHandlerBase
         byte[] migrate = _packets.SelectCharacterResult(
             _channelEndpoint.Address, _channelEndpoint.Port, characterId);
         await session.SendAsync(migrate).ConfigureAwait(false);
+    }
+
+    /// <summary>Places the starter equipment the client sent at the standard equip slots.</summary>
+    private static void AddStarterEquips(Character character, int top, int bottom, int shoes, int weapon)
+    {
+        // Standard equip slots (negative positions): top -5, bottom -6, shoes -7, weapon -11.
+        AddEquip(character, top, -5);
+        AddEquip(character, bottom, -6);
+        AddEquip(character, shoes, -7);
+        AddEquip(character, weapon, -11);
+    }
+
+    private static void AddEquip(Character character, int itemId, short position)
+    {
+        if (itemId <= 0)
+        {
+            return; // e.g. a one-piece overall omits the bottom slot
+        }
+
+        character.EquippedItems.Add(new InventoryItem { ItemId = itemId, Position = position });
     }
 
     private static bool IsNameValid(string name)
