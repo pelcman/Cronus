@@ -31,8 +31,12 @@ A playable slice is up and running (all through the real encrypted protocol):
 - **Field** — multiplayer enter/leave, movement relay, chat, map transfer (portals)
 - **NPC dialogue** — JavaScript scripts (Jint) drive `LP_ScriptMessage` conversations
 
-61 tests, all green. See the roadmap and design notes in
+59 tests, all green. See the roadmap and design notes in
 [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md).
+
+> These tests prove internal consistency, not yet fidelity to the real Nexon client.
+> [docs/VALIDATION.md](docs/VALIDATION.md) is the workflow to validate against a real JMS v186
+> client with EmuClient + RirePE.
 
 ## Projects
 
