@@ -239,6 +239,49 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_DropEnterField</c> for a meso drop with the drop-from-mob animation
+    /// (ports <c>ResCDropPool.DropEnterField</c>, JMS v186; ANIMATION enter type, FFA).
+    /// </summary>
+    public byte[] DropEnterFieldMeso(FieldDrop drop)
+    {
+        const int animation = 1; // EnterType.ANIMATION
+        const int freeForAll = 2;
+
+        PacketWriter w = NewPacket(ServerOpcode.DropEnterField);
+        w.WriteByte(animation);
+        w.WriteInt(drop.ObjectId);
+        w.WriteByte(1);                  // meso flag
+        w.WriteInt(drop.Meso);           // meso amount (in the item-id field)
+        w.WriteInt(0);                   // owner (0 = free for all)
+        w.WriteByte(freeForAll);         // drop type
+        w.WriteShort(drop.X);            // landing x
+        w.WriteShort(drop.Y);            // landing y
+        w.WriteInt(drop.SourceObjectId); // source mob
+        w.WriteShort(drop.SourceX);      // drop-from x (ANIMATION)
+        w.WriteShort(drop.SourceY);      // drop-from y
+        w.WriteShort(0);
+        // meso drops omit the 8-byte expiration.
+        w.WriteByte(1);                  // not a player drop
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_DropLeaveField</c> for a pickup (ports <c>ResCDropPool.DropLeaveField</c>,
+    /// PICK_UP): the leave type, drop id, and the picking character's object id.
+    /// </summary>
+    public byte[] DropLeaveFieldPickup(int dropObjectId, int pickerCharacterId)
+    {
+        const int pickUp = 2; // LeaveType.PICK_UP
+
+        PacketWriter w = NewPacket(ServerOpcode.DropLeaveField);
+        w.WriteByte(pickUp);
+        w.WriteInt(dropObjectId);
+        w.WriteInt(pickerCharacterId);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {
