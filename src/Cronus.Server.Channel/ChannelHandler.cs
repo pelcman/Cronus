@@ -86,7 +86,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
         else if (opcode == _opUserChat)
         {
-            await HandleUserChatAsync(packet).ConfigureAwait(false);
+            await HandleUserChatAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opTransferField)
         {
@@ -190,7 +190,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
     }
 
-    private async ValueTask HandleUserChatAsync(PacketReader packet)
+    private async ValueTask HandleUserChatAsync(MapleSession session, PacketReader packet)
     {
         if (_player is null || _field is null)
         {
@@ -202,10 +202,54 @@ public sealed class ChannelHandler : PacketHandlerBase
         string message = packet.ReadString();
         bool onlyBalloon = packet.Remaining > 0 && packet.ReadBool();
 
+        // Commands (prefix '!') are handled server-side and not broadcast.
+        if (message.StartsWith('!'))
+        {
+            await HandleCommandAsync(session, message[1..]).ConfigureAwait(false);
+            return;
+        }
+
         byte[] chat = _packets.UserChat(
             _player.Character.Id, isGm: false, message, onlyBalloon);
         await _field.BroadcastAsync(chat).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Minimal GM/debug command set for local testing (chat lines starting with '!'). Replies
+    /// are echoed back to the caller as their own chat line.
+    /// </summary>
+    private async ValueTask HandleCommandAsync(MapleSession session, string command)
+    {
+        string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            return;
+        }
+
+        switch (parts[0].ToLowerInvariant())
+        {
+            case "map" when parts.Length >= 2 && int.TryParse(parts[1], out int mapId):
+                await MovePlayerToMapAsync(session, mapId, spawnPortal: 0).ConfigureAwait(false);
+                break;
+
+            case "pos":
+                await ReplyAsync(session, $"pos: ({_player!.X}, {_player.Y}) map {_player.Character.MapId}")
+                    .ConfigureAwait(false);
+                break;
+
+            case "help":
+                await ReplyAsync(session, "commands: !map <id>, !pos, !help").ConfigureAwait(false);
+                break;
+
+            default:
+                await ReplyAsync(session, $"unknown command: {parts[0]}").ConfigureAwait(false);
+                break;
+        }
+    }
+
+    /// <summary>Sends a chat line visible only to the calling player (as their own message).</summary>
+    private ValueTask ReplyAsync(MapleSession session, string text)
+        => session.SendAsync(_packets.UserChat(_player!.Character.Id, isGm: true, text, onlyBalloon: false));
 
     private void HandleSelectNpc(MapleSession session, PacketReader packet)
     {

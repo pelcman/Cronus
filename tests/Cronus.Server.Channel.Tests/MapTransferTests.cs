@@ -87,6 +87,15 @@ public class MapTransferTests
             return ValueTask.CompletedTask;
         }
 
+        public async ValueTask ChatAsync(string message)
+        {
+            var w = NewPacket(Session!, ClientOpcode.UserChat);
+            w.WriteInt(0);           // timestamp
+            w.WriteString(message);
+            w.WriteByte(0);          // only balloon
+            await Session!.SendAsync(w.ToArray());
+        }
+
         public async ValueTask RequestTransferAsync(int mapId, string portalName)
         {
             var w = NewPacket(Session!, ClientOpcode.UserTransferFieldRequest);
@@ -154,6 +163,32 @@ public class MapTransferTests
         Assert.DoesNotContain(fields.Get(100000000).Players, fp => fp.Character.Id == hero.Id);
         Assert.Contains(fields.Get(104040000).Players, fp => fp.Character.Id == hero.Id);
         Assert.Equal(104040000, hero.MapId); // character state updated
+    }
+
+    [Fact]
+    public async Task MapCommand_MovesPlayer()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Cmder", MapId = 100000000, Hp = 50,
+        });
+
+        var fields = new FieldRegistry();
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        await client.ChatAsync("!map 104040000");
+
+        (int mapId, short _) = await client.MapChanged.Task.WaitAsync(cts.Token);
+        Assert.Equal(104040000, mapId);
+        Assert.Equal(104040000, hero.MapId);
     }
 
     [Fact]
