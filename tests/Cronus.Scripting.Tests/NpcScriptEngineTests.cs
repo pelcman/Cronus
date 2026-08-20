@@ -169,6 +169,13 @@ public class NpcScriptEngineTests
         }
         public void gainExp(int amount) => Exp = Math.Max(0, Exp + amount);
         public void heal() => Hp = getMaxHp();
+
+        public HashSet<int> Started { get; } = new();
+        public HashSet<int> Completed { get; } = new();
+        public bool hasQuest(int questId) => Started.Contains(questId);
+        public bool isQuestDone(int questId) => Completed.Contains(questId);
+        public void startQuest(int questId) => Started.Add(questId);
+        public void completeQuest(int questId) { Started.Remove(questId); Completed.Add(questId); }
     }
 
     [Fact]
@@ -198,6 +205,60 @@ public class NpcScriptEngineTests
         Assert.Equal(1, player.SaveCount);
 
         cm.Advance(messageType: 0, action: 1, selection: -1, text: string.Empty);
+    }
+
+    [Fact]
+    public void ScriptCanDriveQuestFlow()
+    {
+        const int npcId = 9000005;
+        const int questId = 1000;
+        const string script = """
+            function start() {
+                if (player.isQuestDone(1000)) {
+                    cm.sendOk("You already finished this.");
+                } else if (player.hasQuest(1000)) {
+                    player.completeQuest(1000);
+                    cm.sendOk("Quest complete!");
+                } else {
+                    player.startQuest(1000);
+                    cm.sendOk("Quest started.");
+                }
+            }
+            """;
+
+        var source = new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script });
+        var engine = new NpcScriptEngine(source);
+        var player = new FakePlayer();
+
+        // First talk: starts the quest.
+        RunOnce(engine, npcId, player, out string first);
+        Assert.Equal("Quest started.", first);
+        Assert.Contains(questId, player.Started);
+
+        // Second talk: completes it.
+        RunOnce(engine, npcId, player, out string second);
+        Assert.Equal("Quest complete!", second);
+        Assert.Contains(questId, player.Completed);
+        Assert.DoesNotContain(questId, player.Started);
+
+        // Third talk: already done.
+        RunOnce(engine, npcId, player, out string third);
+        Assert.Equal("You already finished this.", third);
+    }
+
+    private static void RunOnce(NpcScriptEngine engine, int npcId, FakePlayer player, out string okText)
+    {
+        var dialog = new RecordingDialog();
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation cm = engine.Start(npcId, dialog, player)!;
+        Prompt ok = dialog.Take(cts.Token);
+        okText = ok.Text;
+        cm.Advance(messageType: 0, action: 1, selection: -1, text: string.Empty);
+        while (!cm.IsEnded)
+        {
+            cts.Token.ThrowIfCancellationRequested();
+            Thread.Sleep(5);
+        }
     }
 
     [Fact]

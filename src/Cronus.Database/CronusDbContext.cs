@@ -44,6 +44,8 @@ public sealed class CronusDbContext : DbContext
             .WithOne()
             .HasForeignKey(i => i.CharacterId)
             .OnDelete(DeleteBehavior.Cascade);
+        character.Ignore(c => c.StartedQuests);   // quest persistence is a follow-up
+        character.Ignore(c => c.CompletedQuests);
 
         var item = modelBuilder.Entity<InventoryItem>();
         item.ToTable("items");

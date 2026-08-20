@@ -67,6 +67,23 @@ public sealed class ChannelPlayer : INpcPlayer
         Send(_packets.StatChanged(_character, StatFlag.Hp | StatFlag.Mp));
     }
 
+    public bool hasQuest(int questId) => _character.StartedQuests.ContainsKey(questId);
+
+    public bool isQuestDone(int questId) => _character.CompletedQuests.ContainsKey(questId);
+
+    public void startQuest(int questId)
+    {
+        _character.StartedQuests[questId] = string.Empty;
+        _characters.Save(_character);
+    }
+
+    public void completeQuest(int questId)
+    {
+        _character.StartedQuests.Remove(questId);
+        _character.CompletedQuests[questId] = CharacterDataEncoder.FileTimeNow();
+        _characters.Save(_character);
+    }
+
     private void Send(byte[] packet)
         => _session.SendAsync(packet).AsTask().GetAwaiter().GetResult();
 }

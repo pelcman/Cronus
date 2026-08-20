@@ -46,12 +46,23 @@ public static class CharacterDataEncoder
         // [0x8000] cooldowns (none)
         w.WriteShort(0);
 
-        // [0x200] started quests (none) + JMS 184-186 extra list
-        w.WriteShort(0);
-        w.WriteShort(0);
+        // [0x200] started quests + JMS 184-186 extra list
+        w.WriteShort((short)c.StartedQuests.Count);
+        foreach (KeyValuePair<int, string> quest in c.StartedQuests)
+        {
+            w.WriteShort((short)quest.Key);
+            w.WriteString(quest.Value);
+        }
 
-        // [0x4000] completed quests (none)
-        w.WriteShort(0);
+        w.WriteShort(0);   // JMS 184-186 extra list
+
+        // [0x4000] completed quests
+        w.WriteShort((short)c.CompletedQuests.Count);
+        foreach (KeyValuePair<int, long> quest in c.CompletedQuests)
+        {
+            w.WriteShort((short)quest.Key);
+            w.WriteLong(quest.Value);
+        }
 
         // [0x400] minigame records (none)
         w.WriteShort(0);
