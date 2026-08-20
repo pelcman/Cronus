@@ -1,23 +1,33 @@
 using Cronus.Domain;
+using Cronus.Network;
 using Cronus.Scripting;
 
 namespace Cronus.Server.Channel;
 
 /// <summary>
 /// Adapts the in-game character to the scripting layer's <see cref="INpcPlayer"/>. Mutations
-/// (gainMeso) update the character and persist through the repository. Called from the script's
-/// worker thread; the operations here are on the character object + repository only (no session
-/// or field state), so they are safe to run off the network thread.
+/// (gainMeso) update the character, persist through the repository, and push an
+/// <c>LP_StatChanged</c> so the client's UI reflects the change immediately. Called from the
+/// script's worker thread; the async send is awaited synchronously (the worker thread is
+/// dedicated to one conversation, and the session serializes its own writes).
 /// </summary>
 public sealed class ChannelPlayer : INpcPlayer
 {
     private readonly Character _character;
     private readonly ICharacterRepository _characters;
+    private readonly MapleSession _session;
+    private readonly ChannelPackets _packets;
 
-    public ChannelPlayer(Character character, ICharacterRepository characters)
+    public ChannelPlayer(
+        Character character,
+        ICharacterRepository characters,
+        MapleSession session,
+        ChannelPackets packets)
     {
         _character = character;
         _characters = characters;
+        _session = session;
+        _packets = packets;
     }
 
     public string getName() => _character.Name;
@@ -33,5 +43,9 @@ public sealed class ChannelPlayer : INpcPlayer
         long updated = (long)_character.Meso + amount;
         _character.Meso = (int)Math.Clamp(updated, 0, int.MaxValue);
         _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Meso));
     }
+
+    private void Send(byte[] packet)
+        => _session.SendAsync(packet).AsTask().GetAwaiter().GetResult();
 }
