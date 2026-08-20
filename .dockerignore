@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+.git/
+.github/
+.vs/
+.idea/
+*.user
+data/wz/
+data/wz_xml/
+logs/

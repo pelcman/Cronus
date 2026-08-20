@@ -176,7 +176,8 @@ parity is on the order of half a year.
 - [ ] Move to `Span<byte>`/`Memory<byte>`-centric APIs to cut allocations (naive first).
 - [ ] Warn on undefined opcodes (@FFFF) at startup.
 - [ ] Externalize ports / DB connection / data paths via appsettings.json.
-- [ ] Docker Compose (bundled MySQL) — reference Maple2's compose.yml.
+- [x] Docker Compose (bundled MySQL) + Dockerfile — `docker compose up --build`.
+      (Container build not run in the dev environment; standard .NET multi-stage pattern.)
 - [x] CI (GitHub Actions: build + test on push/PR to main).
 
 ---

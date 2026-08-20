@@ -1,0 +1,43 @@
+# Local development stack: MySQL + the Cronus host, with persistence.
+#
+#   docker compose up --build
+#
+# The client (via EmuClient) connects to 127.0.0.1:8484. On character select the server
+# hands the client to the channel at 127.0.0.1:7575 — both are published below, so a client
+# on the same host reaches them through the port mappings.
+
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: cronus
+      MYSQL_DATABASE: cronus
+    ports:
+      - "3306:3306"
+    volumes:
+      - cronus-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pcronus"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  cronus:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CRONUS_DB: "server=db;port=3306;database=cronus;user=root;password=cronus"
+      # Mount a wz_xml tree and/or scripts and point these at them to enable maps / NPC dialogs:
+      # CRONUS_WZ: "/data/wz"
+      CRONUS_SCRIPTS: "/data/scripts"
+    ports:
+      - "8484:8484"
+      - "7575:7575"
+    volumes:
+      - ./scripts:/data/scripts:ro
+      # - /path/to/wz_xml:/data/wz:ro
+
+volumes:
+  cronus-db:

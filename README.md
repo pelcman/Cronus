@@ -76,6 +76,15 @@ Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
 To connect a real client, point a JMS v186 client at the host via EmuClient's localhost
 redirect. Accounts auto-register on first login.
 
+### Docker (with MySQL persistence)
+
+```bash
+docker compose up --build
+```
+
+Starts MySQL + the host (login 8484, channel 7575) with persistent accounts/characters.
+Mount a wz_xml tree into the `cronus` service and set `CRONUS_WZ` to enable maps/NPCs.
+
 ## License
 
 [AGPL-3.0](LICENSE). Cronus is a derivative of upstream JMSv186 (GPLv3) and OdinMS-derived
