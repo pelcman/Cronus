@@ -16,6 +16,19 @@ public sealed class FieldMob
     public short Y { get; init; }
 
     public int Foothold { get; init; }
+
+    public int MaxHp { get; init; } = 100;
+
+    public int Hp { get; set; } = 100;
+
+    public bool IsDead => Hp <= 0;
+
+    /// <summary>Applies damage, returns the new HP (clamped at 0).</summary>
+    public int Damage(int amount)
+    {
+        Hp = Math.Max(0, Hp - Math.Max(0, amount));
+        return Hp;
+    }
 }
 
 /// <summary>A spawned NPC in a field: a runtime object id bound to a wz template + placement.</summary>
@@ -102,6 +115,20 @@ public sealed class Field
         return null;
     }
 
+    /// <summary>Finds a spawned (live or dead) monster by its runtime object id.</summary>
+    public FieldMob? FindMob(int objectId)
+    {
+        foreach (FieldMob mob in Mobs)
+        {
+            if (mob.ObjectId == objectId)
+            {
+                return mob;
+            }
+        }
+
+        return null;
+    }
+
     private static IReadOnlyList<FieldMob> BuildMobs(MapData? mapData)
     {
         if (mapData is null || mapData.Mobs.Count == 0)
@@ -125,6 +152,8 @@ public sealed class Field
                 X = (short)spawn.X,
                 Y = (short)spawn.Y,
                 Foothold = spawn.Foothold,
+                MaxHp = spawn.MaxHp,
+                Hp = spawn.MaxHp,
             });
         }
 

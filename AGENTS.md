@@ -122,8 +122,12 @@ Each milestone means adding one "working vertical slice".
       (RawEncode + equip/bundle body, JMS v186); AvatarLook renders equipped items;
       CharacterData InventoryInfo encodes the equipped tab; new characters get the starter
       equips the client sends; items persist via an `items` table (EF Include/cascade).
-- [ ] **M9b: Combat** — mob HP/aggro/movement, CP_UserMeleeAttack → damage (needs a live
-      capture to validate the variadic attack packet). **← current**
+- [x] **M9b: Melee combat core** — AttackParser (CP_UserMeleeAttack, JMS v186 variadic layout);
+      FieldMob HP; damage application; LP_MobLeaveField on death. (The attack packet layout is
+      ported from source — validate against a live capture; magic/shoot/body attacks, exp/drops,
+      and the LP_UserMeleeAttack mirror to other players are follow-ups.)
+- [ ] **M10: Combat depth & content** — mob wz HP/stats, exp on kill, drops, mob movement/AI,
+      magic/ranged attacks, quests. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

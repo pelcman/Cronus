@@ -62,6 +62,9 @@ public sealed class MobSpawn
     /// <summary>Foothold (<c>fh</c>).</summary>
     public int Foothold { get; init; }
 
+    /// <summary>Max HP. Real values come from mob wz data; defaulted until that loads.</summary>
+    public int MaxHp { get; init; } = 100;
+
     public bool Hidden { get; init; }
 }
 
