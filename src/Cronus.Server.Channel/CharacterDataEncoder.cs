@@ -21,6 +21,9 @@ public static class CharacterDataEncoder
     /// <summary>Windows FILETIME for the current instant (100ns ticks since 1601-01-01).</summary>
     public static long FileTimeNow() => DateTime.UtcNow.ToFileTimeUtc();
 
+    /// <summary>FILETIME for "2079-07-07" — the no-expiration sentinel (permanent skills).</summary>
+    private const long NoExpiration = 151004124000000000L;
+
     /// <summary>Writes CharacterData(datamask = -1) for <paramref name="c"/>.</summary>
     public static void WriteAllData(PacketWriter w, Character c)
     {
@@ -40,8 +43,15 @@ public static class CharacterDataEncoder
 
         WriteInventoryInfo(w, c);
 
-        // [0x100] skills (none yet)
-        w.WriteShort(0);
+        // [0x100] skills: id, level, expiration (JMS >= 180). Master-level-only 4th-job skills
+        // are not modeled, so no master-level field is written.
+        w.WriteShort((short)c.Skills.Count);
+        foreach (KeyValuePair<int, int> skill in c.Skills)
+        {
+            w.WriteInt(skill.Key);
+            w.WriteInt(skill.Value);
+            w.WriteLong(NoExpiration);
+        }
 
         // [0x8000] cooldowns (none)
         w.WriteShort(0);

@@ -66,4 +66,7 @@ public sealed class Character
 
     /// <summary>Completed quests: quest id → completion time (Windows FILETIME). EF-ignored for now.</summary>
     public Dictionary<int, long> CompletedQuests { get; set; } = new();
+
+    /// <summary>Learned skills: skill id → level. In-memory (EF-ignored) for now.</summary>
+    public Dictionary<int, int> Skills { get; set; } = new();
 }

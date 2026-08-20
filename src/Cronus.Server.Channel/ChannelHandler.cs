@@ -39,6 +39,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opUserChat;
     private readonly int _opMeleeAttack;
     private readonly int _opDropPickUp;
+    private readonly int _opSkillUp;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
@@ -70,6 +71,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
         _opMeleeAttack = clientOpcodes.Get(ClientOpcode.UserMeleeAttack);
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
+        _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
@@ -99,6 +101,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opDropPickUp)
         {
             await HandleDropPickUpAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opSkillUp)
+        {
+            await HandleSkillUpAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opTransferField)
         {
@@ -248,6 +254,32 @@ public sealed class ChannelHandler : PacketHandlerBase
         int meso = Math.Max(1, mob.MaxHp / 5); // placeholder formula
         FieldDrop drop = _field.AddMesoDrop(meso, mob.X, mob.Y, mob);
         await _field.BroadcastAsync(_packets.DropEnterFieldMeso(drop)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleSkillUpAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_UserSkillUpRequest: [timeStamp:4][skillId:4]
+        packet.ReadInt();
+        int skillId = packet.ReadInt();
+
+        Character c = _player.Character;
+        if (c.Sp <= 0)
+        {
+            return; // no SP to spend
+        }
+
+        int level = c.Skills.TryGetValue(skillId, out int current) ? current + 1 : 1;
+        c.Skills[skillId] = level;
+        c.Sp = (short)Math.Max(0, c.Sp - 1);
+        _characters.Save(c);
+
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Sp)).ConfigureAwait(false);
+        await session.SendAsync(_packets.ChangeSkillRecordResult(skillId, level)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleDropPickUpAsync(MapleSession session, PacketReader packet)

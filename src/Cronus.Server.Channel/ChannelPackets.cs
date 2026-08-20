@@ -315,6 +315,26 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>Windows FILETIME for "2027-07-07" — the magical (effectively permanent) expiration.</summary>
+    private const long MagicalExpiration = 134594172000000000L;
+
+    /// <summary>
+    /// Builds <c>LP_ChangeSkillRecordResult</c> confirming a skill's new level (ports
+    /// <c>ResCWvsContext.ChangeSkillRecordResult</c>, JMS v186).
+    /// </summary>
+    public byte[] ChangeSkillRecordResult(int skillId, int level, int masterLevel = 0)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ChangeSkillRecordResult);
+        w.WriteByte(1);
+        w.WriteShort(1);              // record count
+        w.WriteInt(skillId);
+        w.WriteInt(level);
+        w.WriteInt(masterLevel);
+        w.WriteLong(MagicalExpiration); // JMS >= 164
+        w.WriteByte(4);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {

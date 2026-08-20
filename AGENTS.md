@@ -139,8 +139,11 @@ Each milestone means adding one "working vertical slice".
       API (cm/player hasQuest/isQuestDone/startQuest/completeQuest); quest records written into
       the CharacterData blob (survive relog visibly). Quest DB persistence + live LP_QuestRecord
       updates are follow-ups.
+- [x] **M9h: Skills** — CP_UserSkillUpRequest spends SP to raise a skill (LP_StatChanged(Sp) +
+      LP_ChangeSkillRecordResult); skill records written into CharacterData. Closes the
+      level → SP → skill progression loop. (wz skill max-levels + DB persistence are follow-ups.)
 - [ ] **M10: Combat depth & content** — item drops (wz drop tables), mob movement/AI,
-      magic/ranged attacks, quest DB persistence + live updates. **← current**
+      magic/ranged attacks, quest/skill DB persistence, wz skill data. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

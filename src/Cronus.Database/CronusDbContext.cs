@@ -46,6 +46,7 @@ public sealed class CronusDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
         character.Ignore(c => c.StartedQuests);   // quest persistence is a follow-up
         character.Ignore(c => c.CompletedQuests);
+        character.Ignore(c => c.Skills);          // skill persistence is a follow-up
 
         var item = modelBuilder.Entity<InventoryItem>();
         item.ToTable("items");
