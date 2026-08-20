@@ -128,6 +128,9 @@ Each milestone means adding one "working vertical slice".
       and the LP_UserMeleeAttack mirror to other players are follow-ups.)
 - [x] **M9c: Mob wz stats + exp on kill** — `Cronus.Data` mob provider (Mob/{id}.img.xml →
       maxHP/exp/level); FieldMob HP/exp from wz; killing a mob grants exp (LP_StatChanged).
+- [x] **M9d: Level-up** — pre-BB exp table (SharedExpTable), CharacterProgression (level-ups
+      on exp gain: HP/MP/AP/SP gains, SP only for jobs, remainder carried); kill/script exp
+      route through it and send the full LP_StatChanged.
 - [ ] **M10: Combat depth & content** — drops, mob movement/AI, magic/ranged attacks,
       the LP_UserMeleeAttack mirror, quests. **← current**
 

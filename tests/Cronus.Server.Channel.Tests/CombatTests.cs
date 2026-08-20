@@ -138,8 +138,8 @@ public class CombatTests
             Portals = Array.Empty<PortalData>(),
             Mobs = new[] { new MobSpawn { TemplateId = 100100, X = 0, Y = 0, MaxHp = 50 } },
         };
-        // wz mob stats override the spawn placeholder: 50 HP, 25 exp.
-        var mobData = new InMemoryMobProvider(new[] { new MobData { TemplateId = 100100, MaxHp = 50, Exp = 25 } });
+        // wz mob stats override the spawn placeholder: 50 HP, 10 exp (below the level-2 threshold).
+        var mobData = new InMemoryMobProvider(new[] { new MobData { TemplateId = 100100, MaxHp = 50, Exp = 10 } });
         var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }), mobData);
 
         // Two hits of 40 each = 80 > 50 HP -> dead.
@@ -165,8 +165,8 @@ public class CombatTests
         Assert.Equal(1, deadType);
         Assert.True(mob.IsDead);
         Assert.Equal(0, mob.Hp);
-        Assert.Equal(25, exp);          // mob exp granted
-        Assert.Equal(25, hero.Exp);
+        Assert.Equal(10, exp);          // mob exp granted (no level-up)
+        Assert.Equal(10, hero.Exp);
     }
 
     [Fact]

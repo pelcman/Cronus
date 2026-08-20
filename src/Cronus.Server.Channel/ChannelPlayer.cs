@@ -54,10 +54,9 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void gainExp(int amount)
     {
-        long updated = (long)_character.Exp + amount;
-        _character.Exp = (int)Math.Clamp(updated, 0, int.MaxValue);
+        StatFlag changed = CharacterProgression.GainExp(_character, amount); // processes level-ups
         _characters.Save(_character);
-        Send(_packets.StatChanged(_character, StatFlag.Exp));
+        Send(_packets.StatChanged(_character, changed));
     }
 
     public void heal()
