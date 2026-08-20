@@ -67,6 +67,36 @@ public class DbAccountRepositoryTests
     }
 
     [Fact]
+    public void CharacterRepository_CreateListFindNameExists()
+    {
+        Func<CronusDbContext> factory = InMemoryFactory();
+        var repo = new DbCharacterRepository(factory);
+
+        Character created = repo.Create(new Character
+        {
+            AccountId = 7,
+            WorldId = 0,
+            Name = "Kaede",
+            Face = 20000,
+            Hair = 30000,
+        });
+
+        Assert.True(created.Id > 0);
+        Assert.True(repo.NameExists("kaede")); // case-insensitive
+        Assert.False(repo.NameExists("other"));
+
+        IReadOnlyList<Character> list = repo.ListByAccount(7, 0);
+        Assert.Single(list);
+        Assert.Equal(created.Id, list[0].Id);
+        Assert.Empty(repo.ListByAccount(7, 1));   // other world
+        Assert.Empty(repo.ListByAccount(8, 0));   // other account
+
+        Character? found = repo.Find(created.Id);
+        Assert.NotNull(found);
+        Assert.Equal("Kaede", found!.Name);
+    }
+
+    [Fact]
     public void LoginService_WorksOverDbRepository()
     {
         var repo = new DbAccountRepository(InMemoryFactory());

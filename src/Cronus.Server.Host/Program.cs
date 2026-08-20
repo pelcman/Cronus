@@ -23,15 +23,15 @@ WarnUnresolved("client", clientOps);
 WarnUnresolved("server", serverOps);
 
 // Use MySQL when a connection string is configured (CRONUS_DB env var), else fall back to the
-// in-memory store so the server runs with zero external dependencies for local testing.
-IAccountRepository accounts = CreateAccountRepository();
+// in-memory stores so the server runs with zero external dependencies for local testing.
+(IAccountRepository accounts, ICharacterRepository characters) = CreateRepositories();
 var loginService = new LoginService(accounts, autoRegister: true);
 
 var listener = new MapleListener(
     new IPEndPoint(IPAddress.Any, port),
     config,
     () => new LoggingHandler(
-        new LoginHandler(clientOps, serverOps, loginService, config),
+        new LoginHandler(clientOps, serverOps, loginService, config, characters: characters),
         "login"));
 
 using var cts = new CancellationTokenSource();
@@ -63,25 +63,25 @@ static void WarnUnresolved(string which, OpcodeTable table)
     }
 }
 
-static IAccountRepository CreateAccountRepository()
+static (IAccountRepository, ICharacterRepository) CreateRepositories()
 {
     string? connectionString = Environment.GetEnvironmentVariable("CRONUS_DB");
     if (string.IsNullOrWhiteSpace(connectionString))
     {
-        Console.WriteLine("[db] CRONUS_DB not set — using in-memory accounts (not persistent).");
-        return new InMemoryAccountRepository();
+        Console.WriteLine("[db] CRONUS_DB not set — using in-memory stores (not persistent).");
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository());
     }
 
     try
     {
         Func<CronusDbContext> factory = MySqlDatabase.CreateFactory(connectionString);
         MySqlDatabase.EnsureCreated(factory);
-        Console.WriteLine("[db] Connected to MySQL; accounts are persistent.");
-        return new DbAccountRepository(factory);
+        Console.WriteLine("[db] Connected to MySQL; accounts and characters are persistent.");
+        return (new DbAccountRepository(factory), new DbCharacterRepository(factory));
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory accounts.");
-        return new InMemoryAccountRepository();
+        Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory stores.");
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository());
     }
 }
