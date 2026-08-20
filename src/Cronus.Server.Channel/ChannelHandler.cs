@@ -149,6 +149,16 @@ public sealed class ChannelHandler : PacketHandlerBase
         _field = field;
         await field.BroadcastAsync(_packets.UserEnterField(player), exceptCharacterId: character.Id)
             .ConfigureAwait(false);
+
+        await SpawnNpcsAsync(session, field).ConfigureAwait(false);
+    }
+
+    private async ValueTask SpawnNpcsAsync(MapleSession session, Field field)
+    {
+        foreach (FieldNpc npc in field.Npcs)
+        {
+            await session.SendAsync(_packets.NpcEnterField(npc)).ConfigureAwait(false);
+        }
     }
 
     private async ValueTask HandleUserMoveAsync(PacketReader packet)
@@ -200,11 +210,13 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        // JMS v186 CP_UserSelectNpc: [npcObjectId:4][x:2][y:2]
-        int npcId = packet.ReadInt();
+        // JMS v186 CP_UserSelectNpc: [npcObjectId:4][x:2][y:2]. The client sends the runtime
+        // object id; resolve it to the template id (the script key) via the field.
+        int objectId = packet.ReadInt();
+        int templateId = _field?.FindNpc(objectId)?.TemplateId ?? objectId;
 
         var dialog = new ChannelNpcDialog(session, _packets);
-        _conversation = _npcScripts.Start(npcId, dialog, _player.Character);
+        _conversation = _npcScripts.Start(templateId, dialog, _player.Character);
     }
 
     private void HandleScriptAnswer(PacketReader packet)
@@ -320,6 +332,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         _field = newField;
         await newField.BroadcastAsync(_packets.UserEnterField(player), exceptCharacterId: player.Character.Id)
             .ConfigureAwait(false);
+
+        await SpawnNpcsAsync(session, newField).ConfigureAwait(false);
     }
 
     /// <summary>

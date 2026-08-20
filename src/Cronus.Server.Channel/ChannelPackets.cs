@@ -126,6 +126,27 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_NpcEnterField</c> spawning an NPC (ports <c>ResCNpcPool.NpcEnterField</c> +
+    /// <c>CNpc_Init</c>, JMS v186 path — no JMS &gt;= 194 trailing byte).
+    /// </summary>
+    public byte[] NpcEnterField(FieldNpc npc)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.NpcEnterField);
+        w.WriteInt(npc.ObjectId);     // dwNpcId (runtime oid)
+        w.WriteInt(npc.TemplateId);   // NpcTemplate
+
+        // CNpc::Init
+        w.WriteShort(npc.X);
+        w.WriteShort(npc.Y);
+        w.WriteByte((byte)npc.Facing);
+        w.WriteShort((short)npc.Foothold);
+        w.WriteShort((short)npc.Rx0);
+        w.WriteShort((short)npc.Rx1);
+        w.WriteByte(1);               // m_bEnabled
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {

@@ -50,4 +50,5 @@ public static class ServerOpcode
     public const string UserChat = "LP_UserChat";
     public const string UserMove = "LP_UserMove";
     public const string ScriptMessage = "LP_ScriptMessage";
+    public const string NpcEnterField = "LP_NpcEnterField";
 }

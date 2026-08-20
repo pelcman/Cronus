@@ -42,11 +42,10 @@ var loginListener = new MapleListener(
             characters: characters, channelEndpoint: channelEndpoint),
         "login"));
 
-var fields = new FieldRegistry();
-
 // Map data from a wz_xml tree if CRONUS_WZ points at one, else no static map data (portal-by-
-// name transfers degrade to "disabled portal"; direct map-id jumps still work).
+// name transfers degrade to "disabled portal"; direct map-id jumps still work; no NPCs spawn).
 IMapProvider maps = CreateMapProvider();
+var fields = new FieldRegistry(maps);
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js, if configured.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
