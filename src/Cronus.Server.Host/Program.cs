@@ -1,5 +1,6 @@
 using System.Net;
 using Cronus.Common;
+using Cronus.Data;
 using Cronus.Database;
 using Cronus.Domain;
 using Cronus.Network;
@@ -41,11 +42,16 @@ var loginListener = new MapleListener(
         "login"));
 
 var fields = new FieldRegistry();
+
+// Map data from a wz_xml tree if CRONUS_WZ points at one, else no static map data (portal-by-
+// name transfers degrade to "disabled portal"; direct map-id jumps still work).
+IMapProvider maps = CreateMapProvider();
+
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, channelId: 0),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, channelId: 0),
         "channel"));
 
 using var cts = new CancellationTokenSource();
@@ -73,6 +79,19 @@ finally
 }
 
 Console.WriteLine("Stopped.");
+
+static IMapProvider CreateMapProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
+    {
+        Console.WriteLine("[wz] CRONUS_WZ not set — no static map data (portal-by-name disabled).");
+        return new InMemoryMapProvider(Array.Empty<MapData>());
+    }
+
+    Console.WriteLine($"[wz] Loading map data on demand from {wzRoot}");
+    return new WzMapProvider(wzRoot);
+}
 
 static void WarnUnresolved(string which, OpcodeTable table)
 {

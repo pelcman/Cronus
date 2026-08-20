@@ -1,5 +1,6 @@
 using System.IO.Pipelines;
 using Cronus.Common;
+using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
@@ -156,7 +157,56 @@ public class MapTransferTests
     }
 
     [Fact]
-    public async Task PortalByName_IsRefusedUntilMapDataExists()
+    public async Task PortalByName_ResolvesThroughMapData()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Walker", MapId = 100000000, Hp = 50,
+        });
+
+        // Map 100000000 has portal "east00" linking to 104040000 at target "west00".
+        var start = new MapData
+        {
+            MapId = 100000000,
+            Portals = new[]
+            {
+                new PortalData { Id = 0, Name = "sp", Type = 0, TargetMapId = MapData.NoLink },
+                new PortalData { Id = 1, Name = "east00", Type = 2, TargetMapId = 104040000, TargetName = "west00" },
+            },
+        };
+        var destination = new MapData
+        {
+            MapId = 104040000,
+            Portals = new[]
+            {
+                new PortalData { Id = 0, Name = "sp", Type = 0, TargetMapId = MapData.NoLink },
+                new PortalData { Id = 3, Name = "west00", Type = 2, TargetMapId = MapData.NoLink },
+            },
+        };
+        var maps = new InMemoryMapProvider(new[] { start, destination });
+
+        var fields = new FieldRegistry();
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        await client.RequestTransferAsync(mapId: -1, portalName: "east00");
+
+        (int mapId, short _) = await client.MapChanged.Task.WaitAsync(cts.Token);
+        Assert.Equal(104040000, mapId);
+        Assert.Equal(104040000, hero.MapId);
+        Assert.Equal(3, hero.Portal); // spawned at the "west00" portal id
+        Assert.Contains(fields.Get(104040000).Players, fp => fp.Character.Id == hero.Id);
+    }
+
+    [Fact]
+    public async Task PortalByName_IsRefusedWhenMapDataMissing()
     {
         var repo = new InMemoryCharacterRepository();
         Character hero = repo.Create(new Character

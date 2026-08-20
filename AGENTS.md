@@ -96,9 +96,13 @@ Each milestone means adding one "working vertical slice".
       mutual LP_UserEnterField on migrate-in, CP_UserMove relay (raw CMovePath verbatim +
       server-side position tracking), CP_UserChat broadcast, LP_UserLeaveField on
       disconnect. Multi-client tests over separate encrypted sessions.
-- [ ] **M7b: Map transfer & gameplay follow-ups** — portals (CP_UserTransferFieldRequest →
-      SetField map-change branch), starter equipment + item serialization, NPC dialogue
-      (Jint), simple combat. **← current**
+- [x] **M7b: Map transfer** — CP_UserTransferFieldRequest → SetField map-change branch;
+      direct map-id jumps and portal-by-name (resolved via wz map data).
+- [x] **M7c: WZ data (`Cronus.Data`)** — WzData XML parser (wz_xml format), MapData/PortalData,
+      WzMapProvider (on-demand load from a wz_xml tree via CRONUS_WZ) + InMemoryMapProvider.
+      Portal graph now drives map transfer.
+- [ ] **M8: Gameplay content** — starter equipment + item serialization, NPC dialogue (Jint
+      scripting), NPC/mob spawn packets, simple combat. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
