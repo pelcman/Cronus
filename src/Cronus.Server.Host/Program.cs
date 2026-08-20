@@ -5,6 +5,7 @@ using Cronus.Database;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
+using Cronus.Scripting;
 using Cronus.Server.Channel;
 using Cronus.Server.Host;
 using Cronus.Server.Login;
@@ -47,11 +48,14 @@ var fields = new FieldRegistry();
 // name transfers degrade to "disabled portal"; direct map-id jumps still work).
 IMapProvider maps = CreateMapProvider();
 
+// NPC scripts from CRONUS_SCRIPTS/npc/{id}.js, if configured.
+NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
+
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, channelId: 0),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, channelId: 0),
         "channel"));
 
 using var cts = new CancellationTokenSource();
@@ -91,6 +95,20 @@ static IMapProvider CreateMapProvider()
 
     Console.WriteLine($"[wz] Loading map data on demand from {wzRoot}");
     return new WzMapProvider(wzRoot);
+}
+
+static NpcScriptEngine? CreateNpcScriptEngine()
+{
+    string? scriptRoot = Environment.GetEnvironmentVariable("CRONUS_SCRIPTS");
+    if (string.IsNullOrWhiteSpace(scriptRoot))
+    {
+        Console.WriteLine("[npc] CRONUS_SCRIPTS not set — NPC dialogs disabled.");
+        return null;
+    }
+
+    string npcDir = Path.Combine(scriptRoot, "npc");
+    Console.WriteLine($"[npc] Loading NPC scripts on demand from {npcDir}");
+    return new NpcScriptEngine(new FolderNpcScriptSource(npcDir));
 }
 
 static void WarnUnresolved(string which, OpcodeTable table)

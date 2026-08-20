@@ -9,6 +9,7 @@
     <ProjectReference Include="..\Cronus.Data\Cronus.Data.csproj" />
     <ProjectReference Include="..\Cronus.Domain\Cronus.Domain.csproj" />
     <ProjectReference Include="..\Cronus.Network\Cronus.Network.csproj" />
+    <ProjectReference Include="..\Cronus.Scripting\Cronus.Scripting.csproj" />
     <ProjectReference Include="..\Cronus.Server.Login\Cronus.Server.Login.csproj" />
   </ItemGroup>
 

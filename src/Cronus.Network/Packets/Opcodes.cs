@@ -22,6 +22,8 @@ public static class ClientOpcode
     public const string UserMove = "CP_UserMove";
     public const string UserChat = "CP_UserChat";
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
+    public const string UserSelectNpc = "CP_UserSelectNpc";
+    public const string UserScriptMessageAnswer = "CP_UserScriptMessageAnswer";
 }
 
 /// <summary>
@@ -47,4 +49,5 @@ public static class ServerOpcode
     public const string TransferFieldReqIgnored = "LP_TransferFieldReqIgnored";
     public const string UserChat = "LP_UserChat";
     public const string UserMove = "LP_UserMove";
+    public const string ScriptMessage = "LP_ScriptMessage";
 }
