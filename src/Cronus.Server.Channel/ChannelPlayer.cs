@@ -38,12 +38,34 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public int getMeso() => _character.Meso;
 
+    public int getHp() => _character.Hp;
+
+    public int getMaxHp() => _character.MaxHp;
+
+    public int getExp() => _character.Exp;
+
     public void gainMeso(int amount)
     {
         long updated = (long)_character.Meso + amount;
         _character.Meso = (int)Math.Clamp(updated, 0, int.MaxValue);
         _characters.Save(_character);
         Send(_packets.StatChanged(_character, StatFlag.Meso));
+    }
+
+    public void gainExp(int amount)
+    {
+        long updated = (long)_character.Exp + amount;
+        _character.Exp = (int)Math.Clamp(updated, 0, int.MaxValue);
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Exp));
+    }
+
+    public void heal()
+    {
+        _character.Hp = _character.MaxHp;
+        _character.Mp = _character.MaxMp;
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Hp | StatFlag.Mp));
     }
 
     private void Send(byte[] packet)

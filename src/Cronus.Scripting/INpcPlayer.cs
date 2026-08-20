@@ -16,6 +16,18 @@ public interface INpcPlayer
 
     int getMeso();
 
+    int getHp();
+
+    int getMaxHp();
+
+    int getExp();
+
     /// <summary>Adds (or, if negative, removes) mesos, clamped at zero, and persists.</summary>
     void gainMeso(int amount);
+
+    /// <summary>Adds experience (no auto-level yet) and notifies the client.</summary>
+    void gainExp(int amount);
+
+    /// <summary>Restores HP and MP to full and notifies the client.</summary>
+    void heal();
 }

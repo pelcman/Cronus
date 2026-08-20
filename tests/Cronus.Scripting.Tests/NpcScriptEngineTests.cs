@@ -151,17 +151,24 @@ public class NpcScriptEngineTests
     private sealed class FakePlayer : INpcPlayer
     {
         public int Meso;
+        public int Exp;
+        public int Hp = 10;
         public int SaveCount;
 
         public string getName() => "Hero";
         public int getLevel() => 10;
         public int getMapId() => 100000000;
         public int getMeso() => Meso;
+        public int getHp() => Hp;
+        public int getMaxHp() => 100;
+        public int getExp() => Exp;
         public void gainMeso(int amount)
         {
             Meso = Math.Max(0, Meso + amount);
             SaveCount++;
         }
+        public void gainExp(int amount) => Exp = Math.Max(0, Exp + amount);
+        public void heal() => Hp = getMaxHp();
     }
 
     [Fact]
@@ -191,6 +198,32 @@ public class NpcScriptEngineTests
         Assert.Equal(1, player.SaveCount);
 
         cm.Advance(messageType: 0, action: 1, selection: -1, text: string.Empty);
+    }
+
+    [Fact]
+    public void ScriptCanHealAndGiveExp()
+    {
+        const int npcId = 9000004;
+        const string script = """
+            function start() {
+                player.heal();
+                player.gainExp(500);
+                cm.sendOk("Healed to " + player.getHp() + ", exp " + player.getExp());
+            }
+            """;
+
+        var engine = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+        var dialog = new RecordingDialog();
+        var player = new FakePlayer { Hp = 10, Exp = 100 };
+
+        using var cts = new CancellationTokenSource(Timeout);
+        engine.Start(npcId, dialog, player);
+
+        Prompt ok = dialog.Take(cts.Token);
+        Assert.Equal("Healed to 100, exp 600", ok.Text);
+        Assert.Equal(100, player.Hp);
+        Assert.Equal(600, player.Exp);
     }
 
     private static void WaitUntilEnded(NpcConversation cm, CancellationToken ct)
