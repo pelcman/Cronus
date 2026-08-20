@@ -1,0 +1,108 @@
+using Cronus.Domain;
+using Cronus.Network.Packets;
+using Cronus.Server.Login;
+
+namespace Cronus.Server.Channel;
+
+/// <summary>
+/// Serializes the full CharacterData blob sent inside <c>LP_SetField</c> on game entry.
+/// Ports the JMS v186 path of <c>DataCharacterData.Encode(chr, -1)</c> — pre-Big-Bang,
+/// JMS &gt;= 180 &amp;&amp; &lt; 187 — with empty inventories, skills, quests, rings, and
+/// monster book (item persistence lands later). Every conditional the Java takes for this
+/// version is flattened into a straight-line write.
+/// </summary>
+public static class CharacterDataEncoder
+{
+    private const byte BuddyListCapacity = 20;
+    private const int EmptyTeleportRock = 999999999;
+    private const byte DefaultInventorySlots = 24;
+
+    /// <summary>Windows FILETIME for the current instant (100ns ticks since 1601-01-01).</summary>
+    public static long FileTimeNow() => DateTime.UtcNow.ToFileTimeUtc();
+
+    /// <summary>Writes CharacterData(datamask = -1) for <paramref name="c"/>.</summary>
+    public static void WriteAllData(PacketWriter w, Character c)
+    {
+        w.WriteLong(-1);                  // statmask (all)
+        w.WriteByte(0);                   // nCombatOrders (JMS >= 180)
+
+        // [0x01] character stat + buddy capacity + bless of fairy
+        CharacterEncoder.WriteStat(w, c);
+        w.WriteByte(BuddyListCapacity);
+        w.WriteByte(0);                   // bless of fairy: none
+
+        // [0x02] money + pachinko
+        w.WriteInt(c.Meso);
+        w.WriteInt(c.Id);                 // pachinko: character id
+        w.WriteInt(0);                    // pachinko: tama
+        w.WriteInt(0);                    // pachinko: reserved
+
+        WriteInventoryInfo(w);
+
+        // [0x100] skills (none yet)
+        w.WriteShort(0);
+
+        // [0x8000] cooldowns (none)
+        w.WriteShort(0);
+
+        // [0x200] started quests (none) + JMS 184-186 extra list
+        w.WriteShort(0);
+        w.WriteShort(0);
+
+        // [0x4000] completed quests (none)
+        w.WriteShort(0);
+
+        // [0x400] minigame records (none)
+        w.WriteShort(0);
+
+        // [0x800] rings: couple / friend / marriage (none)
+        w.WriteShort(0);
+        w.WriteShort(0);
+        w.WriteShort(0);
+
+        // [0x1000] teleport rocks: 5 regular + 10 VIP, all empty
+        for (int i = 0; i < 15; i++)
+        {
+            w.WriteInt(EmptyTeleportRock);
+        }
+
+        // JMS branch tail:
+        w.WriteShort(0);                  // [0x7C] presents (none)
+        w.WriteInt(0);                    // [0x20000] monster book cover
+        w.WriteByte(0);                   // [0x10000] monster book: not shrunk
+        w.WriteShort(0);                  //           card count 0
+        w.WriteShort(0);                  // [0x40000] quest info records (none)
+        w.WriteShort(0);                  // [0x80000] (pre-BB extra)
+        w.WriteShort(0);                  // [0x200000] visitor quest log (JMS >= 186)
+    }
+
+    /// <summary>
+    /// Writes InventoryInfo(datamask = -1) with empty inventories (JMS v186 layout).
+    /// Slot terminators: 2 bytes for equip-typed sections, 1 byte for the rest.
+    /// </summary>
+    private static void WriteInventoryInfo(PacketWriter w)
+    {
+        // [0x80] slot limits: EQUIP / USE / SETUP / ETC / CASH
+        for (int i = 0; i < 5; i++)
+        {
+            w.WriteByte(DefaultInventorySlots);
+        }
+
+        // [0x100000] (JMS >= 165)
+        w.WriteInt(0);
+        w.WriteInt(0);
+
+        // [0x04] equip sections: equipped, equipped avatars, equip inventory,
+        // and the JMS >= 180 (-1000..-1099) block — all empty, 2-byte terminators.
+        for (int i = 0; i < 4; i++)
+        {
+            w.WriteShort(0);
+        }
+
+        // [0x08/0x10/0x20/0x40] USE, SETUP, ETC, CASH — empty, 1-byte terminators.
+        for (int i = 0; i < 4; i++)
+        {
+            w.WriteByte(0);
+        }
+    }
+}

@@ -4,16 +4,18 @@ using Cronus.Database;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
+using Cronus.Server.Channel;
 using Cronus.Server.Host;
 using Cronus.Server.Login;
 
-// JMS v186 login server. Point a JMS v186 client (via EmuClient localhost redirect) at this
-// host's login port to reach the ID/PW screen.
+// JMS v186 server host: login server + one channel server in a single process.
+// Point a JMS v186 client (via EmuClient localhost redirect) at the login port.
 
 CodePage.Register();
 ServerConfig config = ServerConfig.Jms186;
 
-int port = args.Length > 0 && int.TryParse(args[0], out int p) ? p : 8484;
+int loginPort = args.Length > 0 && int.TryParse(args[0], out int p) ? p : 8484;
+int channelPort = args.Length > 1 && int.TryParse(args[1], out int cp) ? cp : 7575;
 
 string opcodeDir = Path.Combine(AppContext.BaseDirectory, "opcodes");
 OpcodeTable clientOps = OpcodeTable.LoadFile(Path.Combine(opcodeDir, "JMS_v186_ClientPacket.properties"));
@@ -27,12 +29,23 @@ WarnUnresolved("server", serverOps);
 (IAccountRepository accounts, ICharacterRepository characters) = CreateRepositories();
 var loginService = new LoginService(accounts, autoRegister: true);
 
-var listener = new MapleListener(
-    new IPEndPoint(IPAddress.Any, port),
+// The login server hands clients to the channel via LP_SelectCharacterResult.
+var channelEndpoint = new IPEndPoint(IPAddress.Loopback, channelPort);
+
+var loginListener = new MapleListener(
+    new IPEndPoint(IPAddress.Any, loginPort),
     config,
     () => new LoggingHandler(
-        new LoginHandler(clientOps, serverOps, loginService, config, characters: characters),
+        new LoginHandler(clientOps, serverOps, loginService, config,
+            characters: characters, channelEndpoint: channelEndpoint),
         "login"));
+
+var channelListener = new MapleListener(
+    new IPEndPoint(IPAddress.Any, channelPort),
+    config,
+    () => new LoggingHandler(
+        new ChannelHandler(clientOps, serverOps, characters, config, channelId: 0),
+        "channel"));
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -41,16 +54,21 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-Console.WriteLine($"Cronus login server — JMS v{config.Version}, region {config.Region} — listening on 0.0.0.0:{port}");
+Console.WriteLine($"Cronus — JMS v{config.Version}, region {config.Region}");
+Console.WriteLine($"  login   : 0.0.0.0:{loginPort}");
+Console.WriteLine($"  channel : 0.0.0.0:{channelPort}");
 Console.WriteLine("Accounts auto-register on first login. Press Ctrl+C to stop.");
 
 try
 {
-    await listener.RunAsync(cts.Token);
+    await Task.WhenAll(
+        loginListener.RunAsync(cts.Token),
+        channelListener.RunAsync(cts.Token));
 }
 finally
 {
-    await listener.DisposeAsync();
+    await loginListener.DisposeAsync();
+    await channelListener.DisposeAsync();
 }
 
 Console.WriteLine("Stopped.");

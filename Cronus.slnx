@@ -4,12 +4,14 @@
     <Project Path="src/Cronus.Database/Cronus.Database.csproj" />
     <Project Path="src/Cronus.Domain/Cronus.Domain.csproj" />
     <Project Path="src/Cronus.Network/Cronus.Network.csproj" />
+    <Project Path="src/Cronus.Server.Channel/Cronus.Server.Channel.csproj" />
     <Project Path="src/Cronus.Server.Host/Cronus.Server.Host.csproj" />
     <Project Path="src/Cronus.Server.Login/Cronus.Server.Login.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Cronus.Database.Tests/Cronus.Database.Tests.csproj" />
     <Project Path="tests/Cronus.Network.Tests/Cronus.Network.Tests.csproj" />
+    <Project Path="tests/Cronus.Server.Channel.Tests/Cronus.Server.Channel.Tests.csproj" />
     <Project Path="tests/Cronus.Server.Login.Tests/Cronus.Server.Login.Tests.csproj" />
   </Folder>
 </Solution>

@@ -86,10 +86,14 @@ Each milestone means adding one "working vertical slice".
 - [x] **M4: World / channel select** — `LP_WorldInformation` list + terminator, recommend /
       latest world, `CP_SelectWorld` → `LP_SelectWorldResult` (empty character list),
       `CP_ViewAllChar`. `WorldRegistry` model. End-to-end flow test green.
-- [~] **M5: Character select → channel migrate** — `LP_SelectCharacterResult` (migrate
-      packet) is wired; needs a real channel server + persisted characters to exercise. **← current**
-- [ ] **M6: Map entry** — spawn the character into a field, sync movement.
-- [ ] **M7: Basic gameplay** — inventory, NPC dialogue (Jint scripts), simple combat.
+- [x] **M5: Characters + persistence** — Character model/repositories (in-memory + EF Core),
+      creation flow (name check + CP_CreateNewCharacter), JMS v186 GW_CharacterStat /
+      AvatarLook serialization; characters appear on the selection screen.
+- [x] **M6: Channel server + game entry** — `Cronus.Server.Channel`: CP_MigrateIn →
+      LP_SetField with the full JMS v186 CharacterData blob (empty inventories/skills/
+      quests). Host runs login + channel in one process. Byte-exact flow test.
+- [ ] **M7: Map entry follow-ups & basic gameplay** — movement sync, NPC spawn packets,
+      inventory items, starter equipment, NPC dialogue (Jint), simple combat. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

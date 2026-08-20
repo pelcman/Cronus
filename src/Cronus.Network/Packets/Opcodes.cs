@@ -38,4 +38,5 @@ public static class ServerOpcode
     public const string LatestConnectedWorld = "LP_LatestConnectedWorld";
     public const string MigrateCommand = "LP_MigrateCommand";
     public const string AliveReq = "LP_AliveReq";
+    public const string SetField = "LP_SetField";
 }
