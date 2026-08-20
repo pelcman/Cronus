@@ -133,8 +133,10 @@ Each milestone means adding one "working vertical slice".
       route through it and send the full LP_StatChanged.
 - [x] **M9e: Meso drops** — killed mobs drop meso (LP_DropEnterField, placeholder amount);
       CP_DropPickUpRequest picks it up (LP_DropLeaveField + LP_StatChanged meso). Field drop pool.
+- [x] **M9f: Attack mirror** — LP_UserMeleeAttack relays a player's swing + per-target damage
+      (critical flag) to everyone else in the field (multiplayer combat is now visible).
 - [ ] **M10: Combat depth & content** — item drops (wz drop tables), mob movement/AI,
-      magic/ranged attacks, the LP_UserMeleeAttack mirror, quests. **← current**
+      magic/ranged attacks, quests. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

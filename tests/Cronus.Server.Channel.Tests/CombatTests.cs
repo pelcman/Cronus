@@ -198,6 +198,96 @@ public class CombatTests
         Assert.Equal(10, hero.Meso);
     }
 
+    private sealed class Watcher : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opAttack = ServerOps.Get(ServerOpcode.UserMeleeAttack);
+
+        public Watcher(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource<(int Attacker, int MobOid, int Damage)> SawAttack { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opAttack)
+            {
+                int attacker = p.ReadInt();
+                p.ReadByte();  // hit key
+                p.ReadByte();  // level
+                p.ReadByte();  // skill level
+                p.ReadByte();  // buff key
+                p.ReadShort(); // attack action
+                p.ReadByte();  // speed
+                p.ReadByte();  // mastery
+                p.ReadInt();   // bullet
+                int mobOid = p.ReadInt();
+                p.ReadByte();  // 7
+                p.ReadByte();  // critical
+                int damage = p.ReadInt();
+                SawAttack.TrySetResult((attacker, mobOid, damage));
+            }
+
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task MeleeAttack_MirrorsToOtherPlayers()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character attacker = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Hitter", MapId = 100000000, Level = 5 });
+        Character bystander = repo.Create(new Character { AccountId = 2, WorldId = 0, Name = "Watcher", MapId = 100000000 });
+
+        var map = new MapData
+        {
+            MapId = 100000000,
+            Portals = Array.Empty<PortalData>(),
+            Mobs = new[] { new MobSpawn { TemplateId = 100100, X = 0, Y = 0, MaxHp = 1000 } },
+        };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        // Bystander enters first.
+        var watcher = new Watcher(bystander.Id);
+        var watcherHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var b2s = new Pipe();
+        var s2b = new Pipe();
+        await using var wServer = new MapleSession(b2s.Reader, s2b.Writer, ServerConfig.Jms186, SessionRole.Server, watcherHandler);
+        await using var wClient = new MapleSession(s2b.Reader, b2s.Writer, ServerConfig.Jms186, SessionRole.Client, watcher);
+        _ = wServer.RunAsync(cts.Token);
+        _ = wClient.RunAsync(cts.Token);
+
+        int mobOid = fields.Get(100000000).Mobs[0].ObjectId;
+
+        // Attacker enters and hits the mob for 100 (mob has 1000 HP, so it survives).
+        var fighter = new Fighter(attacker.Id, new[] { 100 });
+        var fighterHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var a2s = new Pipe();
+        var s2a = new Pipe();
+        await using var aServer = new MapleSession(a2s.Reader, s2a.Writer, ServerConfig.Jms186, SessionRole.Server, fighterHandler);
+        await using var aClient = new MapleSession(s2a.Reader, a2s.Writer, ServerConfig.Jms186, SessionRole.Client, fighter);
+        _ = aServer.RunAsync(cts.Token);
+        _ = aClient.RunAsync(cts.Token);
+
+        (int who, int oid, int dmg) = await watcher.SawAttack.Task.WaitAsync(cts.Token);
+        Assert.Equal(attacker.Id, who);
+        Assert.Equal(mobOid, oid);
+        Assert.Equal(100, dmg);
+    }
+
     [Fact]
     public void ParseMelee_ReadsTargetsAndDamages()
     {

@@ -52,6 +52,7 @@ public static class ServerOpcode
     public const string TransferFieldReqIgnored = "LP_TransferFieldReqIgnored";
     public const string UserChat = "LP_UserChat";
     public const string UserMove = "LP_UserMove";
+    public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string ScriptMessage = "LP_ScriptMessage";
     public const string StatChanged = "LP_StatChanged";
     public const string BroadcastMsg = "LP_BroadcastMsg";
