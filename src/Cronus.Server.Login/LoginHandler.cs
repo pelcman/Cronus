@@ -1,5 +1,6 @@
 using System.Net;
 using Cronus.Common;
+using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
 
@@ -8,13 +9,17 @@ namespace Cronus.Server.Login;
 /// <summary>
 /// Handles login-stage packets for one connection (ports <c>PacketHandler_Login</c> +
 /// <c>ReqCLogin</c>, JMS v186 path): credential check, world list, world/channel select,
-/// the "view all characters" button, and character select (migrate to a channel server).
+/// character list, name-duplication check, character creation, and character select (migrate).
 /// </summary>
 public sealed class LoginHandler : PacketHandlerBase
 {
+    private const int MinNameLength = 4;
+    private const int MaxNameLength = 12;
+
     private readonly LoginService _loginService;
     private readonly LoginPackets _packets;
     private readonly WorldRegistry _worlds;
+    private readonly ICharacterRepository _characters;
     private readonly IPEndPoint _channelEndpoint;
     private readonly int _characterSlots;
 
@@ -22,6 +27,8 @@ public sealed class LoginHandler : PacketHandlerBase
     private readonly int _opWorldInfoRequest;
     private readonly int _opSelectWorld;
     private readonly int _opViewAllChar;
+    private readonly int _opCheckDuplicatedId;
+    private readonly int _opCreateNewCharacter;
     private readonly int _opSelectCharacter;
 
     public LoginHandler(
@@ -30,12 +37,14 @@ public sealed class LoginHandler : PacketHandlerBase
         LoginService loginService,
         ServerConfig config,
         WorldRegistry? worlds = null,
+        ICharacterRepository? characters = null,
         IPEndPoint? channelEndpoint = null,
         int characterSlots = 3)
     {
         _loginService = loginService;
         _packets = new LoginPackets(serverOpcodes, config);
         _worlds = worlds ?? WorldRegistry.CreateDefault();
+        _characters = characters ?? new InMemoryCharacterRepository();
         _channelEndpoint = channelEndpoint ?? new IPEndPoint(IPAddress.Loopback, 7575);
         _characterSlots = characterSlots;
 
@@ -43,6 +52,8 @@ public sealed class LoginHandler : PacketHandlerBase
         _opWorldInfoRequest = clientOpcodes.Get(ClientOpcode.WorldInfoRequest);
         _opSelectWorld = clientOpcodes.Get(ClientOpcode.SelectWorld);
         _opViewAllChar = clientOpcodes.Get(ClientOpcode.ViewAllChar);
+        _opCheckDuplicatedId = clientOpcodes.Get(ClientOpcode.CheckDuplicatedId);
+        _opCreateNewCharacter = clientOpcodes.Get(ClientOpcode.CreateNewCharacter);
         _opSelectCharacter = clientOpcodes.Get(ClientOpcode.SelectCharacter);
     }
 
@@ -63,6 +74,14 @@ public sealed class LoginHandler : PacketHandlerBase
         else if (opcode == _opViewAllChar)
         {
             await HandleViewAllCharAsync(session).ConfigureAwait(false);
+        }
+        else if (opcode == _opCheckDuplicatedId)
+        {
+            await HandleCheckDuplicatedIdAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opCreateNewCharacter)
+        {
+            await HandleCreateNewCharacterAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opSelectCharacter)
         {
@@ -108,35 +127,96 @@ public sealed class LoginHandler : PacketHandlerBase
         int channelId = packet.ReadByte();
 
         GameWorld? world = _worlds.Find(worldId);
-        if (world is null)
+        if (world is null || session.UserData is not LoginState state)
         {
             await session.SendAsync(_packets.SelectWorldFailure(LoginResult.NotConnectableWorld)).ConfigureAwait(false);
             return;
         }
 
-        if (session.UserData is LoginState state)
-        {
-            state.SelectedWorld = worldId;
-            state.SelectedChannel = channelId;
-        }
+        state.SelectedWorld = worldId;
+        state.SelectedChannel = channelId;
 
-        await session.SendAsync(_packets.SelectWorldSuccess(_characterSlots)).ConfigureAwait(false);
+        IReadOnlyList<Character> characters = _characters.ListByAccount(state.Account.Id, worldId);
+        await session.SendAsync(_packets.SelectWorldSuccess(characters, _characterSlots)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleViewAllCharAsync(MapleSession session)
     {
-        await session.SendAsync(_packets.ViewAllCharCount(_worlds.Worlds.Count, 0)).ConfigureAwait(false);
-        await session.SendAsync(_packets.ViewAllCharSuccessEmpty()).ConfigureAwait(false);
+        IReadOnlyList<Character> characters = session.UserData is LoginState state
+            ? _characters.ListByAccount(state.Account.Id, worldId: 0)
+            : Array.Empty<Character>();
+
+        await session.SendAsync(_packets.ViewAllCharCount(_worlds.Worlds.Count, characters.Count)).ConfigureAwait(false);
+        await session.SendAsync(_packets.ViewAllCharSuccess(worldId: 0, characters)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleCheckDuplicatedIdAsync(MapleSession session, PacketReader packet)
+    {
+        string name = packet.ReadString();
+        bool available = IsNameValid(name) && !_characters.NameExists(name);
+        await session.SendAsync(_packets.CheckDuplicatedIdResult(name, available)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleCreateNewCharacterAsync(MapleSession session, PacketReader packet)
+    {
+        if (session.UserData is not LoginState state)
+        {
+            await session.SendAsync(_packets.CreateNewCharacterFailure(LoginResult.Unknown)).ConfigureAwait(false);
+            return;
+        }
+
+        // JMS v186 CP_CreateNewCharacter:
+        //   [name:str][jobType:int][jobDualblade:short][face:int][hair:int]
+        //   [top:int][bottom:int][shoes:int][weapon:int]
+        string name = packet.ReadString();
+        packet.ReadInt();           // job type (0 = Adventurers for v186)
+        packet.ReadShort();         // job sub-type (dual blade / cannoneer)
+        int face = packet.ReadInt();
+        int hair = packet.ReadInt();
+        // Remaining starter-equip ids are consumed but not persisted yet.
+
+        if (!IsNameValid(name))
+        {
+            await session.SendAsync(_packets.CreateNewCharacterFailure(LoginResult.InvalidCharacterName)).ConfigureAwait(false);
+            return;
+        }
+
+        if (_characters.NameExists(name))
+        {
+            await session.SendAsync(_packets.CreateNewCharacterFailure(LoginResult.InvalidCharacterName)).ConfigureAwait(false);
+            return;
+        }
+
+        var character = new Character
+        {
+            AccountId = state.Account.Id,
+            WorldId = Math.Max(state.SelectedWorld, 0),
+            Name = name,
+            Gender = state.Account.Gender,
+            SkinColor = 0,
+            Face = face,
+            Hair = hair,
+            Level = 1,
+            Job = 0,
+            Str = 12,
+            Dex = 5,
+            Int = 4,
+            Luk = 4,
+        };
+
+        Character created = _characters.Create(character);
+        await session.SendAsync(_packets.CreateNewCharacterSuccess(created)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleSelectCharacterAsync(MapleSession session, PacketReader packet)
     {
         int characterId = packet.ReadInt();
 
-        // No characters exist yet (creation lands with the DB layer); this wires the migrate
-        // packet so the flow is complete once characters can be created.
         byte[] migrate = _packets.SelectCharacterResult(
             _channelEndpoint.Address, _channelEndpoint.Port, characterId);
         await session.SendAsync(migrate).ConfigureAwait(false);
     }
+
+    private static bool IsNameValid(string name)
+        => name.Length is >= MinNameLength and <= MaxNameLength;
 }

@@ -16,4 +16,6 @@ public enum LoginResult
     DbFail = 6,
     AlreadyConnected = 7,
     NotConnectableWorld = 8,
+    Unknown = 9,
+    InvalidCharacterName = 30,
 }

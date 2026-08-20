@@ -106,15 +106,20 @@ public sealed class LoginPackets
     }
 
     /// <summary>
-    /// Builds <c>LP_SelectWorldResult</c> for a successful world selection with an empty
-    /// character list (JMS v186 layout). Character serialization arrives with the DB layer.
+    /// Builds <c>LP_SelectWorldResult</c> for a successful world selection with the given
+    /// character list (JMS v186 layout).
     /// </summary>
-    public byte[] SelectWorldSuccess(int characterSlots)
+    public byte[] SelectWorldSuccess(IReadOnlyList<Character> characters, int characterSlots)
     {
         PacketWriter w = NewPacket(ServerOpcode.SelectWorldResult);
         w.WriteByte((byte)LoginResult.Success); // result
         w.WriteString(string.Empty);            // JMS marker string
-        w.WriteByte(0);                         // character count (empty)
+        w.WriteByte((byte)characters.Count);    // character count
+        foreach (Character character in characters)
+        {
+            CharacterEncoder.WriteSelectWorldEntry(w, character);
+        }
+
         w.WriteByte(2);                         // m_bLoginOpt (JMS v186 default branch)
         w.WriteByte(0);
         w.WriteInt(characterSlots);             // m_nSlotCount
@@ -157,13 +162,45 @@ public sealed class LoginPackets
         return w.ToArray();
     }
 
-    /// <summary>Builds the success phase of <c>LP_ViewAllCharResult</c> with an empty list.</summary>
-    public byte[] ViewAllCharSuccessEmpty()
+    /// <summary>Builds the success phase of <c>LP_ViewAllCharResult</c> with the given characters.</summary>
+    public byte[] ViewAllCharSuccess(int worldId, IReadOnlyList<Character> characters)
     {
         PacketWriter w = NewPacket(ServerOpcode.ViewAllCharResult);
-        w.WriteByte(0); // VAC_ResCode_Success
-        w.WriteByte(0); // m_anWorldID
-        w.WriteByte(0); // character count (empty)
+        w.WriteByte(0);                       // VAC_ResCode_Success
+        w.WriteByte((byte)worldId);           // m_anWorldID
+        w.WriteByte((byte)characters.Count);  // character count
+        foreach (Character character in characters)
+        {
+            CharacterEncoder.WriteViewAllEntry(w, character);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_CheckDuplicatedIDResult</c> (0 = name available).</summary>
+    public byte[] CheckDuplicatedIdResult(string name, bool available)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.CheckDuplicatedIdResult);
+        w.WriteString(name);
+        w.WriteByte(available ? (byte)0 : (byte)1);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_CreateNewCharacterResult</c> for a successful creation.</summary>
+    public byte[] CreateNewCharacterSuccess(Character character)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.CreateNewCharacterResult);
+        w.WriteByte((byte)LoginResult.Success);
+        CharacterEncoder.WriteStat(w, character);
+        CharacterEncoder.WriteAvatarLook(w, character);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_CreateNewCharacterResult</c> for a failed creation.</summary>
+    public byte[] CreateNewCharacterFailure(LoginResult result)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.CreateNewCharacterResult);
+        w.WriteByte((byte)result);
         return w.ToArray();
     }
 

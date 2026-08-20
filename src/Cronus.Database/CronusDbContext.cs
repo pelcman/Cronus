@@ -17,12 +17,9 @@ public sealed class CronusDbContext : DbContext
 
     public DbSet<Account> Accounts => Set<Account>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        EntityTypeBuilder(modelBuilder);
-    }
+    public DbSet<Character> Characters => Set<Character>();
 
-    private static void EntityTypeBuilder(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
         account.ToTable("accounts");
@@ -33,5 +30,13 @@ public sealed class CronusDbContext : DbContext
         account.Property(a => a.Password).HasMaxLength(128).IsRequired();
         account.Property(a => a.Gender);
         account.Property(a => a.IsGameMaster);
+
+        var character = modelBuilder.Entity<Character>();
+        character.ToTable("characters");
+        character.HasKey(c => c.Id);
+        character.Property(c => c.Id).ValueGeneratedOnAdd();
+        character.Property(c => c.Name).HasMaxLength(13).IsRequired();
+        character.HasIndex(c => c.Name).IsUnique();
+        character.HasIndex(c => new { c.AccountId, c.WorldId });
     }
 }
