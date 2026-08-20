@@ -26,10 +26,14 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly FieldRegistry _fields;
     private readonly int _channelId;
 
+    /// <summary>LP_TransferFieldReqIgnored reason: the portal is disabled.</summary>
+    private const byte TransferDisabledPortal = 1;
+
     private readonly int _opMigrateIn;
     private readonly int _opAliveAck;
     private readonly int _opUserMove;
     private readonly int _opUserChat;
+    private readonly int _opTransferField;
 
     private FieldPlayer? _player;
     private Field? _field;
@@ -51,6 +55,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opAliveAck = clientOpcodes.Get(ClientOpcode.AliveAck);
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
         _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
+        _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
     }
 
     /// <summary>The character bound to this session after a successful migrate-in.</summary>
@@ -69,6 +74,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opUserChat)
         {
             await HandleUserChatAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opTransferField)
+        {
+            await HandleTransferFieldAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opAliveAck)
         {
@@ -157,6 +166,59 @@ public sealed class ChannelHandler : PacketHandlerBase
         byte[] chat = _packets.UserChat(
             _player.Character.Id, isGm: false, message, onlyBalloon);
         await _field.BroadcastAsync(chat).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleTransferFieldAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_UserTransferFieldRequest:
+        //   [portalCount:1][mapId:4][portalName:str][x:2,y:2 if portal][unk:1][reviveType:1]
+        packet.ReadByte();
+        int targetMapId = packet.ReadInt();
+        string portalName = packet.ReadString();
+
+        // Portal-by-name needs wz map data (portal graph) — not loaded yet. Refuse politely so
+        // the client unfreezes; direct map ids (e.g. /map-style transfers) work now.
+        if (targetMapId < 0 || !string.IsNullOrEmpty(portalName))
+        {
+            await session.SendAsync(_packets.TransferFieldReqIgnored(TransferDisabledPortal)).ConfigureAwait(false);
+            return;
+        }
+
+        await MovePlayerToMapAsync(session, targetMapId).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Moves the bound player to another map: leave + announce, switch fields, SetField
+    /// (map-change branch), then exchange enter-field packets in the new map.
+    /// </summary>
+    private async ValueTask MovePlayerToMapAsync(MapleSession session, int targetMapId)
+    {
+        FieldPlayer player = _player!;
+        Field oldField = _field!;
+
+        oldField.Leave(player.Character.Id);
+        await oldField.BroadcastAsync(_packets.UserLeaveField(player.Character.Id)).ConfigureAwait(false);
+
+        player.Character.MapId = targetMapId;
+        player.Character.Portal = 0;
+
+        await session.SendAsync(_packets.SetFieldChangeMap(player.Character, _channelId)).ConfigureAwait(false);
+
+        Field newField = _fields.Get(targetMapId);
+        foreach (FieldPlayer other in newField.Players)
+        {
+            await session.SendAsync(_packets.UserEnterField(other)).ConfigureAwait(false);
+        }
+
+        newField.Enter(player);
+        _field = newField;
+        await newField.BroadcastAsync(_packets.UserEnterField(player), exceptCharacterId: player.Character.Id)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
