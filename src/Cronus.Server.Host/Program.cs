@@ -34,13 +34,18 @@ var loginService = new LoginService(accounts, autoRegister: true);
 // The login server hands clients to the channel via LP_SelectCharacterResult.
 var channelEndpoint = new IPEndPoint(IPAddress.Loopback, channelPort);
 
+// LP_AliveReq body: the server pings idle clients so they keep the connection open.
+byte[] keepAlive = new PacketWriter(
+    serverOps.Get(ServerOpcode.AliveReq), config.PacketHeaderSize, config.CodePage).ToArray();
+
 var loginListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, loginPort),
     config,
     () => new LoggingHandler(
         new LoginHandler(clientOps, serverOps, loginService, config,
             characters: characters, channelEndpoint: channelEndpoint),
-        "login"));
+        "login"),
+    keepAlive);
 
 // Map data from a wz_xml tree if CRONUS_WZ points at one, else no static map data (portal-by-
 // name transfers degrade to "disabled portal"; direct map-id jumps still work; no NPCs spawn).
@@ -56,7 +61,8 @@ var channelListener = new MapleListener(
     config,
     () => new LoggingHandler(
         new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, channelId: 0),
-        "channel"));
+        "channel"),
+    keepAlive);
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>

@@ -143,6 +143,42 @@ public class MapleSessionTests
     }
 
     [Fact]
+    public async Task Server_SendsKeepAlivePings_OnInterval()
+    {
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+
+        byte[] keepAlive = { 0x0F, 0x00 }; // a 2-byte "AliveReq" body
+        var pinged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var clientHandler = new DelegateHandler
+        {
+            Packet = (session, opcode, packet) =>
+            {
+                if (opcode == 0x000F)
+                {
+                    pinged.TrySetResult();
+                }
+
+                return ValueTask.CompletedTask;
+            },
+        };
+
+        await using var server = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server,
+            new DelegateHandler(), randomByte: () => 0x2A,
+            keepAlive: keepAlive, keepAliveInterval: TimeSpan.FromMilliseconds(50));
+        await using var client = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, clientHandler);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = server.RunAsync(cts.Token);
+        _ = client.RunAsync(cts.Token);
+
+        await pinged.Task.WaitAsync(cts.Token); // a ping arrived within the timeout
+    }
+
+    [Fact]
     public async Task Listener_AcceptsRealSocket_AndRoundTrips()
     {
         var clientReceived = new TaskCompletionSource<(int Opcode, byte[] Body)>(

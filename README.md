@@ -30,11 +30,18 @@ A playable slice is up and running (all through the real encrypted protocol):
 - **World / character select** — world list, world/channel select, character list,
   name check, character creation
 - **Game entry** — `CP_MigrateIn` → `LP_SetField` (full CharacterData)
-- **Field** — multiplayer enter/leave, movement relay, chat, map transfer (portals)
-- **NPC dialogue** — JavaScript scripts (Jint) drive `LP_ScriptMessage` conversations
+- **Field** — multiplayer enter/leave, movement relay, chat, map transfer (portals),
+  NPC/mob spawns, mob controller movement
+- **NPC dialogue** — JavaScript scripts (Jint) drive `LP_ScriptMessage` conversations, with a
+  player API (meso/exp/hp, quests, skills)
+- **Items** — equipment serialization + persistence; starter equips on creation
+- **Combat & progression** — melee attack (mirrored to others) → mob HP → death → exp
+  (level-up) → meso drops → pickup; SP → skills; script-driven quests
+- **Keep-alive** — the server pings idle clients (`LP_AliveReq`) to hold the connection
 
-70 tests, all green. See the roadmap and design notes in
-[AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md).
+93 tests, all green. See the roadmap and design notes in
+[AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md), and the real-client runbook in
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 > These tests prove internal consistency, not yet fidelity to the real Nexon client.
 > [docs/VALIDATION.md](docs/VALIDATION.md) is the workflow to validate against a real JMS v186
@@ -74,7 +81,8 @@ Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
 | `CRONUS_SCRIPTS` | script root (`{root}/npc/{id}.js`); enables NPC dialogs |
 
 To connect a real client, point a JMS v186 client at the host via EmuClient's localhost
-redirect. Accounts auto-register on first login.
+redirect. Accounts auto-register on first login. See
+**[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** for the full step-by-step runbook.
 
 ### Try the bundled sample content
 
