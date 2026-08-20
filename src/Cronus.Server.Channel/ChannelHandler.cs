@@ -233,9 +233,9 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         Character c = _player.Character;
-        c.Exp = (int)Math.Clamp((long)c.Exp + exp, 0, int.MaxValue);
+        StatFlag changed = CharacterProgression.GainExp(c, exp); // processes level-ups
         _characters.Save(c);
-        await session.SendAsync(_packets.StatChanged(c, StatFlag.Exp)).ConfigureAwait(false);
+        await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleUserChatAsync(MapleSession session, PacketReader packet)
