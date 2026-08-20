@@ -18,13 +18,20 @@ public sealed class MapleListener : IAsyncDisposable
     private readonly List<Task> _sessions = new();
     private readonly object _sessionsLock = new();
 
+    private readonly byte[]? _keepAlive;
+
     private Socket? _listenSocket;
 
-    public MapleListener(IPEndPoint endpoint, ServerConfig config, Func<IPacketHandler> handlerFactory)
+    public MapleListener(
+        IPEndPoint endpoint,
+        ServerConfig config,
+        Func<IPacketHandler> handlerFactory,
+        byte[]? keepAlive = null)
     {
         _endpoint = endpoint;
         _config = config;
         _handlerFactory = handlerFactory;
+        _keepAlive = keepAlive;
     }
 
     /// <summary>The bound endpoint (useful when binding to port 0 to get an ephemeral port).</summary>
@@ -61,7 +68,8 @@ public sealed class MapleListener : IAsyncDisposable
         var stream = new NetworkStream(socket, ownsSocket: true);
         var input = PipeReader.Create(stream);
         var output = PipeWriter.Create(stream);
-        await using var session = new MapleSession(input, output, _config, SessionRole.Server, _handlerFactory());
+        await using var session = new MapleSession(
+            input, output, _config, SessionRole.Server, _handlerFactory(), keepAlive: _keepAlive);
 
         try
         {

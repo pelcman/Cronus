@@ -40,6 +40,8 @@ public sealed class MapleSession : IAsyncDisposable
     private readonly IPacketHandler _handler;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly Func<byte>? _randomByte;
+    private readonly byte[]? _keepAlive;
+    private readonly TimeSpan _keepAliveInterval;
 
     private AesOfbCipher? _sendCipher;
     private AesOfbCipher? _recvCipher;
@@ -51,7 +53,9 @@ public sealed class MapleSession : IAsyncDisposable
         ServerConfig config,
         SessionRole role,
         IPacketHandler handler,
-        Func<byte>? randomByte = null)
+        Func<byte>? randomByte = null,
+        byte[]? keepAlive = null,
+        TimeSpan? keepAliveInterval = null)
     {
         _input = input;
         _output = output;
@@ -59,6 +63,8 @@ public sealed class MapleSession : IAsyncDisposable
         _role = role;
         _handler = handler;
         _randomByte = randomByte;
+        _keepAlive = keepAlive;
+        _keepAliveInterval = keepAliveInterval ?? TimeSpan.FromSeconds(15);
     }
 
     /// <summary>Arbitrary per-session state bag for higher layers (e.g. account, stage).</summary>
@@ -87,7 +93,22 @@ public sealed class MapleSession : IAsyncDisposable
             }
 
             await _handler.OnConnectedAsync(this).ConfigureAwait(false);
-            await ReceiveLoopAsync(cancellationToken).ConfigureAwait(false);
+
+            // A server session pings the client so it does not consider the link idle.
+            using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            Task keepAlive = _role == SessionRole.Server && _keepAlive is not null
+                ? KeepAliveLoopAsync(loopCts.Token)
+                : Task.CompletedTask;
+
+            try
+            {
+                await ReceiveLoopAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                loopCts.Cancel();
+                await keepAlive.ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -142,6 +163,26 @@ public sealed class MapleSession : IAsyncDisposable
         finally
         {
             _sendLock.Release();
+        }
+    }
+
+    private async Task KeepAliveLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(_keepAliveInterval, cancellationToken).ConfigureAwait(false);
+                await SendAsync(_keepAlive!, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Session ending.
+        }
+        catch (Exception)
+        {
+            // The connection is going away; the receive loop reports the disconnect.
         }
     }
 
