@@ -38,5 +38,6 @@ public sealed class CronusDbContext : DbContext
         character.Property(c => c.Name).HasMaxLength(13).IsRequired();
         character.HasIndex(c => c.Name).IsUnique();
         character.HasIndex(c => new { c.AccountId, c.WorldId });
+        character.Ignore(c => c.EquippedItems); // item persistence is a follow-up
     }
 }

@@ -113,6 +113,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         if (_player is not null && _field is not null)
         {
+            _characters.Save(_player.Character); // persist last known map/stats on logout
             _field.Leave(_player.Character.Id);
             await _field.BroadcastAsync(_packets.UserLeaveField(_player.Character.Id)).ConfigureAwait(false);
             _player = null;
@@ -381,6 +382,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         player.Character.MapId = targetMapId;
         player.Character.Portal = (byte)spawnPortal;
+        _characters.Save(player.Character); // DB-backed repos need an explicit flush
 
         await session.SendAsync(_packets.SetFieldChangeMap(player.Character, _channelId)).ConfigureAwait(false);
 

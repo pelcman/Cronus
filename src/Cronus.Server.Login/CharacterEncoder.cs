@@ -56,7 +56,7 @@ public static class CharacterEncoder
         w.WriteInt(0);                         // (JMS >= 180)
     }
 
-    /// <summary>Writes AvatarLook for <paramref name="c"/> (no visible equipment).</summary>
+    /// <summary>Writes AvatarLook for <paramref name="c"/>, rendering equipped items.</summary>
     public static void WriteAvatarLook(PacketWriter w, Character c)
     {
         w.WriteByte(c.Gender);
@@ -65,15 +65,27 @@ public static class CharacterEncoder
         w.WriteByte(0);                        // ignored byte
         w.WriteInt(c.Hair);
 
-        // Visible equipment (none) then terminator.
-        w.WriteByte(0xFF);
-        // Masked equipment (none) then terminator.
-        w.WriteByte(0xFF);
+        // Visible equipment: slots 1..99 (masked/covered slots below -100 are ignored for now).
+        // Each entry: [slot:1][itemId:4]; 0xFF terminates the list. Sorted by slot for determinism.
+        foreach (InventoryItem item in VisibleEquips(c))
+        {
+            w.WriteByte((byte)(-item.Position));
+            w.WriteInt(item.ItemId);
+        }
 
-        w.WriteInt(0);                         // weapon sticker id
+        w.WriteByte(0xFF);                     // end of visible items
+        w.WriteByte(0xFF);                     // end of masked items (none)
+
+        // Weapon sticker: the cash-weapon slot (-111); 0 if none.
+        w.WriteInt(0);
         w.WriteInt(0);                         // pet 1
         w.WriteLong(0);                        // pet 2 & 3 (JMS >= 146)
     }
+
+    private static IEnumerable<InventoryItem> VisibleEquips(Character c)
+        => c.EquippedItems
+            .Where(i => i.Position is > -100 and < 0)
+            .OrderBy(i => -i.Position);
 
     /// <summary>
     /// Writes a full character entry for <c>LP_SelectWorldResult</c>: stat, look, the JMS-&gt;=180

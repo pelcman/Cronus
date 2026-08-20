@@ -57,4 +57,10 @@ public sealed class Character
     public int RankMove { get; set; }
     public int JobRank { get; set; } = 1;
     public int JobRankMove { get; set; }
+
+    /// <summary>
+    /// Equipped items (negative positions). Not persisted yet (EF-ignored) — populated in
+    /// memory at creation; DB item persistence is a follow-up.
+    /// </summary>
+    public List<InventoryItem> EquippedItems { get; set; } = new();
 }
