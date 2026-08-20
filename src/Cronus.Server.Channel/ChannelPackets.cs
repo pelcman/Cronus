@@ -212,6 +212,21 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_BroadcastMsg</c> of type BM_NOTICE (blue "[Notice]" text) or BM_ALERT
+    /// (a dialog popup) — both encode just the message (ports <c>ResCWvsContext.BroadcastMsg</c>).
+    /// </summary>
+    public byte[] BroadcastNotice(string message, bool alert = false)
+    {
+        const int bmNotice = 0;
+        const int bmAlert = 1;
+
+        PacketWriter w = NewPacket(ServerOpcode.BroadcastMsg);
+        w.WriteByte(alert ? bmAlert : bmNotice);
+        w.WriteString(message);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {
