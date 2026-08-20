@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Cronus.Server.Host</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cronus.Common\Cronus.Common.csproj" />
+    <ProjectReference Include="..\Cronus.Network\Cronus.Network.csproj" />
+    <ProjectReference Include="..\Cronus.Server.Login\Cronus.Server.Login.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\data\opcodes\*.properties" Link="opcodes\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
