@@ -33,6 +33,8 @@ public static class ServerOpcode
     public const string CheckDuplicatedIdResult = "LP_CheckDuplicatedIDResult";
     public const string ViewAllCharResult = "LP_ViewAllCharResult";
     public const string SelectCharacterResult = "LP_SelectCharacterResult";
+    public const string RecommendWorldMessage = "LP_RecommendWorldMessage";
+    public const string LatestConnectedWorld = "LP_LatestConnectedWorld";
     public const string MigrateCommand = "LP_MigrateCommand";
     public const string AliveReq = "LP_AliveReq";
 }

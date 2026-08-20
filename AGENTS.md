@@ -83,8 +83,11 @@ Each milestone means adding one "working vertical slice".
       auto-registers/authenticates, replies `LP_CheckPasswordResult` (exact JMS v186 success
       layout). End-to-end encrypted login test green. Runnable `Cronus.Server.Host` binds the
       login port.
-- [ ] **M4: World / channel select** — world list, channel select, character list. **← current**
-- [ ] **M5: Character select → channel migrate** — MigrateCommand to the channel server.
+- [x] **M4: World / channel select** — `LP_WorldInformation` list + terminator, recommend /
+      latest world, `CP_SelectWorld` → `LP_SelectWorldResult` (empty character list),
+      `CP_ViewAllChar`. `WorldRegistry` model. End-to-end flow test green.
+- [~] **M5: Character select → channel migrate** — `LP_SelectCharacterResult` (migrate
+      packet) is wired; needs a real channel server + persisted characters to exercise. **← current**
 - [ ] **M6: Map entry** — spawn the character into a field, sync movement.
 - [ ] **M7: Basic gameplay** — inventory, NPC dialogue (Jint scripts), simple combat.
 
@@ -117,11 +120,21 @@ parity is on the order of half a year.
 - [x] Account auth interim: `InMemoryAccountRepository` + `LoginService` (auto-register)
 - [x] `Cronus.Server.Host`: runnable console host binding the login port (arg = port)
 
-### Next (M4)
-- [ ] World/channel model + `LP_WorldInformation` / `CP_WorldInfoRequest`
-- [ ] `CP_SelectWorld` → `LP_SelectWorldResult`, `CP_ViewAllChar` → character list
-- [ ] `LP_MigrateCommand` to hand off to the channel server
-- [ ] Persist accounts/characters (introduce `Cronus.Database`, EF Core + MySQL)
+### Done (M4)
+- [x] `WorldRegistry` / `GameWorld` / `GameChannel` model (default: 1 world, 2 channels)
+- [x] `CP_WorldInfoRequest` → `LP_WorldInformation` list + terminator + recommend/latest
+- [x] `CP_SelectWorld` → `LP_SelectWorldResult` (empty char list, JMS v186 layout)
+- [x] `CP_ViewAllChar` → `LP_ViewAllCharResult` (count + empty success)
+- [x] `CP_SelectCharacter` → `LP_SelectCharacterResult` migrate packet
+- [x] `LoginState` per-connection state (account + selected world/channel)
+
+### Next (M5 → DB)
+- [ ] `Cronus.Database` (EF Core + Pomelo/MySQL); reuse JMSv186 `sql/` schema
+- [ ] Persist accounts; migrate `InMemoryAccountRepository` behind the DB
+- [ ] Character model + `DataGW_CharacterStat` / `DataAvatarLook` encoding (needed to show
+      characters in `LP_SelectWorldResult` / `LP_ViewAllCharResult`)
+- [ ] `CP_CheckDuplicatedID` / `CP_CreateNewCharacter` → create characters
+- [ ] Stand up a minimal channel server so `LP_SelectCharacterResult` migrate resolves
 
 ### Improvements / tech debt (ongoing)
 - [ ] **Add golden vectors**: run the Java build, capture handshake→login real bytes with
