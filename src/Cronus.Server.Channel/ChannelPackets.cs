@@ -60,6 +60,85 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_UserEnterField</c> announcing a remote player (ports
+    /// <c>DataCUserRemote.Init</c>, JMS v186 path: &gt;= 164, &lt; 187, no guild/buffs/pets).
+    /// </summary>
+    public byte[] UserEnterField(FieldPlayer player)
+    {
+        Character c = player.Character;
+        PacketWriter w = NewPacket(ServerOpcode.UserEnterField);
+
+        w.WriteInt(c.Id);
+        w.WriteByte(c.Level);            // JMS >= 164
+        w.WriteString(c.Name);
+        // Empty guild block.
+        w.WriteString(string.Empty);
+        w.WriteShort(0);
+        w.WriteByte(0);
+        w.WriteShort(0);
+        w.WriteByte(0);
+        w.WriteLong(0);                  // buff mask (JMS >= 164)
+        w.WriteLong(0);                  // buff mask
+        w.WriteByte(0);                  // energy charge
+        w.WriteByte(0);
+        w.WriteShort(c.Job);
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, c);
+        w.WriteInt(0);                   // follow character id
+        w.WriteInt(0);                   // JMS >= 164 block
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteInt(0);                   // active effect item
+        w.WriteInt(0);                   // chair
+        w.WriteShort(player.X);
+        w.WriteShort(player.Y);
+        w.WriteByte(player.Stance);
+        w.WriteShort(0);                 // foothold
+        w.WriteByte(0);                  // pet count
+        w.WriteInt(0);                   // mount level
+        w.WriteInt(0);                   // mount exp
+        w.WriteInt(0);                   // mount fatigue
+        w.WriteByte(0);                  // mini-room balloon (none)
+        w.WriteByte(0);                  // ad board (none)
+        w.WriteByte(0);                  // couple records
+        w.WriteByte(0);                  // friend records
+        w.WriteByte(0);                  // marriage record
+        w.WriteByte(0);                  // effect mask
+        w.WriteInt(0);                   // m_nPhase
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_UserLeaveField</c>.</summary>
+    public byte[] UserLeaveField(int characterId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserLeaveField);
+        w.WriteInt(characterId);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_UserChat</c> (ports <c>ResCUser.UserChat</c>, JMS v186 path).</summary>
+    public byte[] UserChat(int characterId, bool isGm, string message, bool onlyBalloon)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserChat);
+        w.WriteInt(characterId);
+        w.WriteBool(isGm);
+        w.WriteString(message);
+        w.WriteBool(onlyBalloon);        // JMS >= 146
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_UserMove</c> relaying a raw CMovePath buffer (ports
+    /// <c>ResCUserRemote.UserMove</c>: character id + the path bytes as received).
+    /// </summary>
+    public byte[] UserMove(int characterId, ReadOnlySpan<byte> rawMovePath)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserMove);
+        w.WriteInt(characterId);
+        w.WriteBytes(rawMovePath);
+        return w.ToArray();
+    }
+
     private PacketWriter NewPacket(string opcodeName)
         => new(_serverOps.Get(opcodeName), _config.PacketHeaderSize, _config.CodePage);
 }

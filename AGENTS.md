@@ -92,8 +92,13 @@ Each milestone means adding one "working vertical slice".
 - [x] **M6: Channel server + game entry** — `Cronus.Server.Channel`: CP_MigrateIn →
       LP_SetField with the full JMS v186 CharacterData blob (empty inventories/skills/
       quests). Host runs login + channel in one process. Byte-exact flow test.
-- [ ] **M7: Map entry follow-ups & basic gameplay** — movement sync, NPC spawn packets,
-      inventory items, starter equipment, NPC dialogue (Jint), simple combat. **← current**
+- [x] **M7a: Field interaction** — Field/FieldRegistry (players per map, broadcast),
+      mutual LP_UserEnterField on migrate-in, CP_UserMove relay (raw CMovePath verbatim +
+      server-side position tracking), CP_UserChat broadcast, LP_UserLeaveField on
+      disconnect. Multi-client tests over separate encrypted sessions.
+- [ ] **M7b: Map transfer & gameplay follow-ups** — portals (CP_UserTransferFieldRequest →
+      SetField map-change branch), starter equipment + item serialization, NPC dialogue
+      (Jint), simple combat. **← current**
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

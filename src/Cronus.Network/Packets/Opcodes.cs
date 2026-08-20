@@ -19,6 +19,8 @@ public static class ClientOpcode
     public const string DeleteCharacter = "CP_DeleteCharacter";
     public const string AliveAck = "CP_AliveAck";
     public const string SecurityPacket = "CP_SecurityPacket";
+    public const string UserMove = "CP_UserMove";
+    public const string UserChat = "CP_UserChat";
 }
 
 /// <summary>
@@ -39,4 +41,8 @@ public static class ServerOpcode
     public const string MigrateCommand = "LP_MigrateCommand";
     public const string AliveReq = "LP_AliveReq";
     public const string SetField = "LP_SetField";
+    public const string UserEnterField = "LP_UserEnterField";
+    public const string UserLeaveField = "LP_UserLeaveField";
+    public const string UserChat = "LP_UserChat";
+    public const string UserMove = "LP_UserMove";
 }
