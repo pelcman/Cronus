@@ -1,5 +1,6 @@
 using System.IO.Pipelines;
 using Cronus.Common;
+using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
 using Cronus.Server.Login;

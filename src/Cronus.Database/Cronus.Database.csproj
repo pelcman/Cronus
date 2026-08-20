@@ -5,9 +5,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Cronus.Common\Cronus.Common.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Cronus.Domain\Cronus.Domain.csproj" />
-    <ProjectReference Include="..\Cronus.Network\Cronus.Network.csproj" />
   </ItemGroup>
 
 </Project>

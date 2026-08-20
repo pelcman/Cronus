@@ -1,3 +1,4 @@
+using Cronus.Domain;
 using Cronus.Server.Login;
 using Xunit;
 

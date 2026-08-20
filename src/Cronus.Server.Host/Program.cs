@@ -1,5 +1,7 @@
 using System.Net;
 using Cronus.Common;
+using Cronus.Database;
+using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
 using Cronus.Server.Host;
@@ -20,7 +22,9 @@ OpcodeTable serverOps = OpcodeTable.LoadFile(Path.Combine(opcodeDir, "JMS_v186_S
 WarnUnresolved("client", clientOps);
 WarnUnresolved("server", serverOps);
 
-var accounts = new InMemoryAccountRepository();
+// Use MySQL when a connection string is configured (CRONUS_DB env var), else fall back to the
+// in-memory store so the server runs with zero external dependencies for local testing.
+IAccountRepository accounts = CreateAccountRepository();
 var loginService = new LoginService(accounts, autoRegister: true);
 
 var listener = new MapleListener(
@@ -56,5 +60,28 @@ static void WarnUnresolved(string which, OpcodeTable table)
     if (table.UnresolvedNames.Count > 0)
     {
         Console.WriteLine($"[warn] {which} opcodes unresolved: {string.Join(", ", table.UnresolvedNames)}");
+    }
+}
+
+static IAccountRepository CreateAccountRepository()
+{
+    string? connectionString = Environment.GetEnvironmentVariable("CRONUS_DB");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        Console.WriteLine("[db] CRONUS_DB not set — using in-memory accounts (not persistent).");
+        return new InMemoryAccountRepository();
+    }
+
+    try
+    {
+        Func<CronusDbContext> factory = MySqlDatabase.CreateFactory(connectionString);
+        MySqlDatabase.EnsureCreated(factory);
+        Console.WriteLine("[db] Connected to MySQL; accounts are persistent.");
+        return new DbAccountRepository(factory);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory accounts.");
+        return new InMemoryAccountRepository();
     }
 }

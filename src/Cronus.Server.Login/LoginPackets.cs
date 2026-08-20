@@ -1,5 +1,6 @@
 using System.Net;
 using Cronus.Common;
+using Cronus.Domain;
 using Cronus.Network.Packets;
 
 namespace Cronus.Server.Login;

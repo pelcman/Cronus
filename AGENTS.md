@@ -128,13 +128,23 @@ parity is on the order of half a year.
 - [x] `CP_SelectCharacter` → `LP_SelectCharacterResult` migrate packet
 - [x] `LoginState` per-connection state (account + selected world/channel)
 
-### Next (M5 → DB)
-- [ ] `Cronus.Database` (EF Core + Pomelo/MySQL); reuse JMSv186 `sql/` schema
-- [ ] Persist accounts; migrate `InMemoryAccountRepository` behind the DB
+### Done (M5a: DB + account persistence)
+- [x] `Cronus.Domain` layer: `Account`, `IAccountRepository`, `InMemoryAccountRepository`
+      moved here so infrastructure depends inward (ports & adapters). Login depends on Domain.
+- [x] `Cronus.Database` (EF Core 9 + Pomelo/MySQL): `CronusDbContext` (accounts table),
+      `DbAccountRepository`, `MySqlDatabase` helper (factory + EnsureCreated).
+- [x] Host uses MySQL when `CRONUS_DB` is set, else falls back to in-memory (runs with zero
+      external deps). Verified: starts and binds in both modes.
+- [x] `Cronus.Database.Tests`: repository + LoginService-over-DB tests via EF Core InMemory.
+
+### Next (M5b → characters, then channel)
 - [ ] Character model + `DataGW_CharacterStat` / `DataAvatarLook` encoding (needed to show
       characters in `LP_SelectWorldResult` / `LP_ViewAllCharResult`)
-- [ ] `CP_CheckDuplicatedID` / `CP_CreateNewCharacter` → create characters
+- [ ] `CP_CheckDuplicatedID` / `CP_CreateNewCharacter` → create characters (persist via DB)
 - [ ] Stand up a minimal channel server so `LP_SelectCharacterResult` migrate resolves
+- [ ] Replace plaintext password with a real hash (BCrypt); consider async repository APIs
+- [ ] EF Core migrations (replace EnsureCreated); reconcile with JMSv186 `sql/` schema
+- [ ] Verify against a live MySQL server (tests currently use the InMemory provider)
 
 ### Improvements / tech debt (ongoing)
 - [ ] **Add golden vectors**: run the Java build, capture handshake→login real bytes with
@@ -156,16 +166,19 @@ Cronus/
 ├─ .gitignore / .editorconfig / Directory.Build.props
 ├─ Cronus.sln
 ├─ src/
-│  ├─ Cronus.Common/
-│  ├─ Cronus.Network/            (Crypto/, Packets/)
-│  ├─ Cronus.Database/           (later)
-│  ├─ Cronus.Data/               (later)
-│  ├─ Cronus.Scripting/          (later)
-│  ├─ Cronus.Server.Login/       (later)
+│  ├─ Cronus.Common/             (Region, ServerConfig, CodePage)
+│  ├─ Cronus.Domain/             (Account, IAccountRepository, in-memory adapter)
+│  ├─ Cronus.Network/            (Crypto/, Packets/, MapleSession, MapleListener)
+│  ├─ Cronus.Database/           (EF Core + Pomelo/MySQL; CronusDbContext, DbAccountRepository)
+│  ├─ Cronus.Data/               (later — wz_xml loader)
+│  ├─ Cronus.Scripting/          (later — Jint)
+│  ├─ Cronus.Server.Login/       (LoginHandler, LoginService, LoginPackets, World)
 │  ├─ Cronus.Server.Channel/     (later)
-│  └─ Cronus.Server.Host/        (later)
+│  └─ Cronus.Server.Host/        (runnable console host)
 ├─ tests/
-│  └─ Cronus.Network.Tests/
+│  ├─ Cronus.Network.Tests/
+│  ├─ Cronus.Server.Login.Tests/
+│  └─ Cronus.Database.Tests/
 └─ data/
    └─ opcodes/                    (JMS_v186_*.properties)
 ```

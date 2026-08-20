@@ -1,17 +1,9 @@
 using System.Collections.Concurrent;
 
-namespace Cronus.Server.Login;
-
-/// <summary>Account store abstraction. Interim in-memory implementation; swapped for the DB later.</summary>
-public interface IAccountRepository
-{
-    Account? Find(string loginId);
-
-    Account Create(string loginId, string password, byte gender);
-}
+namespace Cronus.Domain;
 
 /// <summary>
-/// Thread-safe in-memory account store for local development. Not persistent.
+/// Thread-safe in-memory account store for local development and tests. Not persistent.
 /// </summary>
 public sealed class InMemoryAccountRepository : IAccountRepository
 {
