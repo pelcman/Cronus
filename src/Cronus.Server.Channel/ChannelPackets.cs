@@ -228,6 +228,39 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_UserMeleeAttack</c> mirroring a player's attack to onlookers (ports
+    /// <c>ResCUserRemote.UserAttack</c>, JMS v186 melee path): attacker, hit key, level, and per-
+    /// target damages with a critical flag byte each.
+    /// </summary>
+    public byte[] UserMeleeAttack(int characterId, int level, AttackInfo attack)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserMeleeAttack);
+        w.WriteInt(characterId);
+        w.WriteByte((byte)attack.HitKey);
+        w.WriteByte((byte)level);            // m_nLevel (JMS >= 164)
+        w.WriteByte((byte)attack.SkillLevel);
+        // skillLevel == 0 → no skill id; no PostBB sniper passive.
+        w.WriteByte((byte)attack.BuffKey);
+        w.WriteShort((short)attack.AttackActionKey); // JMS > 147
+        w.WriteByte((byte)attack.AttackSpeed);
+        w.WriteByte(0);                      // nMastery (not modeled)
+        w.WriteInt(0);                       // nBulletItemID (melee)
+
+        foreach (AttackTarget target in attack.Targets)
+        {
+            w.WriteInt(target.MobObjectId);
+            w.WriteByte(7);
+            foreach (int damage in target.Damages)
+            {
+                w.WriteByte((damage & unchecked((int)0x80000000)) != 0 ? (byte)1 : (byte)0); // critical
+                w.WriteInt(damage & 0x7FFFFFFF);
+            }
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_MobLeaveField</c> (ports <c>ResCMobPool.MobLeaveField</c>): the mob's object
     /// id and a dead-type animation (1 = killed / fade out).
     /// </summary>

@@ -18,6 +18,17 @@ public sealed class AttackInfo
 {
     public required int SkillId { get; init; }
 
+    /// <summary>The raw hit key: low nibble = hits/target, high nibble = target count.</summary>
+    public required int HitKey { get; init; }
+
+    public required int SkillLevel { get; init; }
+
+    public required int BuffKey { get; init; }
+
+    public required int AttackActionKey { get; init; }
+
+    public required int AttackSpeed { get; init; }
+
     public required IReadOnlyList<AttackTarget> Targets { get; init; }
 }
 
@@ -42,10 +53,10 @@ public static class AttackParser
         p.ReadInt();               // DR get_rand
         p.ReadInt();               // DR crc
         p.ReadInt();               // crc (JMS >= 164)
-        p.ReadByte();              // BuffKey
-        p.ReadShort();             // AttackActionKey
+        int buffKey = p.ReadByte();
+        int attackActionKey = p.ReadShort() & 0xFFFF;
         p.ReadByte();              // nAttackActionType
-        p.ReadByte();              // nAttackSpeed
+        int attackSpeed = p.ReadByte();
         p.ReadInt();               // tAttackTime
         p.ReadInt();               // dwID (JMS >= 186)
 
@@ -66,6 +77,15 @@ public static class AttackParser
             targets.Add(new AttackTarget { MobObjectId = mobOid, Damages = damages });
         }
 
-        return new AttackInfo { SkillId = skillId, Targets = targets };
+        return new AttackInfo
+        {
+            SkillId = skillId,
+            HitKey = hitKey,
+            SkillLevel = 0, // no skills modeled yet
+            BuffKey = buffKey,
+            AttackActionKey = attackActionKey,
+            AttackSpeed = attackSpeed,
+            Targets = targets,
+        };
     }
 }

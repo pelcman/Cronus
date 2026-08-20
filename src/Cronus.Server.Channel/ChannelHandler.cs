@@ -212,6 +212,11 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         AttackInfo attack = AttackParser.ParseMelee(packet);
 
+        // Show the swing + damage numbers to everyone else in the field.
+        await _field.BroadcastAsync(
+            _packets.UserMeleeAttack(_player.Character.Id, _player.Character.Level, attack),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+
         foreach (AttackTarget target in attack.Targets)
         {
             FieldMob? mob = _field.FindMob(target.MobObjectId);
