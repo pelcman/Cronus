@@ -30,9 +30,9 @@ public sealed class FieldMob
 
     public required int TemplateId { get; init; }
 
-    public short X { get; init; }
+    public short X { get; set; }
 
-    public short Y { get; init; }
+    public short Y { get; set; }
 
     public int Foothold { get; init; }
 
@@ -40,8 +40,16 @@ public sealed class FieldMob
 
     public int Hp { get; set; } = 100;
 
+    public short Mp { get; set; }
+
     /// <summary>Experience granted on kill (from mob wz data; 0 if unknown).</summary>
     public int Exp { get; init; }
+
+    /// <summary>
+    /// Character id of the client simulating this mob's movement, or -1 when uncontrolled.
+    /// MapleStory delegates mob AI to one nearby client; the server acks and relays.
+    /// </summary>
+    public int ControllerId { get; set; } = -1;
 
     public bool IsDead => Hp <= 0;
 

@@ -154,20 +154,81 @@ public sealed class ChannelPackets
     /// </summary>
     public byte[] MobEnterField(FieldMob mob)
     {
-        const int spawnStance = 5;
-
         PacketWriter w = NewPacket(ServerOpcode.MobEnterField);
         w.WriteInt(mob.ObjectId);     // dwMobID (runtime oid)
         w.WriteByte(1);               // 1 = control normal
         w.WriteInt(mob.TemplateId);   // mob template
+        WriteMobTemporaryStat(w);
+        WriteMobInit(w, mob);
+        return w.ToArray();
+    }
 
-        // CMob::SetTemporaryStat — JMS v186 mask is 4 ints, all zero (no buffs).
+    /// <summary>
+    /// Builds <c>LP_MobChangeController</c> making the receiving client this mob's local
+    /// controller (ports <c>ResCMobPool.MobChangeController</c>, JMS v186; nLevel 1 = control,
+    /// 2 = control with aggro).
+    /// </summary>
+    public byte[] MobChangeController(FieldMob mob, bool aggro = false)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MobChangeController);
+        w.WriteByte(aggro ? (byte)2 : (byte)1); // nLevel
+        w.WriteInt(mob.ObjectId);
+        w.WriteByte(1);               // nCalcDamageIndex = control normal
+        w.WriteInt(mob.TemplateId);
+        WriteMobTemporaryStat(w);
+        WriteMobInit(w, mob);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_MobCtrlAck</c> answering a controller's <c>CP_MobMove</c> (ports
+    /// <c>ResCMobPool.MobCtrlAck</c>, JMS v186 — no &gt;= 194 tail).
+    /// </summary>
+    public byte[] MobCtrlAck(FieldMob mob, short moveId, bool aggro, byte skillId = 0, byte skillLevel = 0)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MobCtrlAck);
+        w.WriteInt(mob.ObjectId);
+        w.WriteShort(moveId);
+        w.WriteBool(aggro);
+        w.WriteShort(mob.Mp);
+        w.WriteByte(skillId);
+        w.WriteByte(skillLevel);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_MobMove</c> relaying a mob's movement to onlookers (ports
+    /// <c>ResCMobPool.MobMove</c>, JMS v186): flags, action, skill, and the raw CMovePath.
+    /// </summary>
+    public byte[] MobMove(int mobObjectId, bool nextAttackPossible, byte left, int mobSkill, ReadOnlySpan<byte> rawMovePath)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MobMove);
+        w.WriteInt(mobObjectId);
+        w.WriteByte(0);                        // bNotForceLandingWhenDiscard (JMS >= 186)
+        w.WriteByte(0);                        // bNotChangeAction
+        w.WriteBool(nextAttackPossible);
+        w.WriteByte(left);
+        w.WriteInt(mobSkill);
+        w.WriteInt(0);                         // JMS >= 186 pair
+        w.WriteInt(0);
+        w.WriteBytes(rawMovePath);
+        return w.ToArray();
+    }
+
+    /// <summary>CMob::SetTemporaryStat — JMS v186 mask is 4 ints, all zero (no buffs).</summary>
+    private static void WriteMobTemporaryStat(PacketWriter w)
+    {
         for (int i = 0; i < 4; i++)
         {
             w.WriteInt(0);
         }
+    }
 
-        // CMob::Init
+    /// <summary>CMob::Init for JMS v186.</summary>
+    private static void WriteMobInit(PacketWriter w, FieldMob mob)
+    {
+        const int spawnStance = 5;
+
         w.WriteShort(mob.X);
         w.WriteShort(mob.Y);
         w.WriteByte(spawnStance);            // m_nMoveAction
@@ -177,7 +238,6 @@ public sealed class ChannelPackets
         w.WriteByte(unchecked((byte)-1));    // m_nTeamForMCarnival
         w.WriteInt(0);                       // nEffectItemID (JMS >= 146)
         w.WriteInt(0);                       // m_nPhase (JMS >= 165)
-        return w.ToArray();
     }
 
     /// <summary>
