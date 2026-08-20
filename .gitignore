@@ -1,0 +1,49 @@
+# .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+
+# Rider / VS
+.idea/
+.vs/
+*.DotSettings.user
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# Local config / secrets
+appsettings.*.Local.json
+*.local.json
+.env
+
+# Game data / assets (do NOT commit copyrighted client data)
+data/wz/
+data/wz_xml/
+data/scripts/
+*.wz
+*.nx
+*.img
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
