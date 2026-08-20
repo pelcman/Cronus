@@ -204,6 +204,15 @@ public sealed class LoginPackets
         return w.ToArray();
     }
 
+    /// <summary>Builds <c>LP_DeleteCharacterResult</c>.</summary>
+    public byte[] DeleteCharacterResult(int characterId, bool success)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.DeleteCharacterResult);
+        w.WriteInt(characterId);
+        w.WriteByte(success ? (byte)LoginResult.Success : (byte)LoginResult.Unknown);
+        return w.ToArray();
+    }
+
     private PacketWriter NewPacket(string opcodeName)
     {
         int opcode = _serverOps.Get(opcodeName);

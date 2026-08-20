@@ -37,6 +37,7 @@ public static class ServerOpcode
     public const string SelectWorldResult = "LP_SelectWorldResult";
     public const string CheckDuplicatedIdResult = "LP_CheckDuplicatedIDResult";
     public const string CreateNewCharacterResult = "LP_CreateNewCharacterResult";
+    public const string DeleteCharacterResult = "LP_DeleteCharacterResult";
     public const string ViewAllCharResult = "LP_ViewAllCharResult";
     public const string SelectCharacterResult = "LP_SelectCharacterResult";
     public const string RecommendWorldMessage = "LP_RecommendWorldMessage";

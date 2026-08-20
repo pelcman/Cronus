@@ -97,6 +97,18 @@ public class DbAccountRepositoryTests
     }
 
     [Fact]
+    public void CharacterRepository_Delete()
+    {
+        var repo = new DbCharacterRepository(InMemoryFactory());
+        Character c = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Doomed" });
+
+        Assert.True(repo.Delete(c.Id));
+        Assert.Null(repo.Find(c.Id));
+        Assert.False(repo.NameExists("doomed"));
+        Assert.False(repo.Delete(c.Id)); // already gone
+    }
+
+    [Fact]
     public void LoginService_WorksOverDbRepository()
     {
         var repo = new DbAccountRepository(InMemoryFactory());

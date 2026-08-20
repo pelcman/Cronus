@@ -49,4 +49,18 @@ public sealed class DbCharacterRepository : ICharacterRepository
         db.Characters.Update(character);
         db.SaveChanges();
     }
+
+    public bool Delete(int characterId)
+    {
+        using CronusDbContext db = _contextFactory();
+        Character? character = db.Characters.FirstOrDefault(c => c.Id == characterId);
+        if (character is null)
+        {
+            return false;
+        }
+
+        db.Characters.Remove(character);
+        db.SaveChanges();
+        return true;
+    }
 }

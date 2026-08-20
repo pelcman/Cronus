@@ -116,6 +116,8 @@ Each milestone means adding one "working vertical slice".
       chat `!map/!meso/!pos/!help` GM commands.
 - [x] **M8e: LP_StatChanged** — stat-change encoder (StatFlag + EncodeChangeStat, JMS v186
       pre-BB), so gainMeso / `!meso` update the client UI immediately.
+- [x] **M8f: Character deletion** — CP_DeleteCharacter → LP_DeleteCharacterResult with
+      account-ownership check; ICharacterRepository.Delete (in-memory + EF). Completes CRUD.
 - [ ] **M9: Combat & content** — mob HP/aggro/movement, CP_UserMeleeAttack → damage,
       starter equipment + item serialization, quests. **← current**
 
