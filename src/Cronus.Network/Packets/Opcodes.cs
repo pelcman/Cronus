@@ -37,6 +37,7 @@ public static class ClientOpcode
     public const string UserSelectNpc = "CP_UserSelectNpc";
     public const string UserScriptMessageAnswer = "CP_UserScriptMessageAnswer";
     public const string Whisper = "CP_Whisper";
+    public const string Messenger = "CP_Messenger";
 }
 
 /// <summary>
@@ -68,6 +69,7 @@ public static class ServerOpcode
     public const string Whisper = "LP_Whisper";
     public const string UserEffectLocal = "LP_UserEffectLocal";
     public const string UserEffectRemote = "LP_UserEffectRemote";
+    public const string Messenger = "LP_Messenger";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string UserShootAttack = "LP_UserShootAttack";

@@ -72,11 +72,14 @@ ISkillProvider skills = CreateSkillProvider();
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js, if configured.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
 
+// Shared across all connections so messenger windows tie players together across fields.
+var messengers = new MessengerRegistry(new ChannelPackets(serverOps, config));
+
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers),
         "channel"),
     keepAlive);
 

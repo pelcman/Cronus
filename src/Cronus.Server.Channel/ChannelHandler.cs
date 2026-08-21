@@ -32,6 +32,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly IMapProvider _maps;
     private readonly ISkillProvider _skills;
     private readonly NpcScriptEngine? _npcScripts;
+    private readonly MessengerRegistry _messengers;
     private readonly int _channelId;
 
     private readonly int _opMigrateIn;
@@ -51,6 +52,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
     private readonly int _opWhisper;
+    private readonly int _opMessenger;
 
     private FieldPlayer? _player;
     private Field? _field;
@@ -65,7 +67,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         IMapProvider? maps = null,
         NpcScriptEngine? npcScripts = null,
         ISkillProvider? skills = null,
-        int channelId = 0)
+        int channelId = 0,
+        MessengerRegistry? messengers = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -74,6 +77,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _skills = skills ?? NullSkillProvider.Instance;
         _npcScripts = npcScripts;
         _channelId = channelId;
+        _messengers = messengers ?? new MessengerRegistry(_packets);
 
         _opMigrateIn = clientOpcodes.Get(ClientOpcode.MigrateIn);
         _opAliveAck = clientOpcodes.Get(ClientOpcode.AliveAck);
@@ -92,6 +96,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
         _opWhisper = clientOpcodes.Get(ClientOpcode.Whisper);
+        _opMessenger = clientOpcodes.Get(ClientOpcode.Messenger);
     }
 
     /// <summary>The character bound to this session after a successful migrate-in.</summary>
@@ -114,6 +119,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opWhisper)
         {
             await HandleWhisperAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opMessenger)
+        {
+            await HandleMessengerAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opUserEmotion)
         {
@@ -177,6 +186,15 @@ public sealed class ChannelHandler : PacketHandlerBase
         if (_player is not null && _field is not null)
         {
             _characters.Save(_player.Character); // persist last known map/stats on logout
+
+            // Leave any messenger so the other members' windows drop this player.
+            Messenger? messenger = _messengers.GetFor(_player.Character.Id);
+            if (messenger is not null)
+            {
+                await messenger.LeaveAsync(_player.Character.Id).ConfigureAwait(false);
+                _messengers.Unregister(_player.Character.Id, messenger);
+            }
+
             _field.Leave(_player.Character.Id);
             await _field.BroadcastAsync(_packets.UserLeaveField(_player.Character.Id)).ConfigureAwait(false);
             await ReleaseControlledMobsAsync(_field, _player.Character.Id).ConfigureAwait(false);
@@ -703,6 +721,100 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await target.Session.SendAsync(
                     _packets.WhisperReceive(_player.Character.Name, _channelId, message))
                     .ConfigureAwait(false);
+            }
+        }
+    }
+
+    // CP_Messenger sub-operations the client sends (ports OpsMessenger).
+    private const int MsmpEnterOp = 0;
+    private const int MsmpLeaveOp = 2;
+    private const int MsmpInviteOp = 3;
+    private const int MsmpChatOp = 6;
+
+    /// <summary>
+    /// Handles <c>CP_Messenger</c> — the 3-person messenger window: create/join (Enter), leave,
+    /// invite a player, and chat (ports <c>ReqCUIMessenger.OnMessenger</c> + <c>TacosMessenger</c>).
+    /// Block-list and avatar-refresh ops are out of scope (no block/appearance systems yet).
+    /// </summary>
+    private async ValueTask HandleMessengerAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        int op = packet.ReadByte();
+        int myId = _player.Character.Id;
+        Messenger? current = _messengers.GetFor(myId);
+
+        switch (op)
+        {
+            case MsmpEnterOp:
+            {
+                if (current is not null)
+                {
+                    return; // already in a messenger
+                }
+
+                int messengerId = packet.ReadInt();
+                Messenger? target = messengerId == 0 ? _messengers.Create() : _messengers.FindById(messengerId);
+                if (target is null)
+                {
+                    return; // invite expired / bad id
+                }
+
+                if (await target.EnterAsync(_player, _channelId).ConfigureAwait(false))
+                {
+                    _messengers.Register(myId, target);
+                }
+
+                return;
+            }
+
+            case MsmpLeaveOp:
+            {
+                if (current is null)
+                {
+                    return;
+                }
+
+                await current.LeaveAsync(myId).ConfigureAwait(false);
+                _messengers.Unregister(myId, current);
+                return;
+            }
+
+            case MsmpInviteOp:
+            {
+                if (current is null)
+                {
+                    return;
+                }
+
+                string inviteeName = packet.ReadString();
+                FieldPlayer? invitee = _fields.FindPlayerByName(inviteeName);
+                // Available only if online and not already in a messenger.
+                bool available = invitee is not null && _messengers.GetFor(invitee.Character.Id) is null;
+
+                await current.BroadcastInviteResultAsync(inviteeName, available).ConfigureAwait(false);
+                if (available)
+                {
+                    await invitee!.Session.SendAsync(
+                        _packets.MessengerInvite(_player.Character.Name, _channelId, current.Id)).ConfigureAwait(false);
+                }
+
+                return;
+            }
+
+            case MsmpChatOp:
+            {
+                if (current is null)
+                {
+                    return;
+                }
+
+                string message = packet.ReadString();
+                await current.ChatAsync(myId, message).ConfigureAwait(false);
+                return;
             }
         }
     }

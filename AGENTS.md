@@ -232,6 +232,14 @@ Each milestone means adding one "working vertical slice".
       see the level-up animation. The local client plays its own from the level `LP_StatChanged`, so
       only the remote effect needs sending (ports `MapleCharacter.levelUp` →
       `ResCUserRemote.UserEffectRemote`). End-to-end tested (observer sees the attacker's ding).
+- [x] **M21: Messenger** — the 3-person messenger window (`CP_Messenger` / `LP_Messenger`, ports
+      `TacosMessenger` + `ReqCUIMessenger`). `Messenger` holds up to 3 slots and fans packets out to
+      members across fields; `MessengerRegistry` (shared, injected like `FieldRegistry`) creates and
+      looks them up. Ops: create/join (Enter → SelfEnterResult + Enter to peers), Invite (→
+      InviteResult to members + Invite to the target), Chat, Leave; disconnect auto-leaves. The
+      member avatar reuses the client-verified `WriteAvatarLook`, so the window renders real looks.
+      End-to-end tested (invite → join → chat → leave through encrypted sessions). Out of scope:
+      block-list (MSMP_Blocked), avatar refresh (MSMP_Avatar), and cross-channel migration.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

@@ -737,6 +737,90 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_Messenger sub-operations (ports OpsMessenger). The first byte selects the shape.
+    private const byte MsmpEnter = 0;
+    private const byte MsmpSelfEnterResult = 1;
+    private const byte MsmpLeave = 2;
+    private const byte MsmpInvite = 3;
+    private const byte MsmpInviteResult = 4;
+    private const byte MsmpChat = 6;
+
+    /// <summary>
+    /// Builds <c>LP_Messenger</c> MSMP_SelfEnterResult, telling the player who just joined which
+    /// slot (0..2) they occupy in the 3-person window (ports <c>ResCUIMessenger.Messenger</c>).
+    /// </summary>
+    public byte[] MessengerSelfEnterResult(int slotIndex)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Messenger);
+        w.WriteByte(MsmpSelfEnterResult);
+        w.WriteByte((byte)slotIndex);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_Messenger</c> MSMP_Enter describing a member (their slot, avatar look, name,
+    /// 0-based channel, and whether they are the one who just joined) so the recipient's window
+    /// shows them (ports <c>ResCUIMessenger.Messenger</c> + <c>DataAvatarLook</c>). Reuses the
+    /// client-verified avatar-look encoding from the field spawn packet.
+    /// </summary>
+    public byte[] MessengerEnter(int slotIndex, Character member, int channel, bool isNew)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Messenger);
+        w.WriteByte(MsmpEnter);
+        w.WriteByte((byte)slotIndex);
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, member);
+        w.WriteString(member.Name);
+        w.WriteByte((byte)channel);
+        w.WriteBool(isNew);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_Messenger</c> MSMP_Leave: the slot a departing member vacated.</summary>
+    public byte[] MessengerLeave(int slotIndex)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Messenger);
+        w.WriteByte(MsmpLeave);
+        w.WriteByte((byte)slotIndex);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_Messenger</c> MSMP_Invite delivered to an invited player: the inviter's name,
+    /// 0-based channel, and the messenger id to join.
+    /// </summary>
+    public byte[] MessengerInvite(string inviterName, int inviterChannel, int messengerId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Messenger);
+        w.WriteByte(MsmpInvite);
+        w.WriteString(inviterName);
+        w.WriteByte((byte)inviterChannel);
+        w.WriteInt(messengerId);
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_Messenger</c> MSMP_InviteResult echoed to the members: the invited name and
+    /// whether they could be invited (online and not already in a messenger).
+    /// </summary>
+    public byte[] MessengerInviteResult(string inviteeName, bool found)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Messenger);
+        w.WriteByte(MsmpInviteResult);
+        w.WriteString(inviteeName);
+        w.WriteBool(found);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_Messenger</c> MSMP_Chat: a line for the other members' windows.</summary>
+    public byte[] MessengerChat(string message)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Messenger);
+        w.WriteByte(MsmpChat);
+        w.WriteString(message);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_UserMove</c> relaying a raw CMovePath buffer (ports
     /// <c>ResCUserRemote.UserMove</c>: character id + the path bytes as received).
