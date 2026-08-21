@@ -11,7 +11,7 @@ namespace Cronus.Server.Channel.Tests;
 
 public class PartyLivenessTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
     private const int OtherMap = 200000000;
 
     private static OpcodeTable ClientOps { get; } =

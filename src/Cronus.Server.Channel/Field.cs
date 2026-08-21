@@ -298,6 +298,18 @@ public sealed class Field
         }
     }
 
+    /// <summary>A snapshot of the drops currently on the ground (for spawning to a newcomer).</summary>
+    public IReadOnlyList<FieldDrop> Drops
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _drops.Values.ToList();
+            }
+        }
+    }
+
     /// <summary>Registers a meso drop and returns it (assigns the object id).</summary>
     public FieldDrop AddMesoDrop(int meso, short x, short y, FieldMob source)
     {

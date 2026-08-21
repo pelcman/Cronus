@@ -355,16 +355,19 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
-    /// Builds <c>LP_DropEnterField</c> for a meso drop with the drop-from-mob animation
-    /// (ports <c>ResCDropPool.DropEnterField</c>, JMS v186; ANIMATION enter type, FFA).
+    /// Builds <c>LP_DropEnterField</c> for a meso drop (ports <c>ResCDropPool.DropEnterField</c>,
+    /// JMS v186; FFA). Fresh drops use ANIMATION (fall from the source mob); when
+    /// <paramref name="onGround"/> the drop is already lying there (NO_ANIMATION, no drop-from
+    /// coords) — used to show a newcomer the drops already in the field.
     /// </summary>
-    public byte[] DropEnterFieldMeso(FieldDrop drop)
+    public byte[] DropEnterFieldMeso(FieldDrop drop, bool onGround = false)
     {
-        const int animation = 1; // EnterType.ANIMATION
+        const int animation = 1;   // EnterType.ANIMATION
+        const int noAnimation = 2; // EnterType.NO_ANIMATION (already on the ground)
         const int freeForAll = 2;
 
         PacketWriter w = NewPacket(ServerOpcode.DropEnterField);
-        w.WriteByte(animation);
+        w.WriteByte(onGround ? noAnimation : animation);
         w.WriteInt(drop.ObjectId);
         w.WriteByte(1);                  // meso flag
         w.WriteInt(drop.Meso);           // meso amount (in the item-id field)
@@ -373,9 +376,13 @@ public sealed class ChannelPackets
         w.WriteShort(drop.X);            // landing x
         w.WriteShort(drop.Y);            // landing y
         w.WriteInt(drop.SourceObjectId); // source mob
-        w.WriteShort(drop.SourceX);      // drop-from x (ANIMATION)
-        w.WriteShort(drop.SourceY);      // drop-from y
-        w.WriteShort(0);
+        if (!onGround)
+        {
+            w.WriteShort(drop.SourceX);  // drop-from x (ANIMATION only)
+            w.WriteShort(drop.SourceY);  // drop-from y
+            w.WriteShort(0);
+        }
+
         // meso drops omit the 8-byte expiration.
         w.WriteByte(1);                  // not a player drop
         w.WriteByte(0);

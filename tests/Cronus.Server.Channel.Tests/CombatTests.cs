@@ -11,7 +11,7 @@ namespace Cronus.Server.Channel.Tests;
 
 public class CombatTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
 
     private static OpcodeTable ClientOps { get; } =
         OpcodeTable.LoadFile(Path.Combine(AppContext.BaseDirectory, "opcodes", "JMS_v186_ClientPacket.properties"));

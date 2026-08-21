@@ -325,6 +325,12 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await session.SendAsync(_packets.MobChangeController(mob)).ConfigureAwait(false);
             }
         }
+
+        // Show the newcomer the meso drops already lying on the ground (no fall animation).
+        foreach (FieldDrop drop in field.Drops)
+        {
+            await session.SendAsync(_packets.DropEnterFieldMeso(drop, onGround: true)).ConfigureAwait(false);
+        }
     }
 
     private async ValueTask HandleUserMoveAsync(PacketReader packet)

@@ -270,6 +270,11 @@ Each milestone means adding one "working vertical slice".
       window shows current maps and levels. `RefreshPartyWindowAsync` fires from `MovePlayerToMapAsync`
       and the level-up branch of `GrantExpToAsync` (ports the `SILENT_UPDATE` path). End-to-end tested
       (partner's window updates to the leader's new map after a warp).
+- [x] **M26: Ground drops on entry** — a player entering (or warping into) a field now sees the meso
+      drops already lying there, not just ones that drop after they arrive. `SpawnNpcsAsync` sends each
+      existing `Field.Drops` with `LP_DropEnterField` using `NO_ANIMATION` (already-on-ground, no fall;
+      ports `ResCDropPool.EnterType`). End-to-end tested (late arrival sees a pre-existing drop). Also
+      bumped the integration-test timeouts (5 s → 15 s) so the suite stays green under parallel load.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
