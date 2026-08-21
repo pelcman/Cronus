@@ -24,6 +24,9 @@ public sealed class FieldDrop
 
     /// <summary><see cref="Environment.TickCount64"/> when the drop hit the ground (for expiry).</summary>
     public long DropAtTick { get; init; }
+
+    /// <summary>True when a player threw this drop (vs. a mob dropping it); flips a wire byte.</summary>
+    public bool IsPlayerDrop { get; init; }
 }
 
 /// <summary>A spawned monster in a field: a runtime object id bound to a wz template + placement.</summary>
@@ -310,8 +313,18 @@ public sealed class Field
         }
     }
 
-    /// <summary>Registers a meso drop and returns it (assigns the object id).</summary>
+    /// <summary>Registers a meso drop from a killed mob and returns it (assigns the object id).</summary>
     public FieldDrop AddMesoDrop(int meso, short x, short y, FieldMob source)
+        => AddMesoDropCore(meso, x, y, source.ObjectId, source.X, source.Y, playerDrop: false);
+
+    /// <summary>
+    /// Registers a meso drop thrown by a player at their own position, and returns it (the drop
+    /// falls from and lands at the player's feet; others can pick it up).
+    /// </summary>
+    public FieldDrop AddPlayerMesoDrop(int meso, short x, short y, int sourceCharacterId)
+        => AddMesoDropCore(meso, x, y, sourceCharacterId, x, y, playerDrop: true);
+
+    private FieldDrop AddMesoDropCore(int meso, short x, short y, int sourceObjectId, short sourceX, short sourceY, bool playerDrop)
     {
         lock (_gate)
         {
@@ -321,10 +334,11 @@ public sealed class Field
                 Meso = meso,
                 X = x,
                 Y = y,
-                SourceObjectId = source.ObjectId,
-                SourceX = source.X,
-                SourceY = source.Y,
+                SourceObjectId = sourceObjectId,
+                SourceX = sourceX,
+                SourceY = sourceY,
                 DropAtTick = Environment.TickCount64,
+                IsPlayerDrop = playerDrop,
             };
             _drops[drop.ObjectId] = drop;
             return drop;

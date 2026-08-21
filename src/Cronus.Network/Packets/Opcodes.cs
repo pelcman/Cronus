@@ -31,6 +31,7 @@ public static class ClientOpcode
     public const string UserMagicAttack = "CP_UserMagicAttack";
     public const string UserHit = "CP_UserHit";
     public const string DropPickUpRequest = "CP_DropPickUpRequest";
+    public const string UserDropMoneyRequest = "CP_UserDropMoneyRequest";
     public const string UserSkillUpRequest = "CP_UserSkillUpRequest";
     public const string MobMove = "CP_MobMove";
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";

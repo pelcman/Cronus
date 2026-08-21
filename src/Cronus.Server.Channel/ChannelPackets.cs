@@ -384,7 +384,7 @@ public sealed class ChannelPackets
         }
 
         // meso drops omit the 8-byte expiration.
-        w.WriteByte(1);                  // not a player drop
+        w.WriteByte(drop.IsPlayerDrop ? 0 : 1); // 0 = thrown by a player, 1 = mob drop
         w.WriteByte(0);
         return w.ToArray();
     }

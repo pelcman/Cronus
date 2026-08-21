@@ -47,6 +47,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opShootAttack;
     private readonly int _opUserHit;
     private readonly int _opDropPickUp;
+    private readonly int _opDropMoney;
     private readonly int _opSkillUp;
     private readonly int _opMobMove;
     private readonly int _opTransferField;
@@ -94,6 +95,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opShootAttack = clientOpcodes.Get(ClientOpcode.UserShootAttack);
         _opUserHit = clientOpcodes.Get(ClientOpcode.UserHit);
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
+        _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
         _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
@@ -160,6 +162,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opDropPickUp)
         {
             await HandleDropPickUpAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opDropMoney)
+        {
+            await HandleDropMoneyAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opSkillUp)
         {
@@ -612,6 +618,41 @@ public sealed class ChannelHandler : PacketHandlerBase
         c.Meso = (int)Math.Clamp((long)c.Meso + drop.Meso, 0, int.MaxValue);
         _characters.Save(c);
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+    }
+
+    /// <summary>Meso-drop bounds (ports <c>OnUserDropMoneyRequest</c>): a throw is 10..50000 mesos.</summary>
+    private const int MinMesoDrop = 10;
+    private const int MaxMesoDrop = 50000;
+
+    /// <summary>
+    /// Handles <c>CP_UserDropMoneyRequest</c> — a player throws mesos onto the ground for others to
+    /// pick up (ports <c>ReqCUser.OnUserDropMoneyRequest</c>). Deducts the mesos and spawns a
+    /// player-owned meso drop at their feet; the amount is bounded and must be affordable.
+    /// </summary>
+    private async ValueTask HandleDropMoneyAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        packet.ReadInt();               // timestamp
+        int mesos = packet.ReadInt();
+
+        Character c = _player.Character;
+        if (mesos < MinMesoDrop || mesos > MaxMesoDrop || c.Meso < mesos)
+        {
+            // Reject: resync the client's meso so a rejected throw doesn't desync the UI.
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+            return;
+        }
+
+        c.Meso -= mesos;
+        _characters.Save(c);
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+
+        FieldDrop drop = _field.AddPlayerMesoDrop(mesos, _player.X, _player.Y, c.Id);
+        await _field.BroadcastAsync(_packets.DropEnterFieldMeso(drop)).ConfigureAwait(false);
     }
 
     private async ValueTask GrantKillExpAsync(int exp)

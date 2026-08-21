@@ -285,6 +285,13 @@ Each milestone means adding one "working vertical slice".
       `!warp <name>` (jump to an online player's map — how friends meet up), and `!players` / `!online`
       (list who's on). All are chat-triggered and touch no entry-blob bytes, so they carry no
       client-entry risk. End-to-end tested (`!warp` moves the caller into the target's field).
+- [x] **M29: Dropping meso** — `CP_UserDropMoneyRequest` lets a player throw mesos on the ground for
+      others to pick up (ports `ReqCUser.OnUserDropMoneyRequest`): bounds 10..50000 and affordability
+      are enforced, the mesos are deducted, and a *player-owned* meso drop spawns at their feet
+      (`Field.AddPlayerMesoDrop`; `LP_DropEnterField`'s origin byte flips to 0 for player drops). The
+      existing pickup path then credits whoever grabs it — so friends can hand each other meso, the
+      working currency, without an inventory system. End-to-end tested (250 meso Alice → Bob) plus the
+      below-minimum reject. No entry-blob bytes touched.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
