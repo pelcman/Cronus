@@ -137,4 +137,5 @@ public static class ServerOpcode
     public const string GroupMessage = "LP_GroupMessage";
     public const string GatherItemResult = "LP_GatherItemResult";
     public const string SortItemResult = "LP_SortItemResult";
+    public const string UserMiniRoomBalloon = "LP_UserMiniRoomBalloon";
 }

@@ -86,12 +86,13 @@ var keymaps = new KeymapRegistry(keymapRepo);
 var trades = new TradeRegistry();
 var buffs = new BuffTracker();
 var guilds = new GuildRegistry(guildRepo);
+var miniGames = new MiniGameRegistry();
 
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames),
         "channel"),
     keepAlive);
 

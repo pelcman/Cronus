@@ -1481,6 +1481,250 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // Mini-game protocol ops (OpsMiniRoomProtocol.init, JMS v186 values).
+    public const byte MgTieRequest = 47;
+    public const byte MgTieResult = 48;
+    public const byte MgGiveUpRequest = 49;
+    public const byte MgGiveUpResult = 50;
+    public const byte MgRetreatRequest = 51;
+    public const byte MgRetreatResult = 52;
+    public const byte MgLeaveEngage = 53;
+    public const byte MgLeaveEngageCancel = 54;
+    public const byte MgReady = 55;
+    public const byte MgCancelReady = 56;
+    public const byte MgBan = 57;
+    public const byte MgStart = 58;
+    public const byte MgGameResult = 59;
+    public const byte MgTimeOver = 60;
+    public const byte MgPutStone = 61;
+    public const byte MgInvalidStone = 62;
+    public const byte MgTurnUpCard = 65;
+
+    /// <summary>The "losses,ties,wins" record blob per player (ports <c>GW_MiniGameRecord_Encode</c>).</summary>
+    private static void WriteMiniGameRecord(PacketWriter w, MiniGame game, Character c)
+    {
+        w.WriteInt(game.GameType);
+        w.WriteInt(game.Wins(c));
+        w.WriteInt(game.Ties(c));
+        w.WriteInt(game.Losses(c));
+        w.WriteInt(game.Score(c));
+    }
+
+    /// <summary>
+    /// Builds the game-room open packet for one viewer (ports <c>getMiniGame</c>): room type (1
+    /// Omok / 2 match card), capacity, the viewer's seat, then everyone's avatar+name+job, the
+    /// per-seat win/tie/loss records, the room title, and the piece/board type.
+    /// </summary>
+    public byte[] MiniGameRoom(MiniGame game, int viewerSeat)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomEnterResult);
+        w.WriteByte((byte)game.GameType);
+        w.WriteByte(MiniGame.MaxSize);
+        w.WriteShort((short)viewerSeat);
+
+        Character owner = game.Owner.Character;
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, owner);
+        w.WriteString(owner.Name);
+        w.WriteShort(owner.Job); // JMS >= 186
+        if (game.Visitor is { } visitor)
+        {
+            w.WriteByte(1);
+            Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, visitor.Character);
+            w.WriteString(visitor.Character.Name);
+            w.WriteShort(visitor.Character.Job);
+        }
+
+        w.WriteByte(0xFF);
+
+        w.WriteByte(0); // owner's record, seat 0
+        WriteMiniGameRecord(w, game, owner);
+        if (game.Visitor is { } v2)
+        {
+            w.WriteByte(1);
+            WriteMiniGameRecord(w, game, v2.Character);
+        }
+
+        w.WriteByte(0xFF);
+        w.WriteString(game.Description);
+        w.WriteShort((short)game.PieceType);
+        return w.ToArray();
+    }
+
+    /// <summary>"The room is already full / closed" bounce (ports <c>getMiniGameFull</c>).</summary>
+    public byte[] MiniGameFull()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomEnterResult);
+        w.WriteByte(0);
+        w.WriteByte(2);
+        return w.ToArray();
+    }
+
+    /// <summary>A visitor joined the game room (ports <c>getMiniGameNewVisitor</c>).</summary>
+    public byte[] MiniGameNewVisitor(MiniGame game, Character joiner, int seat)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomEnter);
+        w.WriteByte((byte)seat);
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, joiner);
+        w.WriteString(joiner.Name);
+        w.WriteShort(joiner.Job);
+        WriteMiniGameRecord(w, game, joiner);
+        return w.ToArray();
+    }
+
+    /// <summary>Someone left the game room (ports <c>shopVisitorLeave</c> — no message byte).</summary>
+    public byte[] MiniRoomVisitorLeave(byte seat)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomLeave);
+        w.WriteByte(seat);
+        return w.ToArray();
+    }
+
+    /// <summary>Room closed on a seat with a reason (ports <c>shopErrorMessage</c>: 3 = the room
+    /// is closing, 5 = you were kicked).</summary>
+    public byte[] MiniRoomClosed(byte seat, byte reason)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomLeave);
+        w.WriteByte(seat);
+        w.WriteByte(reason);
+        return w.ToArray();
+    }
+
+    /// <summary>Visitor ready toggled (ports <c>getMiniGameReady</c>).</summary>
+    public byte[] MiniGameReady(bool ready)
+        => MiniGameOpOnly(ready ? MgReady : MgCancelReady);
+
+    /// <summary>"Leave after this game" toggled (ports <c>getMiniGameExitAfter</c>).</summary>
+    public byte[] MiniGameExitAfter(bool set)
+        => MiniGameOpOnly(set ? MgLeaveEngage : MgLeaveEngageCancel);
+
+    /// <summary>A tie was proposed — shown to the other seat (ports <c>getMiniGameRequestTie</c>).</summary>
+    public byte[] MiniGameTieRequest() => MiniGameOpOnly(MgTieResult);
+
+    /// <summary>The tie proposal was declined (ports <c>getMiniGameDenyTie</c>).</summary>
+    public byte[] MiniGameTieDenied() => MiniGameOpOnly(MgGiveUpRequest);
+
+    private byte[] MiniGameOpOnly(byte op)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(op);
+        return w.ToArray();
+    }
+
+    /// <summary>An Omok round starts (ports <c>getMiniGameStart</c>): who moves first.</summary>
+    public byte[] MiniGameStart(int loser)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MgStart);
+        w.WriteByte((byte)(loser == 1 ? 0 : 1));
+        return w.ToArray();
+    }
+
+    /// <summary>A match-card round starts with the shuffled board (ports <c>getMatchCardStart</c>).</summary>
+    public byte[] MatchCardStart(MiniGame game, int loser)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MgStart);
+        w.WriteByte((byte)(loser == 1 ? 0 : 1));
+        w.WriteByte((byte)game.CardCount);
+        for (int i = 1; i <= game.CardCount; i++)
+        {
+            w.WriteInt(game.CardId(i));
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>An Omok stone lands (ports <c>getMiniGameMoveOmok</c>).</summary>
+    public byte[] MiniGameOmokMove(int x, int y, int type)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MgPutStone);
+        w.WriteInt(x);
+        w.WriteInt(y);
+        w.WriteByte((byte)type);
+        return w.ToArray();
+    }
+
+    /// <summary>A match-card flip (ports <c>getMatchCardSelect</c>): the second flip carries the
+    /// first card and the outcome code (0/1 miss by owner/visitor, 2/3 match by owner/visitor).</summary>
+    public byte[] MatchCardSelect(int turn, int slot, int firstSlot, int type)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MgTurnUpCard);
+        w.WriteByte((byte)turn);
+        w.WriteByte((byte)slot);
+        if (turn == 0)
+        {
+            w.WriteByte((byte)firstSlot);
+            w.WriteByte((byte)type);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>A player let their turn time out (ports <c>getMiniGameSkip</c>).</summary>
+    public byte[] MiniGameSkip(int seat)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MgTimeOver);
+        w.WriteByte((byte)seat);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// The round ended (ports <c>getMiniGameResult</c>): result 0 lose (a give-up; the byte then
+    /// names the winner's seat) / 1 tie (no seat byte) / 2 win (the byte names the winner), then
+    /// everyone's updated records. Update the records via <see cref="MiniGame.AddResult"/> first.
+    /// </summary>
+    public byte[] MiniGameResult(MiniGame game, int result, int seat)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MgGameResult);
+        w.WriteByte((byte)result);
+        if (result != MiniGame.ResultTie)
+        {
+            w.WriteByte((byte)(result == MiniGame.ResultLose ? (seat == 1 ? 0 : 1) : seat));
+        }
+
+        WriteMiniGameRecord(w, game, game.Owner.Character);
+        if (game.Visitor is { } visitor)
+        {
+            WriteMiniGameRecord(w, game, visitor.Character);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// The game-room balloon over the owner's head (ports <c>ResCUser.sendPlayerShopBox</c> +
+    /// <c>Structure.AnnounceBox/Interaction</c>). Pass null to clear the balloon.
+    /// </summary>
+    public byte[] MiniRoomBalloon(int ownerCharacterId, MiniGame? game)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserMiniRoomBalloon);
+        w.WriteInt(ownerCharacterId);
+        if (game is null)
+        {
+            w.WriteByte(0);
+            return w.ToArray();
+        }
+
+        w.WriteByte((byte)game.GameType);
+        w.WriteInt(game.ObjectId);
+        w.WriteString(game.Description);
+        w.WriteBool(game.Password.Length > 0);
+        w.WriteByte((byte)(game.ItemId % 10));
+        w.WriteByte((byte)game.Size);
+        w.WriteByte(MiniGame.MaxSize);
+        w.WriteByte((byte)(game.Open ? 0 : 1)); // 1 = a round is in progress
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_UserAvatarModified</c> (ports <c>ResCUserRemote.UserAvatarModified</c>, JMS v186):
     /// the character id, the avatar-change flag, then the full avatar-look block so an equip change

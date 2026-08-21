@@ -41,6 +41,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly TradeRegistry _trades;
     private readonly BuffTracker _buffs;
     private readonly GuildRegistry _guilds;
+    private readonly MiniGameRegistry _miniGames;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -124,7 +125,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         Rates? rates = null,
         TradeRegistry? trades = null,
         BuffTracker? buffs = null,
-        GuildRegistry? guilds = null)
+        GuildRegistry? guilds = null,
+        MiniGameRegistry? miniGames = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -141,6 +143,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _trades = trades ?? new TradeRegistry();
         _buffs = buffs ?? new BuffTracker();
         _guilds = guilds ?? new GuildRegistry();
+        _miniGames = miniGames ?? new MiniGameRegistry();
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -376,6 +379,12 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await CancelTradeAsync(trade).ConfigureAwait(false);
             }
 
+            // Leave any game room (the owner dropping closes it for the visitor too).
+            if (_miniGames.GetForCharacter(_player.Character.Id) is { } miniGame)
+            {
+                await ExitMiniGameAsync(miniGame, _player.Character.Id).ConfigureAwait(false);
+            }
+
             // Buddies see this player go offline.
             await NotifyBuddiesOfPresenceAsync(_player.Character.Id, channel: -1).ConfigureAwait(false);
 
@@ -493,6 +502,13 @@ public sealed class ChannelHandler : PacketHandlerBase
             .ConfigureAwait(false);
 
         await SpawnNpcsAsync(session, field).ConfigureAwait(false);
+
+        // Open game rooms in this map show their balloons to the newcomer.
+        foreach (MiniGame game in _miniGames.GamesInMap(character.MapId))
+        {
+            await session.SendAsync(_packets.MiniRoomBalloon(game.Owner.Character.Id, game)).ConfigureAwait(false);
+        }
+
         await NotifyBuddiesOfPresenceAsync(character.Id, channel: 0).ConfigureAwait(false); // "came online"
 
         // Guild window data + presence; a guild that no longer exists is scrubbed off the character.
@@ -2262,10 +2278,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     /// <summary>
-    /// Handles <c>CP_MiniRoom</c> for the trade room (ports <c>ReqCMiniRoomBaseDlg</c> +
-    /// <c>MapleTrade</c>): create (type 3) → invite → enter, staging items/meso (removed from the
-    /// owner immediately, returned on cancel), and the exchange once both sides press Trade. Other
-    /// mini-room types (minigames, personal/hired shops) aren't modelled.
+    /// Handles <c>CP_MiniRoom</c> (ports <c>ReqCMiniRoomBaseDlg</c>): the trade room (type 3,
+    /// <c>MapleTrade</c>) and the Omok / match-card game rooms (types 1/2, <c>MapleMiniGame</c>).
+    /// Personal/hired shops (types 4/5) aren't modelled.
     /// </summary>
     private async ValueTask HandleMiniRoomAsync(MapleSession session, PacketReader packet)
     {
@@ -2281,9 +2296,15 @@ public sealed class ChannelHandler : PacketHandlerBase
             case ChannelPackets.MiniRoomCreate:
             {
                 byte roomType = packet.ReadByte();
+                if (roomType is MiniGame.TypeOmok or MiniGame.TypeMatchCard)
+                {
+                    await CreateMiniGameAsync(session, c, roomType, packet).ConfigureAwait(false);
+                    return;
+                }
+
                 if (roomType != 3 || _trades.Get(c.Id) is not null)
                 {
-                    return; // only trade rooms; one trade at a time
+                    return; // trades and game rooms only; one room at a time
                 }
 
                 var trade = new Trade(_player);
@@ -2328,15 +2349,21 @@ public sealed class ChannelHandler : PacketHandlerBase
             case ChannelPackets.MiniRoomEnter:
             {
                 Trade? trade = _trades.Get(c.Id);
-                if (trade is null || trade.VisitorEntered || trade.InvitedCharacterId != c.Id)
+                if (trade is not null)
                 {
+                    if (trade.VisitorEntered || trade.InvitedCharacterId != c.Id)
+                    {
+                        return;
+                    }
+
+                    trade.Join(_player);
+                    trade.VisitorEntered = true;
+                    await session.SendAsync(_packets.TradeStart(c, 1, trade.Starter.Player.Character)).ConfigureAwait(false);
+                    await TrySendAsync(trade.Starter.Player, _packets.TradePartnerAdd(c)).ConfigureAwait(false);
                     return;
                 }
 
-                trade.Join(_player);
-                trade.VisitorEntered = true;
-                await session.SendAsync(_packets.TradeStart(c, 1, trade.Starter.Player.Character)).ConfigureAwait(false);
-                await TrySendAsync(trade.Starter.Player, _packets.TradePartnerAdd(c)).ConfigureAwait(false);
+                await EnterMiniGameAsync(session, c, packet).ConfigureAwait(false);
                 break;
             }
 
@@ -2353,6 +2380,10 @@ public sealed class ChannelHandler : PacketHandlerBase
                         await TrySendAsync(partner.Player, chat).ConfigureAwait(false);
                     }
                 }
+                else if (_miniGames.GetForCharacter(c.Id) is { } game && game.SeatOf(c.Id) is int seat and >= 0)
+                {
+                    await BroadcastToMiniGameAsync(game, _packets.TradeChat((byte)seat, $"{c.Name} : {message}")).ConfigureAwait(false);
+                }
 
                 break;
             }
@@ -2362,6 +2393,10 @@ public sealed class ChannelHandler : PacketHandlerBase
                 if (_trades.Get(c.Id) is { } trade)
                 {
                     await CancelTradeAsync(trade).ConfigureAwait(false);
+                }
+                else if (_miniGames.GetForCharacter(c.Id) is { } game)
+                {
+                    await ExitMiniGameAsync(game, c.Id).ConfigureAwait(false);
                 }
 
                 break;
@@ -2377,6 +2412,10 @@ public sealed class ChannelHandler : PacketHandlerBase
 
             case ChannelPackets.TradeConfirm:
                 await HandleTradeConfirmAsync(session, c).ConfigureAwait(false);
+                break;
+
+            default:
+                await HandleMiniGameOpAsync(session, c, protocol, packet).ConfigureAwait(false);
                 break;
         }
     }
@@ -2554,6 +2593,335 @@ public sealed class ChannelHandler : PacketHandlerBase
             }
 
             await TrySendAsync(side.Player, _packets.TradeLeave(side.Slot, ChannelPackets.TradeMsgCancelled)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Creates an Omok / match-card room (ports the MRP_Create game branch): needs the board item
+    /// (4080000+n stone set / 4080100 card deck), one room per player. The room opens for the owner
+    /// and its balloon appears over their head for the whole map.
+    /// </summary>
+    private async ValueTask CreateMiniGameAsync(MapleSession session, Character c, byte gameType, PacketReader packet)
+    {
+        string description = packet.ReadString();
+        byte hasPassword = packet.ReadByte();
+        string password = hasPassword > 0 ? packet.ReadString() : string.Empty;
+        int piece = packet.ReadByte();
+
+        int itemId = gameType == MiniGame.TypeOmok ? 4080000 + piece : 4080100;
+        if (_miniGames.GetForCharacter(c.Id) is not null
+            || _trades.Get(c.Id) is not null
+            || CountInventoryItem(c, itemId) < 1)
+        {
+            return;
+        }
+
+        MiniGame game = _miniGames.Create(gameType, _player!, description, password, piece);
+        await session.SendAsync(_packets.MiniGameRoom(game, viewerSeat: 0)).ConfigureAwait(false);
+        if (_field is not null)
+        {
+            await _field.BroadcastAsync(_packets.MiniRoomBalloon(c.Id, game)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Joins a game room from its balloon (ports the MRP_Enter game branch): seat 1 if the room is
+    /// open, not full, and the password matches; both sides see the updated room.
+    /// </summary>
+    private async ValueTask EnterMiniGameAsync(MapleSession session, Character c, PacketReader packet)
+    {
+        int objectId = packet.ReadInt();
+        MiniGame? game = _miniGames.Get(objectId);
+        if (game is null || game.Visitor is not null || !game.Open || game.SeatOf(c.Id) >= 0
+            || _miniGames.GetForCharacter(c.Id) is not null)
+        {
+            await session.SendAsync(_packets.MiniGameFull()).ConfigureAwait(false);
+            return;
+        }
+
+        if (game.Password.Length > 0)
+        {
+            byte hasPassword = packet.Remaining > 0 ? packet.ReadByte() : (byte)0;
+            string password = hasPassword > 0 ? packet.ReadString() : string.Empty;
+            if (!string.Equals(password, game.Password, StringComparison.Ordinal))
+            {
+                await session.SendAsync(_packets.MiniGameFull()).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        _miniGames.SetVisitor(game, _player!);
+        await TrySendAsync(game.Owner, _packets.MiniGameNewVisitor(game, c, seat: 1)).ConfigureAwait(false);
+        await session.SendAsync(_packets.MiniGameRoom(game, viewerSeat: 1)).ConfigureAwait(false);
+        if (_field is not null)
+        {
+            await _field.BroadcastAsync(_packets.MiniRoomBalloon(game.Owner.Character.Id, game)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Sends a packet to both seats of a game room.</summary>
+    private async ValueTask BroadcastToMiniGameAsync(MiniGame game, byte[] packet)
+    {
+        await TrySendAsync(game.Owner, packet).ConfigureAwait(false);
+        if (game.Visitor is { } visitor)
+        {
+            await TrySendAsync(visitor, packet).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Refreshes the room's balloon for the owner's map.</summary>
+    private async ValueTask UpdateMiniGameBalloonAsync(MiniGame game, bool closed = false)
+    {
+        Field field = _fields.Get(game.Owner.Character.MapId);
+        await field.BroadcastAsync(_packets.MiniRoomBalloon(game.Owner.Character.Id, closed ? null : game)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A participant leaves the room (ports <c>MapleMiniGame.exit</c>): the owner leaving closes
+    /// the room for everyone; a visitor leaving frees their seat. An abandoned round ends.
+    /// </summary>
+    private async ValueTask ExitMiniGameAsync(MiniGame game, int leavingCharacterId)
+    {
+        if (game.SeatOf(leavingCharacterId) == 0)
+        {
+            // Owner closes the room: the visitor is told the room is closing.
+            if (game.Visitor is { } visitor)
+            {
+                await TrySendAsync(visitor, _packets.MiniRoomClosed(1, reason: 3)).ConfigureAwait(false);
+            }
+
+            _miniGames.Remove(game);
+            await UpdateMiniGameBalloonAsync(game, closed: true).ConfigureAwait(false);
+        }
+        else
+        {
+            _miniGames.RemoveVisitor(game);
+            game.Ready[1] = false;
+            game.Open = true; // a running round is abandoned
+            await TrySendAsync(game.Owner, _packets.MiniRoomVisitorLeave(1)).ConfigureAwait(false);
+            await UpdateMiniGameBalloonAsync(game).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Ends a round (ports <c>getMiniGameResult</c>'s stat updates + <c>checkExitAfterGame</c>):
+    /// records the result, shows it to both seats, reopens the lobby, and honors "leave after game".
+    /// </summary>
+    private async ValueTask EndMiniGameRoundAsync(MiniGame game, int result, int seat)
+    {
+        // Stat updates exactly as the reference: a give-up records only the loser's loss.
+        game.AddResult(seat, result);
+        if (result != MiniGame.ResultLose)
+        {
+            game.AddResult(seat == 1 ? 0 : 1, result == MiniGame.ResultWin ? MiniGame.ResultLose : MiniGame.ResultTie);
+        }
+
+        _characters.Save(game.Owner.Character);
+        if (game.Visitor is { } visitor)
+        {
+            _characters.Save(visitor.Character);
+        }
+
+        await BroadcastToMiniGameAsync(game, _packets.MiniGameResult(game, result, seat)).ConfigureAwait(false);
+        game.Open = true;
+        game.RequestedTie = -1;
+        await UpdateMiniGameBalloonAsync(game).ConfigureAwait(false);
+
+        for (int s = MiniGame.MaxSize - 1; s >= 0; s--) // visitor first so the owner-close is last
+        {
+            if (game.ExitAfter[s] && game.PlayerAt(s) is { } player)
+            {
+                game.ExitAfter[s] = false;
+                await ExitMiniGameAsync(game, player.Character.Id).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles the in-game mini-room ops (ports the MGRP_/ORP_/MGP_ cases of
+    /// <c>ReqCMiniRoomBaseDlg.OnMiniRoom</c>): ready/start, Omok stones, match-card flips,
+    /// tie/give-up/leave-after, turn timeouts, and kicks.
+    /// </summary>
+    private async ValueTask HandleMiniGameOpAsync(MapleSession session, Character c, byte protocol, PacketReader packet)
+    {
+        MiniGame? game = _miniGames.GetForCharacter(c.Id);
+        if (game is null)
+        {
+            return;
+        }
+
+        int seat = game.SeatOf(c.Id);
+        switch (protocol)
+        {
+            case ChannelPackets.MgReady:
+            case ChannelPackets.MgCancelReady:
+                if (seat == 1 && game.Open)
+                {
+                    game.Ready[1] = !game.Ready[1];
+                    await BroadcastToMiniGameAsync(game, _packets.MiniGameReady(game.Ready[1])).ConfigureAwait(false);
+                }
+
+                break;
+
+            case ChannelPackets.MgStart:
+                if (seat == 0 && game.Open && game.Visitor is not null && game.Ready[1])
+                {
+                    game.StartRound();
+                    byte[] start = game.GameType == MiniGame.TypeOmok
+                        ? _packets.MiniGameStart(game.Loser)
+                        : _packets.MatchCardStart(game, game.Loser);
+                    await BroadcastToMiniGameAsync(game, start).ConfigureAwait(false);
+                    await UpdateMiniGameBalloonAsync(game).ConfigureAwait(false);
+                }
+
+                break;
+
+            case ChannelPackets.MgTieRequest:
+                if (!game.Open)
+                {
+                    FieldPlayer? other = game.PlayerAt(seat == 0 ? 1 : 0);
+                    if (other is not null)
+                    {
+                        await TrySendAsync(other, _packets.MiniGameTieRequest()).ConfigureAwait(false);
+                    }
+
+                    game.RequestedTie = seat;
+                }
+
+                break;
+
+            case ChannelPackets.MgTieResult:
+                if (!game.Open && game.RequestedTie > -1 && game.RequestedTie != seat)
+                {
+                    byte answer = packet.ReadByte();
+                    if (answer > 0)
+                    {
+                        await EndMiniGameRoundAsync(game, MiniGame.ResultTie, game.RequestedTie).ConfigureAwait(false);
+                        game.NextLoser();
+                    }
+                    else
+                    {
+                        await BroadcastToMiniGameAsync(game, _packets.MiniGameTieDenied()).ConfigureAwait(false);
+                    }
+
+                    game.RequestedTie = -1;
+                }
+
+                break;
+
+            case ChannelPackets.MgGiveUpRequest:
+                if (!game.Open)
+                {
+                    await EndMiniGameRoundAsync(game, MiniGame.ResultLose, seat).ConfigureAwait(false);
+                    game.NextLoser();
+                }
+
+                break;
+
+            case ChannelPackets.MgLeaveEngage:
+            case ChannelPackets.MgLeaveEngageCancel:
+                if (!game.Open && seat >= 0)
+                {
+                    game.ExitAfter[seat] = !game.ExitAfter[seat];
+                    await BroadcastToMiniGameAsync(game, _packets.MiniGameExitAfter(game.ExitAfter[seat])).ConfigureAwait(false);
+                }
+
+                break;
+
+            case ChannelPackets.MgTimeOver:
+                if (!game.Open)
+                {
+                    await BroadcastToMiniGameAsync(game, _packets.MiniGameSkip(seat)).ConfigureAwait(false);
+                    game.NextLoser();
+                }
+
+                break;
+
+            case ChannelPackets.MgBan:
+                if (seat == 0 && game.Open && game.Visitor is { } banned)
+                {
+                    await TrySendAsync(banned, _packets.MiniRoomClosed(1, reason: 5)).ConfigureAwait(false);
+                    _miniGames.RemoveVisitor(game);
+                    game.Ready[1] = false;
+                    await TrySendAsync(game.Owner, _packets.MiniRoomVisitorLeave(1)).ConfigureAwait(false);
+                    await UpdateMiniGameBalloonAsync(game).ConfigureAwait(false);
+                }
+
+                break;
+
+            case ChannelPackets.MgPutStone:
+            {
+                if (game.Open || game.GameType != MiniGame.TypeOmok)
+                {
+                    return;
+                }
+
+                int x = packet.ReadInt();
+                int y = packet.ReadInt();
+                byte type = packet.ReadByte();
+                if (!game.TryPlacePiece(x, y, type))
+                {
+                    return; // occupied square — the reference silently ignores it
+                }
+
+                await BroadcastToMiniGameAsync(game, _packets.MiniGameOmokMove(x, y, type)).ConfigureAwait(false);
+                if (game.HasFiveInARow(type))
+                {
+                    await EndMiniGameRoundAsync(game, MiniGame.ResultWin, seat).ConfigureAwait(false);
+                }
+
+                game.NextLoser(); // the reference advances the turn after every placement
+                break;
+            }
+
+            case ChannelPackets.MgTurnUpCard:
+            {
+                if (game.Open || game.GameType != MiniGame.TypeMatchCard)
+                {
+                    return;
+                }
+
+                int slot = packet.ReadByte();
+                int turn = game.Turn;
+                int firstSlot = game.FirstSlot;
+                FieldPlayer? other = game.PlayerAt(seat == 0 ? 1 : 0);
+
+                if (turn == 1)
+                {
+                    // First card of the pair: echo it to the other seat only.
+                    game.FirstSlot = slot;
+                    if (other is not null)
+                    {
+                        await TrySendAsync(other, _packets.MatchCardSelect(turn, slot, firstSlot, turn)).ConfigureAwait(false);
+                    }
+
+                    game.Turn = 0;
+                    return;
+                }
+
+                if (firstSlot > 0 && game.CardId(firstSlot + 1) == game.CardId(slot + 1))
+                {
+                    // Match: the flipper scores and keeps the turn.
+                    await BroadcastToMiniGameAsync(game, _packets.MatchCardSelect(turn, slot, firstSlot, seat == 0 ? 2 : 3)).ConfigureAwait(false);
+                    game.Points[seat]++;
+                    if (game.Points[0] + game.Points[1] >= game.MatchesToWin)
+                    {
+                        bool tie = game.Points[0] == game.Points[1];
+                        int winner = game.Points[1] > game.Points[0] ? 1 : 0;
+                        await EndMiniGameRoundAsync(game, tie ? MiniGame.ResultTie : MiniGame.ResultWin, winner).ConfigureAwait(false);
+                    }
+                }
+                else
+                {
+                    // Miss: the turn passes.
+                    await BroadcastToMiniGameAsync(game, _packets.MatchCardSelect(turn, slot, firstSlot, seat == 0 ? 0 : 1)).ConfigureAwait(false);
+                    game.NextLoser();
+                }
+
+                game.Turn = 1;
+                game.FirstSlot = 0;
+                break;
+            }
         }
     }
 
@@ -4316,6 +4684,12 @@ public sealed class ChannelHandler : PacketHandlerBase
         _field = newField;
         await newField.BroadcastAsync(_packets.UserEnterField(player, GuildOf(player.Character)), exceptCharacterId: player.Character.Id)
             .ConfigureAwait(false);
+
+        // Open game rooms in the new map show their balloons.
+        foreach (MiniGame game in _miniGames.GamesInMap(targetMapId))
+        {
+            await session.SendAsync(_packets.MiniRoomBalloon(game.Owner.Character.Id, game)).ConfigureAwait(false);
+        }
 
         await SpawnNpcsAsync(session, newField).ConfigureAwait(false);
         await RefreshPartyWindowAsync(player).ConfigureAwait(false); // party window shows the new map

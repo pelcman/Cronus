@@ -314,6 +314,16 @@ Each milestone means adding one "working vertical slice".
         `GuildRegistry` tracks online members for broadcasts. Byte-layout tests + a two-client
         create→invite→join→disband e2e. Deferred: alliances, guild BBS, GP updates, capacity
         growth, the guild-ranking NPC board.
+  - [x] **M10s: Omok & match-card mini-games** — MiniRoom types 1/2 (ports `MapleMiniGame` +
+        `ResCMiniRoomBaseDlg`'s game builders, JMS v186 op values 47-66): create with the board
+        item (4080000+n / 4080100), the balloon over the owner (`LP_UserMiniRoomBalloon`,
+        `AnnounceBox/Interaction` layout, replayed to map entrants), join via balloon (password
+        gate), ready→start, Omok stones with server-side five-in-a-row detection, match-card
+        flips with pair matching and points, tie request/answer, give-up, "leave after game",
+        turn timeout, kick, and results with win/tie/loss records stored as quest 122200/122210
+        custom data ("L,T,W", persisted — the reference's own store). Owner leaving/disconnect
+        closes the room. Rules unit tests + a full two-client create→join→ready→start→five-stones
+        →result e2e.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
