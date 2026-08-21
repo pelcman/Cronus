@@ -180,6 +180,74 @@ public class CommandTests
         }
     }
 
+    /// <summary>Sends a command on entry and counts skill-record updates.</summary>
+    private sealed class SkillMaxer : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opSkill = ServerOps.Get(ServerOpcode.ChangeSkillRecordResult);
+        private bool _sent;
+        private int _seen;
+
+        public SkillMaxer(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource<int> ThreeSkills { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session) =>
+            await session.SendAsync(MigrateIn(session, _characterId));
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChat), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);
+                w.WriteString("/maxskills");
+                w.WriteBool(false);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opSkill && ++_seen == 3)
+            {
+                ThreeSkills.TrySetResult(_seen);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MaxSkillsCommand_MaxesTheJobChain()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Vet", MapId = 100000000, Job = 111 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var skills = new InMemorySkillProvider(maxLevels: new Dictionary<int, int>
+        {
+            [1001003] = 20,  // book 100 (1st job)
+            [1101004] = 20,  // book 110 (2nd job)
+            [1111002] = 30,  // book 111 (3rd job)
+            [1121000] = 30,  // book 112 (4th job) — beyond job 111, must NOT be learned
+        });
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var client = new SkillMaxer(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, skills: skills);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.ThreeSkills.Task.WaitAsync(cts.Token);
+        Assert.Equal(20, hero.Skills[1001003]);
+        Assert.Equal(20, hero.Skills[1101004]);
+        Assert.Equal(30, hero.Skills[1111002]);
+        Assert.False(hero.Skills.ContainsKey(1121000)); // 4th-job book is out of reach at job 111
+    }
+
     [Fact]
     public async Task JobCommand_SetsJob()
     {

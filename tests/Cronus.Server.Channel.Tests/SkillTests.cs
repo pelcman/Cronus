@@ -137,6 +137,8 @@ public class SkillTests
         public Cronus.Data.SkillEffect? GetSkillEffect(int skillId, int level) => null;
 
         public Cronus.Data.MobSkillData? GetMobSkill(int skillId, int level) => null;
+
+        public IReadOnlyList<int> GetSkillIds(int jobId) => Array.Empty<int>();
     }
 
     [Fact]

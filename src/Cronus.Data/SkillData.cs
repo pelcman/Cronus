@@ -74,6 +74,9 @@ public interface ISkillProvider
 
     /// <summary>A mob skill's data at a level (<c>MobSkill.img</c>), or null if unknown.</summary>
     MobSkillData? GetMobSkill(int skillId, int level);
+
+    /// <summary>All skill ids in a job's skill book (<c>Skill/{jobId:000}.img</c>); empty if none.</summary>
+    IReadOnlyList<int> GetSkillIds(int jobId);
 }
 
 /// <summary>
@@ -157,6 +160,37 @@ public sealed class WzSkillProvider : ISkillProvider
         return null;
     }
 
+    private readonly ConcurrentDictionary<int, IReadOnlyList<int>> _jobSkillCache = new();
+
+    public IReadOnlyList<int> GetSkillIds(int jobId) => _jobSkillCache.GetOrAdd(jobId, LoadSkillIds);
+
+    private IReadOnlyList<int> LoadSkillIds(int jobId)
+    {
+        string path = Path.Combine(_wzRoot, "Skill", $"{jobId:000}.img.xml");
+        if (!File.Exists(path))
+        {
+            return Array.Empty<int>();
+        }
+
+        WzData? skillDir = WzData.ParseFile(path).Child("skill");
+        if (skillDir is null)
+        {
+            return Array.Empty<int>();
+        }
+
+        var ids = new List<int>();
+        foreach (WzData skill in skillDir.Children.Values)
+        {
+            if (int.TryParse(skill.Name, out int id))
+            {
+                ids.Add(id);
+            }
+        }
+
+        ids.Sort();
+        return ids;
+    }
+
     private readonly ConcurrentDictionary<long, MobSkillData?> _mobSkillCache = new();
 
     public MobSkillData? GetMobSkill(int skillId, int level)
@@ -238,6 +272,8 @@ public sealed class NullSkillProvider : ISkillProvider
     public SkillEffect? GetSkillEffect(int skillId, int level) => null;
 
     public MobSkillData? GetMobSkill(int skillId, int level) => null;
+
+    public IReadOnlyList<int> GetSkillIds(int jobId) => Array.Empty<int>();
 }
 
 /// <summary>An in-memory skill provider for tests / seeded content.</summary>
@@ -264,4 +300,7 @@ public sealed class InMemorySkillProvider : ISkillProvider
 
     public MobSkillData? GetMobSkill(int skillId, int level)
         => _mobSkills.TryGetValue((skillId, level), out MobSkillData? m) ? m : null;
+
+    public IReadOnlyList<int> GetSkillIds(int jobId)
+        => _maxLevels.Keys.Where(id => id / 10000 == jobId).OrderBy(id => id).ToList();
 }

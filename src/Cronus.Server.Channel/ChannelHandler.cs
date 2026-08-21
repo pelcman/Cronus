@@ -1259,8 +1259,8 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         byte[] buffPacket = _packets.TemporaryStatSet(buffs);
         uint mask = BuffEffect.Word0Mask(buffs);
+        _buffs.Register(c.Id, skillId, mask, effect.DurationMs); // state before the packet
         await session.SendAsync(buffPacket).ConfigureAwait(false);
-        _buffs.Register(c.Id, skillId, mask, effect.DurationMs);
 
         // A party buff (Haste, Rage, Hyper Body, … — marked by the wz affect box) also lands on
         // party members in the same map (ports the isPartyBuff apply; range box simplified to map).
@@ -1270,8 +1270,8 @@ public sealed class ChannelHandler : PacketHandlerBase
             {
                 if (member.Character.Id != c.Id && member.Character.MapId == c.MapId)
                 {
-                    await TrySendAsync(member, buffPacket).ConfigureAwait(false);
                     _buffs.Register(member.Character.Id, skillId, mask, effect.DurationMs);
+                    await TrySendAsync(member, buffPacket).ConfigureAwait(false);
                 }
             }
         }
@@ -1527,8 +1527,8 @@ public sealed class ChannelHandler : PacketHandlerBase
             List<BuffStat> buffs = BuffEffect.FromSpec(spec);
             if (buffs.Count > 0)
             {
+                _buffs.Register(c.Id, -spec.ItemId, BuffEffect.Word0Mask(buffs), spec.Time); // state first
                 await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
-                _buffs.Register(c.Id, -spec.ItemId, BuffEffect.Word0Mask(buffs), spec.Time);
             }
         }
     }
@@ -5681,6 +5681,29 @@ public sealed class ChannelHandler : PacketHandlerBase
                 }).ConfigureAwait(false);
                 break;
 
+            case "maxskills":
+            {
+                Character sc = _player!.Character;
+                int learned = 0;
+                foreach (int jobFile in JobSkillBooks(sc.Job))
+                {
+                    foreach (int skillId in _skills.GetSkillIds(jobFile))
+                    {
+                        int max = _skills.GetMaxLevel(skillId);
+                        if (max > 0)
+                        {
+                            sc.Skills[skillId] = max;
+                            await session.SendAsync(_packets.ChangeSkillRecordResult(skillId, max)).ConfigureAwait(false);
+                            learned++;
+                        }
+                    }
+                }
+
+                _characters.Save(sc);
+                await ReplyAsync(session, $"maxed {learned} skills for job {sc.Job}").ConfigureAwait(false);
+                break;
+            }
+
             case "guildcreate" when parts.Length >= 2:
                 // Free, works anywhere (the client's own flow needs the HQ map and 5m meso).
                 await CreateGuildAsync(session, _player!.Character, parts[1], cost: 0).ConfigureAwait(false);
@@ -5808,6 +5831,31 @@ public sealed class ChannelHandler : PacketHandlerBase
         mutate(c);
         _characters.Save(c);
         await session.SendAsync(_packets.StatChanged(c, flag)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The skill-book file ids a job can learn from: the beginner book, the 1st-job book, then
+    /// each advancement up to the current code (e.g. 112 → 000, 100, 110, 111, 112).
+    /// </summary>
+    private static IEnumerable<int> JobSkillBooks(int job)
+    {
+        yield return 0; // beginner skills
+        if (job <= 0)
+        {
+            yield break;
+        }
+
+        int first = job / 100 * 100;
+        yield return first;
+        if (job == first)
+        {
+            yield break;
+        }
+
+        for (int j = job / 10 * 10; j <= job; j++)
+        {
+            yield return j;
+        }
     }
 
     /// <summary>Sends a chat line visible only to the calling player (as their own message).</summary>

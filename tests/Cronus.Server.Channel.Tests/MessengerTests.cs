@@ -183,8 +183,11 @@ public class MessengerTests
     {
         private readonly int _characterId;
         private readonly int _opMessenger = ServerOps.Get(ServerOpcode.Messenger);
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
 
         public Bob(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource<string> SawChat { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -193,6 +196,12 @@ public class MessengerTests
 
         public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
         {
+            if (opcode == _opSetField)
+            {
+                Ready.TrySetResult();
+                return;
+            }
+
             if (opcode != _opMessenger)
             {
                 return;
@@ -237,6 +246,7 @@ public class MessengerTests
         await using var bClient = new MapleSession(s2b.Reader, b2s.Writer, ServerConfig.Jms186, SessionRole.Client, bobClient);
         _ = bServer.RunAsync(cts.Token);
         _ = bClient.RunAsync(cts.Token);
+        await bobClient.Ready.Task.WaitAsync(cts.Token); // Bob must be in the field before the invite
 
         // Alice enters, invites Bob, chats when he joins.
         var aliceClient = new Alice(alice.Id, "Bob");
