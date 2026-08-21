@@ -48,6 +48,7 @@ public static class ClientOpcode
     public const string UserPortalScriptRequest = "CP_UserPortalScriptRequest";
     public const string UserScriptMessageAnswer = "CP_UserScriptMessageAnswer";
     public const string Whisper = "CP_Whisper";
+    public const string FuncKeyMappedModified = "CP_FuncKeyMappedModified";
     public const string Messenger = "CP_Messenger";
     public const string PartyRequest = "CP_PartyRequest";
 }

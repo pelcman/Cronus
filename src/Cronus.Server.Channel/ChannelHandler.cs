@@ -35,6 +35,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly IDropProvider _dropTable;
     private readonly IShopProvider _shops;
     private readonly StorageRegistry _storages;
+    private readonly KeymapRegistry _keymaps;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -58,6 +59,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
     private readonly int _opTrunkRequest;
+    private readonly int _opFuncKeyMapped;
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
@@ -101,7 +103,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         IItemProvider? items = null,
         IDropProvider? drops = null,
         IShopProvider? shops = null,
-        StorageRegistry? storages = null)
+        StorageRegistry? storages = null,
+        KeymapRegistry? keymaps = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -112,6 +115,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _dropTable = drops ?? new InMemoryDropProvider(new Dictionary<int, IReadOnlyList<DropEntry>>());
         _shops = shops ?? new InMemoryShopProvider(Array.Empty<Shop>());
         _storages = storages ?? new StorageRegistry();
+        _keymaps = keymaps ?? new KeymapRegistry();
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -135,6 +139,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
         _opTrunkRequest = clientOpcodes.Get(ClientOpcode.UserTrunkRequest);
+        _opFuncKeyMapped = clientOpcodes.Get(ClientOpcode.FuncKeyMappedModified);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
@@ -263,6 +268,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleTrunkRequestAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opFuncKeyMapped)
+        {
+            HandleFuncKeyMapped(packet);
+        }
         else if (opcode == _opPortalScript)
         {
             await HandlePortalScriptAsync(session, packet).ConfigureAwait(false);
@@ -370,7 +379,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.PetConsumeItemInit()).ConfigureAwait(false);
         await session.SendAsync(_packets.PetConsumeMpItemInit()).ConfigureAwait(false);
         await session.SendAsync(_packets.PetConsumeCureItemInit()).ConfigureAwait(false);
-        await session.SendAsync(_packets.FuncKeyMappedInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.FuncKeyMappedInit(_keymaps.Get(character.Id))).ConfigureAwait(false);
         await session.SendAsync(_packets.MacroSysDataInit()).ConfigureAwait(false);
         await session.SendAsync(_packets.FriendListInit()).ConfigureAwait(false);
         await session.SendAsync(_packets.FamilyInfoResult()).ConfigureAwait(false);
@@ -1452,6 +1461,46 @@ public sealed class ChannelHandler : PacketHandlerBase
     {
         await session.SendAsync(_packets.StatChanged(_player!.Character, StatFlag.Meso)).ConfigureAwait(false);
         await session.SendAsync(_packets.TrunkMoneyResult(storage)).ConfigureAwait(false);
+    }
+
+    // CP_FuncKeyMappedModified modes (OpsFuncKeyMapped, JMS v186).
+    private const int FuncKeyKeyModified = 0;
+
+    /// <summary>
+    /// Handles <c>CP_FuncKeyMappedModified</c> — the player rebinds keys (ports
+    /// <c>ReqCFuncKeyMappedMan.OnFuncKeyMappedModified</c>). Mode 0 is a key-rebind delta: each entry
+    /// sets a key's binding, or clears it when type is 0. The map persists on the character's keymap
+    /// (no response packet). The pet-consume-item modes (1/2/3) aren't modelled yet.
+    /// </summary>
+    private void HandleFuncKeyMapped(PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        int mode = packet.ReadInt();
+        if (mode != FuncKeyKeyModified)
+        {
+            return; // pet-consume item bindings: not modelled
+        }
+
+        Keymap keymap = _keymaps.Get(_player.Character.Id);
+        int count = packet.ReadInt();
+        for (int i = 0; i < count; i++)
+        {
+            int key = packet.ReadInt();
+            byte type = packet.ReadByte();
+            int action = packet.ReadInt();
+            if (type != 0)
+            {
+                keymap.Set(key, new KeyBinding(type, action));
+            }
+            else
+            {
+                keymap.Remove(key);
+            }
+        }
     }
 
     private const int MinFameLevel = 15;
