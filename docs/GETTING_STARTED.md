@@ -35,6 +35,7 @@ map from its own wz files). To enable persistence, maps/NPCs/mobs, and scripts, 
 | `CRONUS_SCRIPTS` | script root (`{root}/npc/{id}.js`) → NPC dialogs (try `scripts`) |
 | `CRONUS_DROPS` | a `drop_data.sql` dump → mobs drop items/meso (else placeholder meso only) |
 | `CRONUS_SHOPS` | a `shops`+`shopitems` SQL dump → vendor NPCs open shops (buy/sell) |
+| `CRONUS_RATE_EXP` / `_DROP` / `_MESO` | rate multipliers (default 1.0) |
 
 ```powershell
 $env:CRONUS_WZ = "data/sample-wz"

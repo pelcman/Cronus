@@ -266,6 +266,21 @@ Each milestone means adding one "working vertical slice".
         summons, the box-range check (map-wide for now), buff-expiry tick. Cast/attack tests +
         FromEffect goldens.
 
+  - [x] **M10m: player-to-player trade** — the MiniRoom trade room (`CP_MiniRoom` 0x007F /
+        `LP_MiniRoom` 0x015F, v186 protocol ops): create → invite → enter, staging items (removed
+        immediately, equips move as objects so stats survive) and meso, exchange when both confirm,
+        cancel/disconnect returns everything. `Trade.TryClose()` makes the simultaneous-confirm race
+        exchange exactly once. In-room chat works. Mini-games / personal / hired shops not modelled.
+        Full two-client e2e test.
+  - [x] **M10n: rates & gameplay polish batch** — `CRONUS_RATE_EXP/_DROP/_MESO` multipliers;
+        quest-locked drop rows (`drop_data.questid`) only fall for killers on the quest; quest
+        lottery (`prop`>0) rewards pick one weighted row and accept gates on prerequisite quests +
+        job list; skill casts use the server-side learned level (unlearned = ignored); shoot attacks
+        resolve + consume the bullet from the USE slot (onlookers see the right projectile); NPC
+        scripts gain `openShop(id)`/`openStorage()`; shop **recharge** refills stars/bullets to
+        slotMax (+mastery ×10) at `round(unitPrice × missing)` (`WzData.GetDouble`,
+        `IItemProvider.GetUnitPrice`).
+
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated
