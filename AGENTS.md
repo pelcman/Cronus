@@ -215,6 +215,15 @@ Each milestone means adding one "working vertical slice".
         dst==0): a player throws a bundle item onto the field (`Field.AddPlayerItemDrop`) for others to
         pick up. Deferred: equip stat bonuses on the wearer, token shops, equip drop-to-ground (a
         `FieldDrop` carries only the item id). Needs a `Character` junction in the wz root.
+  - [x] **M10h: item effects — return scrolls + buff potions** — return/teleport scrolls (wz
+        `spec/moveTo`) warp the player (999999999 = the map's return field); buff potions
+        (`spec/pad|mad|pdd|mdd|acc|eva|speed|jump` + `time` ms) apply a temporary stat buff via
+        `LP_TemporaryStatSet` (0x001E; 128-bit CTS mask reverse-word-order, per stat
+        `[value:2][-itemId:4][durationMs:4]`, byte-verified against the reference example),
+        `CP_UserStatChangeItemCancelRequest` (0x0042) clears it with `LP_TemporaryStatReset` (0x001F).
+        `ConsumeSpec` gains moveTo + the buff fields. The client counts the duration down and expires
+        the buff visually; a server-side expiry tick is a follow-up (buffs aren't used in server
+        combat). End-to-end tests (scroll warp, buff drink) + packet goldens.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
