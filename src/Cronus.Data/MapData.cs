@@ -93,6 +93,9 @@ public sealed class MapData
 
     public IReadOnlyList<MobSpawn> Mobs { get; init; } = Array.Empty<MobSpawn>();
 
+    /// <summary>Reactor placements (<c>reactor/{n}</c>); empty when the map has none.</summary>
+    public IReadOnlyList<ReactorSpawn> Reactors { get; init; } = Array.Empty<ReactorSpawn>();
+
     /// <summary>Town this map returns to on death (<c>info/returnMap</c>); 0/unset = none.</summary>
     public int ReturnMap { get; init; }
 
@@ -191,7 +194,56 @@ public sealed class MapData
             Portals = portals,
             Npcs = npcs,
             Mobs = mobs,
+            Reactors = ParseReactors(mapImg),
             ReturnMap = mapImg.GetInt("info/returnMap"),
         };
     }
+
+    private static IReadOnlyList<ReactorSpawn> ParseReactors(WzData mapImg)
+    {
+        WzData? reactorRoot = mapImg.Child("reactor");
+        if (reactorRoot is null || reactorRoot.Children.Count == 0)
+        {
+            return Array.Empty<ReactorSpawn>();
+        }
+
+        var reactors = new List<ReactorSpawn>();
+        foreach (WzData entry in reactorRoot.Children.Values)
+        {
+            // The reactor id is stored as a string node.
+            if (!int.TryParse(entry.GetString("id"), out int reactorId) || reactorId <= 0)
+            {
+                continue;
+            }
+
+            reactors.Add(new ReactorSpawn
+            {
+                ReactorId = reactorId,
+                X = entry.GetInt("x"),
+                Y = entry.GetInt("y"),
+                ReactorTime = entry.GetInt("reactorTime"),
+                Facing = entry.GetInt("f"),
+                Name = entry.GetString("name"),
+            });
+        }
+
+        return reactors;
+    }
+}
+
+/// <summary>One reactor placement in a map (<c>reactor/{n}</c>: id, position, respawn time).</summary>
+public sealed class ReactorSpawn
+{
+    public required int ReactorId { get; init; }
+
+    public int X { get; init; }
+
+    public int Y { get; init; }
+
+    /// <summary>Respawn delay in seconds after the reactor breaks (0 = a few seconds).</summary>
+    public int ReactorTime { get; init; }
+
+    public int Facing { get; init; }
+
+    public string Name { get; init; } = string.Empty;
 }

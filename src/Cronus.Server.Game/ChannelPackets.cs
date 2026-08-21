@@ -540,6 +540,45 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>A reactor appears (ports <c>ResCReactorPool.ReactorEnterField</c>).</summary>
+    public byte[] ReactorEnterField(FieldReactor reactor)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ReactorEnterField);
+        w.WriteInt(reactor.ObjectId);
+        w.WriteInt(reactor.ReactorId);
+        w.WriteByte(reactor.State);
+        w.WriteShort(reactor.X);
+        w.WriteShort(reactor.Y);
+        w.WriteByte(reactor.Facing);
+        w.WriteString(reactor.Name);
+        return w.ToArray();
+    }
+
+    /// <summary>A reactor advanced a state (ports <c>ReactorChangeState</c>).</summary>
+    public byte[] ReactorChangeState(FieldReactor reactor, short stance)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ReactorChangeState);
+        w.WriteInt(reactor.ObjectId);
+        w.WriteByte(reactor.State);
+        w.WriteShort(reactor.X);
+        w.WriteShort(reactor.Y);
+        w.WriteShort(stance);
+        w.WriteByte(0);
+        w.WriteByte(4); // frame delay (the reference's constant)
+        return w.ToArray();
+    }
+
+    /// <summary>A broken reactor vanishes (ports <c>ReactorLeaveField</c>).</summary>
+    public byte[] ReactorLeaveField(FieldReactor reactor)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ReactorLeaveField);
+        w.WriteInt(reactor.ObjectId);
+        w.WriteByte(reactor.State);
+        w.WriteShort(reactor.X);
+        w.WriteShort(reactor.Y);
+        return w.ToArray();
+    }
+
     /// <summary>The ad board (黒板) over a player opened or closed (ports <c>ResCUser.UserADBoard</c>).</summary>
     public byte[] UserAdBoard(int characterId, string? message)
     {

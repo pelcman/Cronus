@@ -72,11 +72,13 @@ IItemProvider items = CreateItemProvider();
 IDropProvider drops = CreateDropProvider();
 IShopProvider shops = CreateShopProvider();
 IQuestProvider quests = CreateQuestProvider();
+IReactorProvider? reactorProvider = CreateReactorProvider();
 Rates rates = CreateRates();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
 PortalScriptEngine? portalScripts = CreatePortalScriptEngine();
+PortalScriptEngine? reactorScripts = CreateReactorScriptEngine();
 
 // Shared across all connections so messenger/party windows tie players together across fields.
 var messengers = new MessengerRegistry(new ChannelPackets(serverOps, config));
@@ -94,7 +96,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts),
         "channel"),
     keepAlive);
 
@@ -291,6 +293,29 @@ static NpcScriptEngine? CreateNpcScriptEngine()
     string questDir = Path.Combine(scriptRoot, "quest");
     Console.WriteLine($"[npc] Loading NPC scripts on demand from {npcDir} (quest scripts from {questDir})");
     return new NpcScriptEngine(new FolderNpcScriptSource(npcDir), new FolderNpcScriptSource(questDir));
+}
+
+static IReactorProvider? CreateReactorProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(Path.Combine(wzRoot, "Reactor")))
+    {
+        return null;
+    }
+
+    Console.WriteLine("[reactor] Loading reactor templates on demand from wz data.");
+    return new WzReactorProvider(wzRoot);
+}
+
+static PortalScriptEngine? CreateReactorScriptEngine()
+{
+    string? scriptRoot = Environment.GetEnvironmentVariable("CRONUS_SCRIPTS");
+    if (string.IsNullOrWhiteSpace(scriptRoot))
+    {
+        return null;
+    }
+
+    return new PortalScriptEngine(new FolderPortalScriptSource(Path.Combine(scriptRoot, "reactor")));
 }
 
 static PortalScriptEngine? CreatePortalScriptEngine()

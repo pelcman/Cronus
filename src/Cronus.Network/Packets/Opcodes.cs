@@ -77,6 +77,7 @@ public static class ClientOpcode
     public const string PetAction = "CP_PetAction";
     public const string UserPetFoodItemUseRequest = "CP_UserPetFoodItemUseRequest";
     public const string UserAdBoardClose = "CP_UserADBoardClose";
+    public const string ReactorHit = "CP_ReactorHit";
 }
 
 /// <summary>
@@ -167,4 +168,7 @@ public static class ServerOpcode
     public const string PetMove = "LP_PetMove";
     public const string PetAction = "LP_PetAction";
     public const string UserAdBoard = "LP_UserADBoard";
+    public const string ReactorChangeState = "LP_ReactorChangeState";
+    public const string ReactorEnterField = "LP_ReactorEnterField";
+    public const string ReactorLeaveField = "LP_ReactorLeaveField";
 }

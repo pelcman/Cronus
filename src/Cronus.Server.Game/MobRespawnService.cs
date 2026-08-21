@@ -73,6 +73,12 @@ public sealed class MobRespawnService
                 await field.BroadcastAsync(_packets.DropLeaveFieldExpire(dropOid)).ConfigureAwait(false);
             }
 
+            // Broken reactors come back on the same sweep.
+            foreach (FieldReactor reactor in field.TakeRespawnDueReactors(nowTick))
+            {
+                await field.BroadcastAsync(_packets.ReactorEnterField(reactor)).ConfigureAwait(false);
+            }
+
             IReadOnlyList<FieldMob> respawned = field.TakeRespawnDueMobs(nowTick);
             if (respawned.Count == 0)
             {

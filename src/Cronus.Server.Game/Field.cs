@@ -153,6 +153,48 @@ public sealed class ActivePet
     public short Foothold { get; set; }
 }
 
+/// <summary>A reactor standing in a field (a box, plant, lever …): its live state plus respawn
+/// bookkeeping (ports the runtime side of <c>MapleReactor</c>).</summary>
+public sealed class FieldReactor
+{
+    public required int ObjectId { get; init; }
+
+    public required int ReactorId { get; init; }
+
+    public short X { get; init; }
+
+    public short Y { get; init; }
+
+    public byte Facing { get; init; }
+
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Respawn delay in seconds after breaking (0 → a short default).</summary>
+    public int ReactorTime { get; init; }
+
+    public byte State { get; set; }
+
+    public bool IsDead { get; set; }
+
+    /// <summary><see cref="Environment.TickCount64"/> at which to respawn, or 0.</summary>
+    public long RespawnAtTick { get; set; }
+
+    /// <summary>Breaks the reactor and schedules its respawn.</summary>
+    public void Break(long nowTick)
+    {
+        IsDead = true;
+        RespawnAtTick = nowTick + Math.Max(3, ReactorTime) * 1000L;
+    }
+
+    /// <summary>Brings the reactor back at state 0.</summary>
+    public void Respawn()
+    {
+        State = 0;
+        IsDead = false;
+        RespawnAtTick = 0;
+    }
+}
+
 /// <summary>A spawned NPC in a field: a runtime object id bound to a wz template + placement.</summary>
 public sealed class FieldNpc
 {
@@ -226,6 +268,7 @@ public sealed class Field
     private const int NpcObjectIdBase = 1_000_000;
     private const int MobObjectIdBase = 2_000_000;
     private const int DropObjectIdBase = 3_000_000;
+    private const int ReactorObjectIdBase = 4_000_000;
 
     private readonly Dictionary<int, FieldPlayer> _players = new();
     private readonly Dictionary<int, FieldDrop> _drops = new();
@@ -238,6 +281,65 @@ public sealed class Field
         Npcs = BuildNpcs(mapData);
         _mobs = BuildMobs(mapData, mobs);
         _nextMobOid = MobObjectIdBase + _mobs.Count;
+        Reactors = BuildReactors(mapData);
+    }
+
+    /// <summary>Reactors placed on this field (boxes, plants, …); empty when no map data.</summary>
+    public IReadOnlyList<FieldReactor> Reactors { get; }
+
+    public FieldReactor? FindReactor(int objectId)
+    {
+        foreach (FieldReactor reactor in Reactors)
+        {
+            if (reactor.ObjectId == objectId)
+            {
+                return reactor;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Respawns broken reactors whose delay has passed; returns them for announcing.</summary>
+    public IReadOnlyList<FieldReactor> TakeRespawnDueReactors(long nowTick)
+    {
+        List<FieldReactor>? due = null;
+        foreach (FieldReactor reactor in Reactors)
+        {
+            if (reactor.IsDead && reactor.RespawnAtTick != 0 && reactor.RespawnAtTick <= nowTick)
+            {
+                reactor.Respawn();
+                (due ??= new List<FieldReactor>()).Add(reactor);
+            }
+        }
+
+        return due ?? (IReadOnlyList<FieldReactor>)Array.Empty<FieldReactor>();
+    }
+
+    private static IReadOnlyList<FieldReactor> BuildReactors(MapData? mapData)
+    {
+        if (mapData is null || mapData.Reactors.Count == 0)
+        {
+            return Array.Empty<FieldReactor>();
+        }
+
+        var reactors = new List<FieldReactor>(mapData.Reactors.Count);
+        int oid = ReactorObjectIdBase;
+        foreach (ReactorSpawn spawn in mapData.Reactors)
+        {
+            reactors.Add(new FieldReactor
+            {
+                ObjectId = oid++,
+                ReactorId = spawn.ReactorId,
+                X = (short)spawn.X,
+                Y = (short)spawn.Y,
+                Facing = (byte)spawn.Facing,
+                Name = spawn.Name,
+                ReactorTime = spawn.ReactorTime,
+            });
+        }
+
+        return reactors;
     }
 
     public int MapId { get; }

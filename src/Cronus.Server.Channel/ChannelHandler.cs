@@ -44,6 +44,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly MiniGameRegistry _miniGames;
     private readonly PlayerShopRegistry _playerShops;
     private readonly HiredMerchantRegistry _merchants;
+    private readonly IReactorProvider? _reactors;
+    private readonly PortalScriptEngine? _reactorScripts;
+    private readonly int _opReactorHit;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -146,7 +149,9 @@ public sealed class ChannelHandler : PacketHandlerBase
         GuildRegistry? guilds = null,
         MiniGameRegistry? miniGames = null,
         PlayerShopRegistry? playerShops = null,
-        HiredMerchantRegistry? merchants = null)
+        HiredMerchantRegistry? merchants = null,
+        IReactorProvider? reactors = null,
+        PortalScriptEngine? reactorScripts = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -166,6 +171,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         _miniGames = miniGames ?? new MiniGameRegistry();
         _playerShops = playerShops ?? new PlayerShopRegistry();
         _merchants = merchants ?? new HiredMerchantRegistry();
+        _reactors = reactors;
+        _reactorScripts = reactorScripts;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -201,6 +208,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opPetAction = clientOpcodes.Get(ClientOpcode.PetAction);
         _opPetFood = clientOpcodes.Get(ClientOpcode.UserPetFoodItemUseRequest);
         _opAdBoardClose = clientOpcodes.Get(ClientOpcode.UserAdBoardClose);
+        _opReactorHit = clientOpcodes.Get(ClientOpcode.ReactorHit);
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
@@ -363,6 +371,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opPetFood)
         {
             await HandlePetFoodAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opReactorHit)
+        {
+            await HandleReactorHitAsync(packet).ConfigureAwait(false);
         }
         else if (opcode == _opAdBoardClose)
         {
@@ -624,6 +636,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             .ConfigureAwait(false);
 
         await SpawnNpcsAsync(session, field).ConfigureAwait(false);
+        await SpawnReactorsAsync(session, field).ConfigureAwait(false);
 
         // Open game rooms and shops in this map show their balloons to the newcomer.
         foreach (MiniGame game in _miniGames.GamesInMap(character.MapId))
@@ -667,6 +680,18 @@ public sealed class ChannelHandler : PacketHandlerBase
             if (entry.Hidden && _characters.Find(fromId) is { } from)
             {
                 await session.SendAsync(_packets.BuddyInvite(fromId, from.Name, from.Level, from.Job)).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>Shows the field's standing (unbroken) reactors to a newcomer.</summary>
+    private async ValueTask SpawnReactorsAsync(MapleSession session, Field field)
+    {
+        foreach (FieldReactor reactor in field.Reactors)
+        {
+            if (!reactor.IsDead)
+            {
+                await session.SendAsync(_packets.ReactorEnterField(reactor)).ConfigureAwait(false);
             }
         }
     }
@@ -4587,6 +4612,55 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.SortItemResult(tab)).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Handles <c>CP_ReactorHit</c> — striking a reactor (ports <c>MapleReactor.hitReactor</c>'s
+    /// core path): the hit advances the wz state machine and is shown to the map; reaching a
+    /// terminal state breaks the reactor (it vanishes, respawning after its <c>reactorTime</c>)
+    /// and runs <c>scripts/reactor/{id}.js</c> if present (rewards, spawns, …).
+    /// </summary>
+    private async ValueTask HandleReactorHitAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null || _reactors is null)
+        {
+            return;
+        }
+
+        int objectId = packet.ReadInt();
+        packet.ReadInt();               // character position flags
+        short stance = packet.ReadShort();
+
+        FieldReactor? reactor = _field.FindReactor(objectId);
+        if (reactor is null || reactor.IsDead || _reactors.GetReactor(reactor.ReactorId) is not { } data)
+        {
+            return;
+        }
+
+        if (data.IsTerminal(reactor.State))
+        {
+            return; // already spent
+        }
+
+        reactor.State = (byte)data.NextState(reactor.State);
+        if (data.IsTerminal(reactor.State))
+        {
+            // Broken: show the final state, then remove it and schedule the respawn.
+            reactor.Break(Environment.TickCount64);
+            await _field.BroadcastAsync(_packets.ReactorChangeState(reactor, stance)).ConfigureAwait(false);
+            await _field.BroadcastAsync(_packets.ReactorLeaveField(reactor)).ConfigureAwait(false);
+
+            if (_reactorScripts is not null)
+            {
+                ChannelPlayer scriptPlayer = CreateScriptPlayer(_player.Session);
+                FieldReactor broken = reactor;
+                await Task.Run(() => _reactorScripts.Run(broken.ReactorId.ToString(), scriptPlayer)).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            await _field.BroadcastAsync(_packets.ReactorChangeState(reactor, stance)).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>The character's guild, or null when guildless / unknown.</summary>
     private GuildData? GuildOf(Character c) => c.GuildId > 0 ? _guilds.Get(c.GuildId) : null;
 
@@ -6148,6 +6222,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         _field = newField;
         await newField.BroadcastAsync(_packets.UserEnterField(player, GuildOf(player.Character)), exceptCharacterId: player.Character.Id)
             .ConfigureAwait(false);
+
+        await SpawnReactorsAsync(session, newField).ConfigureAwait(false);
 
         // The pet follows its owner through the portal (ports the transfer-field respawn).
         if (player.Pet is { } pet)
