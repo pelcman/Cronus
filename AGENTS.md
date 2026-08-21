@@ -384,6 +384,20 @@ Each milestone means adding one "working vertical slice".
         (`CP_PetAction`), feeding (fullness/closeness + live item refresh), the enter-field pet
         block, and portal-following via `LP_PetTransferField`. Single pet; pet level-ups and
         auto-loot are deferred.
+  - [x] **M10z: combat/content/ops finale batch** — ad boards (黒板, cash 537x →
+        `LP_UserADBoard` + enter-field replay); Crusader combo orbs (CTS bit 21 via the verified
+        stat-set layout: cast = value 1, each landed swing charges to the skill's x, Panic/Coma
+        consume; the reference never implemented orb tracking); the full signature-buff table
+        (Invincible/Soul Arrow/WK charges/Dragon Blood/Holy Symbol/Meso Up/Shadow
+        Partner/PickPocket/Meso Guard/Stance/Sharp Eyes/Mana Reflection/Maple Warrior) with the
+        CTS masks widened to 64 bits (word[1] carries 32+); `/maxskills` (job-chain skill maxing
+        via `ISkillProvider.GetSkillIds`); an **additive MySQL auto-migration** (missing
+        tables/columns added in place at startup — no drop-and-recreate on upgrades); NPC content
+        in Japanese for the whole progression loop (1st–4th job instructors incl. Kyrin's pirate
+        one-stop, storage Goldmen, Victoria taxis) with `gainMaxHp/gainMaxMp` script APIs and a
+        parse+`start()` gate over every shipped script; and the two long-standing intermittent
+        test failures fixed (a Messenger test start race, and a real buff register-after-send
+        ordering bug).
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

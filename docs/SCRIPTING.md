@@ -51,9 +51,21 @@ Menu markup: `"#L0#First#l\r\n#L1#Second#l"` renders two clickable choices retur
 
 **Change** (each persists and updates the client):
 `gainMeso(n)` · `gainExp(n)` · `gainAp(n)` · `gainSp(n)` · `gainFame(n)` · `heal()` ·
-`setJob(job)` · `warp(mapId)` · `warp(mapId, portal)`
+`setJob(job)` · `gainMaxHp(n)` · `gainMaxMp(n)` · `warp(mapId)` · `warp(mapId, portal)`
+
+**Items:** `gainItem(itemId, n)` (negative `n` takes items) · `haveItem(itemId)` ·
+`itemQuantity(itemId)`
+
+**Windows:** `openShop(shopId)` · `openStorage()`
 
 **Quests:** `hasQuest(id)` · `isQuestDone(id)` · `startQuest(id)` · `completeQuest(id)`
+
+### Quest scripts (`quest/{questId}.js`)
+
+A quest whose wz data declares a script runs `CRONUS_SCRIPTS/quest/{questId}.js` instead of the
+data-driven accept/complete: `function start()` handles the accept dialog and `function end()`
+the completion, with the conversation bound as **`qm`** (same API as `cm`) plus the same
+`player`. See `scripts/quest/1000.js` for a template.
 
 ### Example (a first-job instructor)
 
