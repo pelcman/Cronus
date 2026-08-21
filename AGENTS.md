@@ -265,6 +265,11 @@ Each milestone means adding one "working vertical slice".
       `updatePartyMemberHP` + `receivePartyMemberHP`). End-to-end tested (partner sees 500 → 380 on a
       120 hit). This is what lets a support build watch and heal the party. Follow-up: also push on the
       HP-regen tick (the regen service would need the party registry).
+- [x] **M25: Party window liveness** — a member changing map or levelling up now rebroadcasts the
+      party window (the silent-update op 7, reusing the golden-tested `PartyRefresh`), so everyone's
+      window shows current maps and levels. `RefreshPartyWindowAsync` fires from `MovePlayerToMapAsync`
+      and the level-up branch of `GrantExpToAsync` (ports the `SILENT_UPDATE` path). End-to-end tested
+      (partner's window updates to the leader's new map after a warp).
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

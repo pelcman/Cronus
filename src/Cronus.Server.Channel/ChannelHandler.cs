@@ -652,6 +652,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             await _field.BroadcastAsync(
                 _packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectLevelUp),
                 exceptCharacterId: c.Id).ConfigureAwait(false);
+            await RefreshPartyWindowAsync(recipient).ConfigureAwait(false); // party window shows the new level
         }
     }
 
@@ -1072,6 +1073,22 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     /// <summary>
+    /// Rebroadcasts the party window to all members so a member's changed map or level shows up
+    /// (the silent-update op; ports the <c>SILENT_UPDATE</c> path). No-op outside a party.
+    /// </summary>
+    private async ValueTask RefreshPartyWindowAsync(FieldPlayer member)
+    {
+        Party? party = _parties.GetForCharacter(member.Character.Id);
+        if (party is null)
+        {
+            return;
+        }
+
+        byte[] refresh = _packets.PartyRefresh(party.Id, party.ViewSlots(PartyChannel), party.LeaderId, PartyChannel, loading: false);
+        await PartyBroadcastAsync(party, refresh).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// On a join, exchanges HP bars between the joiner and their same-map party members so both
     /// sides' windows start correct (ports <c>updatePartyMemberHP</c> + <c>receivePartyMemberHP</c>).
     /// </summary>
@@ -1311,6 +1328,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             .ConfigureAwait(false);
 
         await SpawnNpcsAsync(session, newField).ConfigureAwait(false);
+        await RefreshPartyWindowAsync(player).ConfigureAwait(false); // party window shows the new map
     }
 
     /// <summary>
