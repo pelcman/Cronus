@@ -79,7 +79,7 @@ matters most for remote play is `CRONUS_HOST`.
 | Variable | What it does | Example |
 |---|---|---|
 | `CRONUS_HOST` | **The IP the server tells clients to use for the channel.** Set this to your **public IP** (or LAN IP for a LAN party). If unset it's `127.0.0.1` = localhost only. | `203.0.113.9` |
-| `CRONUS_DB` | MySQL connection string → persistent accounts/characters. Unset = in-memory (wiped on restart). | `server=localhost;database=cronus;user=root;password=...` |
+| `CRONUS_DB` | MySQL connection string → persistent accounts/characters. Unset = in-memory (wiped on restart). The schema is created automatically, and upgrades add any new tables/columns in place — no manual migration needed. | `server=localhost;database=cronus;user=root;password=...` |
 | `CRONUS_WZ` | Path to a `wz_xml` data tree → NPC/mob/portal spawns. Unset = empty maps (you can still walk around; the client draws the map from its own wz). | `data/sample-wz` |
 | `CRONUS_SCRIPTS` | Script root (`{root}/npc/{id}.js`, `{root}/portal/{name}.js`) → NPC dialogs and portal scripts. | `scripts` |
 | `CRONUS_DROPS` | Path to a `drop_data.sql` dump → mobs drop items/meso from their drop tables. Unset = mobs drop a small placeholder meso pile only. | `drop_data.sql` |
