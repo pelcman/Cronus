@@ -540,6 +540,21 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>The ad board (黒板) over a player opened or closed (ports <c>ResCUser.UserADBoard</c>).</summary>
+    public byte[] UserAdBoard(int characterId, string? message)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserAdBoard);
+        w.WriteInt(characterId);
+        bool open = !string.IsNullOrEmpty(message);
+        w.WriteBool(open);
+        if (open)
+        {
+            w.WriteString(message!);
+        }
+
+        return w.ToArray();
+    }
+
     /// <summary>The CPet::Init block (ports <c>DataCPet.Init</c>).</summary>
     private static void WritePetInit(PacketWriter w, ActivePet pet)
     {
@@ -1208,7 +1223,16 @@ public sealed class ChannelPackets
         w.WriteInt(0);                   // mount exp
         w.WriteInt(0);                   // mount fatigue
         w.WriteByte(0);                  // mini-room balloon (none)
-        w.WriteByte(0);                  // ad board (none)
+        // Ad board (黒板): flag + message when standing.
+        if (!string.IsNullOrEmpty(player.AdBoard))
+        {
+            w.WriteByte(1);
+            w.WriteString(player.AdBoard);
+        }
+        else
+        {
+            w.WriteByte(0);
+        }
         w.WriteByte(0);                  // couple records
         w.WriteByte(0);                  // friend records
         w.WriteByte(0);                  // marriage record

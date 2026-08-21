@@ -208,6 +208,9 @@ public sealed class FieldPlayer
 
     /// <summary>The player's summoned pet, or null (single pet, index 0).</summary>
     public ActivePet? Pet { get; set; }
+
+    /// <summary>The ad board (黒板) message standing over the player, or null.</summary>
+    public string? AdBoard { get; set; }
 }
 
 /// <summary>

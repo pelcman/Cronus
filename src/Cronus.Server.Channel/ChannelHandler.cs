@@ -78,6 +78,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opPetMove;
     private readonly int _opPetAction;
     private readonly int _opPetFood;
+    private readonly int _opAdBoardClose;
     private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
@@ -199,6 +200,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opPetMove = clientOpcodes.Get(ClientOpcode.PetMove);
         _opPetAction = clientOpcodes.Get(ClientOpcode.PetAction);
         _opPetFood = clientOpcodes.Get(ClientOpcode.UserPetFoodItemUseRequest);
+        _opAdBoardClose = clientOpcodes.Get(ClientOpcode.UserAdBoardClose);
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
@@ -361,6 +363,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opPetFood)
         {
             await HandlePetFoodAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opAdBoardClose)
+        {
+            if (_player is not null && _field is not null)
+            {
+                _player.AdBoard = null;
+                await _field.BroadcastAsync(_packets.UserAdBoard(_player.Character.Id, null)).ConfigureAwait(false);
+            }
         }
         else if (opcode == _opChangeSlot)
         {
@@ -4875,7 +4885,25 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         Character c = _player.Character;
         InventoryItem? item = Inventory.ItemAt(c, 5, slot);
-        if (item is null || item.ItemId != itemId || itemId / 10000 != 507)
+        if (item is null || item.ItemId != itemId)
+        {
+            return;
+        }
+
+        // Ad boards (黒板, 537xxxx): stand the message over the player; the board isn't consumed.
+        if (itemId / 10000 == 537)
+        {
+            string boardMessage = packet.ReadString();
+            _player.AdBoard = boardMessage;
+            if (_field is not null)
+            {
+                await _field.BroadcastAsync(_packets.UserAdBoard(c.Id, boardMessage)).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        if (itemId / 10000 != 507)
         {
             return;
         }

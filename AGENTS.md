@@ -366,6 +366,24 @@ Each milestone means adding one "working vertical slice".
         `LP_EmployeeLeaveField` clears the NPC. In-memory only for now (a restart closes all
         merchants; the `hiredmerch` table is the follow-up); withdraw-meso/blacklist ops are
         unhandled in the reference too and stay deferred. Full two-client lifecycle e2e.
+  - [x] **M10x: polish & protocol-gap batch** — from a systematic diff of the reference's handled
+        client packets vs ours: portable chairs (`LP_UserSetActivePortableChair` + the enter-field
+        chair int), skill-macro persistence (`LP_MacroSysDataInit` rows), party invite
+        accept/decline via `CP_PartyResult`, the client's own regen tick
+        (`CP_UserChangeStatRequest`), charge-skill windups (`LP_UserSkillPrepare`), mob aggro
+        takeover (`CP_MobApplyCtrl`), channel-change/cash-shop bounces
+        (`LP_TransferChannelReqIgnored`), megaphones (`CP_UserConsumeCashItemUseRequest` 507
+        family), token-currency shop entries (ReqItem/ReqItemQ), lost-quest-item restore,
+        inventory gather/sort, live guild level updates, and the `hiredmerch` table so merchants
+        survive restarts. Return scrolls now also route via `CP_UserPortalScrollUseRequest` (the
+        opcode the real client uses).
+  - [x] **M10y: pets** — pet items (500xxxx) now encode as `GW_ItemSlotPet` (type 3 + the v186
+        pet body; previously a spawned pet would have corrupted the character-data blob), never
+        stack, and persist name/level/closeness/fullness. Runtime: summon/dismiss
+        (`LP_PetActivated` + `DataCPet.Init`), path relay (`CP_PetMove`), emotes/speech
+        (`CP_PetAction`), feeding (fullness/closeness + live item refresh), the enter-field pet
+        block, and portal-following via `LP_PetTransferField`. Single pet; pet level-ups and
+        auto-loot are deferred.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
