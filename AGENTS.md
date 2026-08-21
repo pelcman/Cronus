@@ -280,6 +280,11 @@ Each milestone means adding one "working vertical slice".
       damage/revive. `PlayerRegenService` takes the shared `PartyRegistry` and calls
       `PushHpToPartyAsync` whenever a regen changed HP. End-to-end tested (partner sees 380 → 390 after
       a regen tick). The party HP-bar feature is now complete for all HP-change paths.
+- [x] **M28: In-group GM commands** — the chat command set (lines starting with `!`) grew with
+      genuinely useful, server-authoritative helpers: `!heal` (full HP/MP, also updates the party bar),
+      `!warp <name>` (jump to an online player's map — how friends meet up), and `!players` / `!online`
+      (list who's on). All are chat-triggered and touch no entry-blob bytes, so they carry no
+      client-entry risk. End-to-end tested (`!warp` moves the caller into the target's field).
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

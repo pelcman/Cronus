@@ -1156,13 +1156,53 @@ public sealed class ChannelHandler : PacketHandlerBase
                     .ConfigureAwait(false);
                 break;
 
+            case "heal":
+            {
+                Character hc = _player!.Character;
+                hc.Hp = hc.MaxHp;
+                hc.Mp = hc.MaxMp;
+                await session.SendAsync(_packets.StatChanged(hc, StatFlag.Hp | StatFlag.Mp)).ConfigureAwait(false);
+                await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false); // party sees the heal
+                break;
+            }
+
+            case "warp" when parts.Length >= 2:
+            {
+                FieldPlayer? target = _fields.FindPlayerByName(parts[1]);
+                if (target is null || target.Character.Id == _player!.Character.Id)
+                {
+                    await ReplyAsync(session, $"'{parts[1]}' is not online").ConfigureAwait(false);
+                    break;
+                }
+
+                await MovePlayerToMapAsync(session, target.Character.MapId, spawnPortal: 0).ConfigureAwait(false);
+                break;
+            }
+
+            case "players":
+            case "online":
+            {
+                var names = new List<string>();
+                foreach (Field f in _fields.Fields)
+                {
+                    foreach (FieldPlayer fp in f.Players)
+                    {
+                        names.Add(fp.Character.Name);
+                    }
+                }
+
+                await ReplyAsync(session, "online: " + (names.Count == 0 ? "(none)" : string.Join(", ", names)))
+                    .ConfigureAwait(false);
+                break;
+            }
+
             case "pos":
                 await ReplyAsync(session, $"pos: ({_player!.X}, {_player.Y}) map {_player.Character.MapId}")
                     .ConfigureAwait(false);
                 break;
 
             case "help":
-                await ReplyAsync(session, "commands: !map <id>, !meso <n>, !notice <msg>, !pos, !help")
+                await ReplyAsync(session, "commands: !map <id>, !warp <name>, !meso <n>, !heal, !players, !notice <msg>, !pos, !help")
                     .ConfigureAwait(false);
                 break;
 
