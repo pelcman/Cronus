@@ -40,6 +40,7 @@ public static class ClientOpcode
     public const string MobMove = "CP_MobMove";
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
     public const string UserSelectNpc = "CP_UserSelectNpc";
+    public const string UserPortalScriptRequest = "CP_UserPortalScriptRequest";
     public const string UserScriptMessageAnswer = "CP_UserScriptMessageAnswer";
     public const string Whisper = "CP_Whisper";
     public const string Messenger = "CP_Messenger";

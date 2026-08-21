@@ -162,6 +162,15 @@ public class NpcScriptEngineTests
         public int getHp() => Hp;
         public int getMaxHp() => 100;
         public int getExp() => Exp;
+        public int getGender() => 0;
+        public int getJob() => Job;
+        public int getStr() => 4;
+        public int getDex() => 4;
+        public int getInt() => 4;
+        public int getLuk() => 4;
+        public int getFame() => Fame;
+        public int getAp() => Ap;
+        public int getSp() => Sp;
         public void gainMeso(int amount)
         {
             Meso = Math.Max(0, Meso + amount);
@@ -169,6 +178,18 @@ public class NpcScriptEngineTests
         }
         public void gainExp(int amount) => Exp = Math.Max(0, Exp + amount);
         public void heal() => Hp = getMaxHp();
+
+        public int Job;
+        public int Fame;
+        public int Ap;
+        public int Sp;
+        public int WarpedTo = -1;
+        public void warp(int mapId) => warp(mapId, 0);
+        public void warp(int mapId, int portal) => WarpedTo = mapId;
+        public void gainAp(int amount) => Ap = Math.Max(0, Ap + amount);
+        public void gainSp(int amount) => Sp = Math.Max(0, Sp + amount);
+        public void gainFame(int amount) => Fame = Math.Clamp(Fame + amount, -30000, 30000);
+        public void setJob(int job) => Job = job;
 
         public HashSet<int> Started { get; } = new();
         public HashSet<int> Completed { get; } = new();

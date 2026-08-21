@@ -32,6 +32,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly IMapProvider _maps;
     private readonly ISkillProvider _skills;
     private readonly NpcScriptEngine? _npcScripts;
+    private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
     private readonly PartyRegistry _parties;
     private readonly int _channelId;
@@ -57,6 +58,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
+    private readonly int _opPortalScript;
     private readonly int _opWhisper;
     private readonly int _opMessenger;
     private readonly int _opPartyRequest;
@@ -79,7 +81,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         ISkillProvider? skills = null,
         int channelId = 0,
         MessengerRegistry? messengers = null,
-        PartyRegistry? parties = null)
+        PartyRegistry? parties = null,
+        PortalScriptEngine? portalScripts = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -87,6 +90,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _maps = maps ?? new InMemoryMapProvider(Array.Empty<MapData>());
         _skills = skills ?? NullSkillProvider.Instance;
         _npcScripts = npcScripts;
+        _portalScripts = portalScripts;
         _channelId = channelId;
         _messengers = messengers ?? new MessengerRegistry(_packets);
         _parties = parties ?? new PartyRegistry();
@@ -112,6 +116,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
+        _opPortalScript = clientOpcodes.Get(ClientOpcode.UserPortalScriptRequest);
         _opWhisper = clientOpcodes.Get(ClientOpcode.Whisper);
         _opMessenger = clientOpcodes.Get(ClientOpcode.Messenger);
         _opPartyRequest = clientOpcodes.Get(ClientOpcode.PartyRequest);
@@ -209,6 +214,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opSelectNpc)
         {
             HandleSelectNpc(session, packet);
+        }
+        else if (opcode == _opPortalScript)
+        {
+            await HandlePortalScriptAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opScriptAnswer)
         {
@@ -1457,6 +1466,35 @@ public sealed class ChannelHandler : PacketHandlerBase
             _player.Character, _characters, session, _packets,
             warp: (map, portal) => MovePlayerToMapAsync(session, map, portal));
         _conversation = _npcScripts.Start(templateId, dialog, player);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserPortalScriptRequest</c> — stepping on a scripted portal (ports
+    /// <c>ReqCUser.OnUserPortalScriptRequest</c>). Looks up the portal on the current map and runs
+    /// its script (which typically warps the player). Runs off the packet loop so a warp inside is
+    /// safe. No-op if the portal has no script or scripting isn't configured.
+    /// </summary>
+    private async ValueTask HandlePortalScriptAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null || _portalScripts is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_UserPortalScriptRequest: [portalCount:1][portalName:str][x:2][y:2]
+        packet.ReadByte();
+        string portalName = packet.ReadString();
+
+        PortalData? portal = _maps.GetMap(_player.Character.MapId)?.FindPortal(portalName);
+        if (portal is null || !portal.HasScript)
+        {
+            return;
+        }
+
+        var scriptPlayer = new ChannelPlayer(
+            _player.Character, _characters, session, _packets,
+            warp: (map, spawn) => MovePlayerToMapAsync(session, map, spawn));
+        await Task.Run(() => _portalScripts.Run(portal.Script, scriptPlayer)).ConfigureAwait(false);
     }
 
     private void HandleScriptAnswer(PacketReader packet)

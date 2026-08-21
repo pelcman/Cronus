@@ -28,6 +28,7 @@ public class WzMapDataTests
               <int name="y" value="120"/>
               <int name="tm" value="104040000"/>
               <string name="tn" value="west00"/>
+              <string name="script" value="enterDungeon"/>
             </imgdir>
           </imgdir>
           <imgdir name="life">
@@ -71,6 +72,11 @@ public class WzMapDataTests
         Assert.Equal(104040000, east.TargetMapId);
         Assert.Equal("west00", east.TargetName);
         Assert.True(east.LinksToMap);
+        Assert.Equal("enterDungeon", east.Script); // portal script name parsed
+        Assert.True(east.HasScript);
+
+        Assert.Equal(string.Empty, spawn.Script);   // a plain portal has none
+        Assert.False(spawn.HasScript);
     }
 
     [Fact]

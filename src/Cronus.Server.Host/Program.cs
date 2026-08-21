@@ -69,8 +69,9 @@ IMobProvider mobs = CreateMobProvider();
 var fields = new FieldRegistry(maps, mobs);
 ISkillProvider skills = CreateSkillProvider();
 
-// NPC scripts from CRONUS_SCRIPTS/npc/{id}.js, if configured.
+// NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
+PortalScriptEngine? portalScripts = CreatePortalScriptEngine();
 
 // Shared across all connections so messenger/party windows tie players together across fields.
 var messengers = new MessengerRegistry(new ChannelPackets(serverOps, config));
@@ -80,7 +81,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts),
         "channel"),
     keepAlive);
 
@@ -202,6 +203,19 @@ static NpcScriptEngine? CreateNpcScriptEngine()
     string npcDir = Path.Combine(scriptRoot, "npc");
     Console.WriteLine($"[npc] Loading NPC scripts on demand from {npcDir}");
     return new NpcScriptEngine(new FolderNpcScriptSource(npcDir));
+}
+
+static PortalScriptEngine? CreatePortalScriptEngine()
+{
+    string? scriptRoot = Environment.GetEnvironmentVariable("CRONUS_SCRIPTS");
+    if (string.IsNullOrWhiteSpace(scriptRoot))
+    {
+        return null;
+    }
+
+    string portalDir = Path.Combine(scriptRoot, "portal");
+    Console.WriteLine($"[portal] Loading portal scripts on demand from {portalDir}");
+    return new PortalScriptEngine(new FolderPortalScriptSource(portalDir));
 }
 
 static void WarnUnresolved(string which, OpcodeTable table)

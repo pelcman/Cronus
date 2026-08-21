@@ -361,6 +361,15 @@ Each milestone means adding one "working vertical slice".
       `1012100.js` (a first-job instructor using `getJob`/`getLevel`/`setJob`/`gainSp`). The shipped
       scripts are loaded and run in a test (a level-5 beginner gets "come back at level 10"), so a typo
       or bad API call in them is caught in CI. A concrete starting point for a deployment's NPCs.
+- [x] **M41: Scripted portals** — stepping on a portal that carries a wz `script` name now runs that
+      script (`CP_UserPortalScriptRequest`, ports `ReqCUser.OnUserPortalScriptRequest`).
+      `PortalData.Script`/`HasScript` are parsed from the map; `PortalScriptEngine` +
+      `IPortalScriptSource` (folder `{name}.js` / dictionary) run it. A portal script has no blocking
+      dialog — it just checks a condition and warps — so it runs in one shot off the packet loop with
+      the `player` global (which now has `warp`). Host loads them from `CRONUS_SCRIPTS/portal/`.
+      End-to-end tested: a scripted portal warps the character, a plain portal is a no-op; the wz
+      `script` field is parse-tested. (Also fixed a `FakePlayer` test double left incomplete by M38/M39's
+      wider `INpcPlayer`.)
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

@@ -17,6 +17,12 @@ public sealed class PortalData
     /// <summary>Target map id (<c>tm</c>); 999999999 means "no link".</summary>
     public int TargetMapId { get; init; }
 
+    /// <summary>Portal script name (<c>script</c>); empty for a plain portal. Keys a portal script.</summary>
+    public string Script { get; init; } = string.Empty;
+
+    /// <summary>True when stepping on this portal runs a script (a special/dungeon portal).</summary>
+    public bool HasScript => !string.IsNullOrEmpty(Script);
+
     public int X { get; init; }
 
     public int Y { get; init; }
@@ -125,6 +131,7 @@ public sealed class MapData
                     Name = entry.GetString("pn"),
                     TargetName = entry.GetString("tn"),
                     TargetMapId = entry.GetInt("tm", NoLink),
+                    Script = entry.GetString("script"),
                     X = entry.GetInt("x"),
                     Y = entry.GetInt("y"),
                 });
