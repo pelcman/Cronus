@@ -541,6 +541,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
+        await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false); // party sees the health drop
     }
 
     private async ValueTask HandleSkillUpAsync(MapleSession session, PacketReader packet)
@@ -939,6 +940,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                 _parties.Register(myId, target);
                 byte[] joinPacket = _packets.PartyJoin(target.Id, _player.Character.Name, target.ViewSlots(PartyChannel), target.LeaderId, PartyChannel);
                 await PartyBroadcastAsync(target, joinPacket).ConfigureAwait(false);
+                await SyncPartyHpAsync(target, _player).ConfigureAwait(false);
                 return;
             }
 
@@ -1043,6 +1045,50 @@ public sealed class ChannelHandler : PacketHandlerBase
         foreach (FieldPlayer member in party.Members)
         {
             await TrySendAsync(member, packet).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Pushes a player's HP bar (<c>LP_UserHP</c>) to their same-map party members so partners and
+    /// healers see it change. No-op outside a party (ports <c>MapleCharacter.updatePartyMemberHP</c>).
+    /// </summary>
+    private async ValueTask NotifyPartyOfMyHpAsync(FieldPlayer who)
+    {
+        Party? party = _parties.GetForCharacter(who.Character.Id);
+        if (party is null)
+        {
+            return;
+        }
+
+        Character me = who.Character;
+        byte[] hp = _packets.UserHP(me.Id, me.Hp, me.MaxHp);
+        foreach (FieldPlayer member in party.Members)
+        {
+            if (member.Character.Id != me.Id && member.Character.MapId == me.MapId)
+            {
+                await TrySendAsync(member, hp).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// On a join, exchanges HP bars between the joiner and their same-map party members so both
+    /// sides' windows start correct (ports <c>updatePartyMemberHP</c> + <c>receivePartyMemberHP</c>).
+    /// </summary>
+    private async ValueTask SyncPartyHpAsync(Party party, FieldPlayer joiner)
+    {
+        Character jc = joiner.Character;
+        byte[] joinerHp = _packets.UserHP(jc.Id, jc.Hp, jc.MaxHp);
+        foreach (FieldPlayer member in party.Members)
+        {
+            if (member.Character.Id == jc.Id || member.Character.MapId != jc.MapId)
+            {
+                continue;
+            }
+
+            await TrySendAsync(member, joinerHp).ConfigureAwait(false);            // member sees joiner
+            Character mc = member.Character;
+            await TrySendAsync(joiner, _packets.UserHP(mc.Id, mc.Hp, mc.MaxHp)).ConfigureAwait(false); // joiner sees member
         }
     }
 
@@ -1231,6 +1277,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         int reviveMap = _maps.GetMap(c.MapId)?.ReviveMap ?? c.MapId;
         await MovePlayerToMapAsync(session, reviveMap, spawnPortal: 0).ConfigureAwait(false);
+        await NotifyPartyOfMyHpAsync(_player!).ConfigureAwait(false); // party sees the revive
     }
 
     /// <summary>

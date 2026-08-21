@@ -258,6 +258,13 @@ Each milestone means adding one "working vertical slice".
       their own `LP_StatChanged` and level-up effect). Exp is server-authoritative so no new packet /
       byte risk. Level/range and class/premium bonuses are not modelled. End-to-end tested (300-exp
       mob → killer 200, partner 30). Follow-up: party HP bars.
+- [x] **M24: Party HP bars** — a party member's HP bar now shows on their same-map partners' screens
+      (`LP_UserHP` = `[cid:4][hp:4][maxHp:4]`, ports `ResCUserRemote.UserHP`). Taking damage
+      (`CP_UserHit`) and reviving push the change (`NotifyPartyOfMyHpAsync` →
+      `updatePartyMemberHP`); joining exchanges current HP both ways (`SyncPartyHpAsync` →
+      `updatePartyMemberHP` + `receivePartyMemberHP`). End-to-end tested (partner sees 500 → 380 on a
+      120 hit). This is what lets a support build watch and heal the party. Follow-up: also push on the
+      HP-regen tick (the regen service would need the party registry).
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

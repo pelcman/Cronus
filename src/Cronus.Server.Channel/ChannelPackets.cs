@@ -1032,6 +1032,19 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_UserHP</c> so a party member sees another member's health bar (ports
+    /// <c>ResCUserRemote.UserHP</c>): the member's character id, current HP, and max HP.
+    /// </summary>
+    public byte[] UserHP(int characterId, int currentHp, int maxHp)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserHP);
+        w.WriteInt(characterId);
+        w.WriteInt(currentHp);
+        w.WriteInt(maxHp);
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_UserMove</c> relaying a raw CMovePath buffer (ports
     /// <c>ResCUserRemote.UserMove</c>: character id + the path bytes as received).
     /// </summary>

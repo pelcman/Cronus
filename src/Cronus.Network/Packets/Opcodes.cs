@@ -72,6 +72,7 @@ public static class ServerOpcode
     public const string UserEffectRemote = "LP_UserEffectRemote";
     public const string Messenger = "LP_Messenger";
     public const string PartyResult = "LP_PartyResult";
+    public const string UserHP = "LP_UserHP";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string UserShootAttack = "LP_UserShootAttack";
