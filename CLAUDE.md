@@ -257,11 +257,12 @@ Detailed progress and the task board live in [AGENTS.md](AGENTS.md) ("Roadmap", 
   server-side damage bounding), mob respawn/control, HP/MP regen, death & revive, a general
   **inventory** system (USE/ETC/SETUP/CASH tabs in the entry blob + live `LP_InventoryOperation`;
   add/stack/use consumables), **mob item drops** (drop tables from `drop_data.sql` → items/meso on
-  the field → pickup → inventory; `CRONUS_DROPS`), meso drops (incl. player-thrown), and a complete
+  the field → pickup → inventory; `CRONUS_DROPS`), **item move/equip/unequip**, **NPC shops**
+  (buy/sell; `CRONUS_SHOPS`), meso drops (incl. player-thrown), and a complete
   social layer: whisper/`/find`, emotes, sitting, messenger, and the full party system (invite/join/
   leave/expel/change-leader, exp sharing, live HP bars and window updates). In-game commands use the
   `/` prefix. Persistence is MySQL (Pomelo/EF Core); deploy is env-driven (`CRONUS_HOST`/`CRONUS_DB`/
-  `CRONUS_WZ`/`CRONUS_SCRIPTS`/`CRONUS_DROPS`).
+  `CRONUS_WZ`/`CRONUS_SCRIPTS`/`CRONUS_DROPS`/`CRONUS_SHOPS`).
 - **Deferred until client-verified**: *equip* item drops and equip shop-buys — the equip item body
   in a live `LP_InventoryOperation` isn't client-verified yet (a byte error would corrupt the
   packet), so only bundle (non-equip) items drop for now. Next: item move/equip

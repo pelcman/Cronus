@@ -200,6 +200,13 @@ Each milestone means adding one "working vertical slice".
         verified byte-identical to the reference (`DataGW_ItemSlotBase`), so equipped gear renders.
         Equip *stat bonuses* aren't recomputed yet (visual + slot only); dropping an item to the
         ground (dst==0) is not modelled yet. End-to-end tested (equip) + move-op goldens.
+  - [x] **M10f: NPC shops** — vendor NPCs open a shop on click (auto-shop) and players buy/sell
+        (`CP_UserShopRequest` → `LP_OpenShopDlg`/`LP_ShopResult`), ports `ReqCShopDlg`+`MapleShop`.
+        `Cronus.Data` `SqlShopProvider` parses the reference `shops`+`shopitems` dump (`CRONUS_SHOPS`),
+        scoped per INSERT block; `IItemProvider.GetPrice` reads the wz `info/price` for sell pricing.
+        Buy debits meso + adds the item; sell removes the slot + credits the wz price; each replies a
+        one-byte `LP_ShopResult`. `/shop <id>` opens a shop for testing. Equip buys / token shops /
+        rechargeables deferred (equips need wz base stats). End-to-end buy test + packet goldens.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

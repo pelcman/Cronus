@@ -83,6 +83,7 @@ matters most for remote play is `CRONUS_HOST`.
 | `CRONUS_WZ` | Path to a `wz_xml` data tree → NPC/mob/portal spawns. Unset = empty maps (you can still walk around; the client draws the map from its own wz). | `data/sample-wz` |
 | `CRONUS_SCRIPTS` | Script root (`{root}/npc/{id}.js`, `{root}/portal/{name}.js`) → NPC dialogs and portal scripts. | `scripts` |
 | `CRONUS_DROPS` | Path to a `drop_data.sql` dump → mobs drop items/meso from their drop tables. Unset = mobs drop a small placeholder meso pile only. | `drop_data.sql` |
+| `CRONUS_SHOPS` | Path to a `shops`+`shopitems` SQL dump (e.g. `init_data_set.sql`) → vendor NPCs open shops to buy/sell. Unset = shops disabled. | `init_data_set.sql` |
 | `CRONUS_STARTMAP` | Map new characters spawn in. | `100000000` |
 | *(args)* | `dotnet run --project src/Cronus.Server.Host <loginPort> <channelPort>` overrides the ports. | `8484 7575` |
 
