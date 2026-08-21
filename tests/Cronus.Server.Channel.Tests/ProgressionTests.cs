@@ -161,4 +161,39 @@ public class ProgressionTests
         Assert.Equal((StatFlag)0, CharacterProgression.SpendAbilityPoint(c, StatFlag.Exp));
         Assert.Equal(5, c.Ap);
     }
+
+    [Fact]
+    public void SpendAllAbilityPoints_SpreadsAcrossStats_AndEmptiesAp()
+    {
+        var c = new Character { Name = "N", Str = 4, Dex = 4, Ap = 5 };
+
+        StatFlag changed = CharacterProgression.SpendAllAbilityPoints(c,
+            new[] { (StatFlag.Str, 3), (StatFlag.Dex, 2) });
+
+        Assert.Equal(StatFlag.Str | StatFlag.Dex | StatFlag.Ap, changed);
+        Assert.Equal(7, c.Str);
+        Assert.Equal(6, c.Dex);
+        Assert.Equal(0, c.Ap);
+    }
+
+    [Fact]
+    public void SpendAllAbilityPoints_TotalMustEqualAp()
+    {
+        var c = new Character { Name = "N", Str = 4, Ap = 5 };
+
+        // Spending only 3 of 5 AP is rejected (auto-assign spends all).
+        Assert.Equal((StatFlag)0, CharacterProgression.SpendAllAbilityPoints(c, new[] { (StatFlag.Str, 3) }));
+        Assert.Equal(4, c.Str);
+        Assert.Equal(5, c.Ap);
+    }
+
+    [Fact]
+    public void SpendAllAbilityPoints_RejectsNonBaseStatOrNegative()
+    {
+        var c = new Character { Name = "N", Ap = 5 };
+
+        Assert.Equal((StatFlag)0, CharacterProgression.SpendAllAbilityPoints(c, new[] { (StatFlag.MaxHp, 5) }));
+        Assert.Equal((StatFlag)0, CharacterProgression.SpendAllAbilityPoints(c, new[] { (StatFlag.Str, -1), (StatFlag.Dex, 6) }));
+        Assert.Equal(5, c.Ap); // nothing spent
+    }
 }

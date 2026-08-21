@@ -34,6 +34,7 @@ public static class ClientOpcode
     public const string UserDropMoneyRequest = "CP_UserDropMoneyRequest";
     public const string UserSkillUpRequest = "CP_UserSkillUpRequest";
     public const string UserAbilityUpRequest = "CP_UserAbilityUpRequest";
+    public const string UserAbilityMassUpRequest = "CP_UserAbilityMassUpRequest";
     public const string MobMove = "CP_MobMove";
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
     public const string UserSelectNpc = "CP_UserSelectNpc";

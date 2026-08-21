@@ -50,6 +50,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opDropMoney;
     private readonly int _opSkillUp;
     private readonly int _opAbilityUp;
+    private readonly int _opAbilityMassUp;
     private readonly int _opMobMove;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
@@ -99,6 +100,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
         _opAbilityUp = clientOpcodes.Get(ClientOpcode.UserAbilityUpRequest);
+        _opAbilityMassUp = clientOpcodes.Get(ClientOpcode.UserAbilityMassUpRequest);
         _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
@@ -176,6 +178,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opAbilityUp)
         {
             await HandleAbilityUpAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opAbilityMassUp)
+        {
+            await HandleAbilityMassUpAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opMobMove)
         {
@@ -582,6 +588,47 @@ public sealed class ChannelHandler : PacketHandlerBase
         if (changed == 0)
         {
             return; // no AP, capped stat, or a non-assignable flag
+        }
+
+        _characters.Save(_player.Character);
+        await session.SendAsync(_packets.StatChanged(_player.Character, changed)).ConfigureAwait(false);
+    }
+
+    /// <summary>Upper bound on mass-up allocations (the client sends 2; guards a malformed count).</summary>
+    private const int MaxAbilityAllocations = 8;
+
+    /// <summary>
+    /// Handles <c>CP_UserAbilityMassUpRequest</c> — the auto-assign button that spends all AP across
+    /// several base stats at once (ports <c>OnUserAbilityMassUpRequest</c>). Reads the
+    /// <c>[stat:4][points:4]</c> pairs and applies them via
+    /// <see cref="CharacterProgression.SpendAllAbilityPoints"/>; an invalid batch is ignored.
+    /// </summary>
+    private async ValueTask HandleAbilityMassUpAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        packet.ReadInt();                 // timestamp
+        int count = packet.ReadInt();
+        if (count < 1 || count > MaxAbilityAllocations)
+        {
+            return;
+        }
+
+        var allocations = new List<(StatFlag, int)>(count);
+        for (int i = 0; i < count; i++)
+        {
+            var stat = (StatFlag)packet.ReadInt();
+            int points = packet.ReadInt();
+            allocations.Add((stat, points));
+        }
+
+        StatFlag changed = CharacterProgression.SpendAllAbilityPoints(_player.Character, allocations);
+        if (changed == 0)
+        {
+            return;
         }
 
         _characters.Save(_player.Character);

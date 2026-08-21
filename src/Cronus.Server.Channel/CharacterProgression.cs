@@ -106,6 +106,55 @@ public static class CharacterProgression
         return stat | StatFlag.Ap;
     }
 
+    /// <summary>
+    /// Spends <em>all</em> remaining AP across the given base-stat allocations in one shot (the
+    /// client's auto-assign; ports <c>OnUserAbilityMassUpRequest</c>). Every allocation must target
+    /// STR/DEX/INT/LUK with a non-negative amount, and the amounts must sum to exactly the remaining
+    /// AP. Returns the changed stats (each raised stat plus <see cref="StatFlag.Ap"/>), or 0 if the
+    /// request is invalid. Only base stats are auto-assignable, matching the reference.
+    /// </summary>
+    public static StatFlag SpendAllAbilityPoints(Character c, IReadOnlyList<(StatFlag Stat, int Points)> allocations)
+    {
+        if (allocations.Count == 0)
+        {
+            return 0;
+        }
+
+        long total = 0;
+        foreach ((StatFlag stat, int points) in allocations)
+        {
+            if (points < 0 || points > StatCap
+                || stat is not (StatFlag.Str or StatFlag.Dex or StatFlag.Int or StatFlag.Luk))
+            {
+                return 0;
+            }
+
+            total += points;
+        }
+
+        if (total == 0 || total != c.Ap)
+        {
+            return 0; // must spend exactly all the AP the player has
+        }
+
+        StatFlag changed = StatFlag.Ap;
+        foreach ((StatFlag stat, int points) in allocations)
+        {
+            switch (stat)
+            {
+                case StatFlag.Str: c.Str = (short)Math.Min(StatCap, c.Str + points); break;
+                case StatFlag.Dex: c.Dex = (short)Math.Min(StatCap, c.Dex + points); break;
+                case StatFlag.Int: c.Int = (short)Math.Min(StatCap, c.Int + points); break;
+                case StatFlag.Luk: c.Luk = (short)Math.Min(StatCap, c.Luk + points); break;
+            }
+
+            changed |= stat;
+        }
+
+        c.Ap = 0;
+        return changed;
+    }
+
     private static void LevelUp(Character c)
     {
         c.Level++;

@@ -96,4 +96,88 @@ public class AbilityTests
         Assert.Equal(5, hero.Str); // persisted on the character
         Assert.Equal(2, hero.Ap);
     }
+
+    private const int CsDex = 0x80; // OpsChangeStat.CS_DEX == StatFlag.Dex
+
+    /// <summary>Auto-assigns all AP across STR/DEX on entry and reads back STR/DEX/AP.</summary>
+    private sealed class MassSpender : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opStat = ServerOps.Get(ServerOpcode.StatChanged);
+        private bool _sent;
+
+        public MassSpender(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource<(int Str, int Dex, int Ap)> Result { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserAbilityMassUpRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);       // timestamp
+                w.WriteInt(2);       // count
+                w.WriteInt(CsStr);
+                w.WriteInt(3);       // STR += 3
+                w.WriteInt(CsDex);
+                w.WriteInt(2);       // DEX += 2
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opStat)
+            {
+                p.ReadByte();        // unlock
+                int mask = p.ReadInt();
+                if ((mask & CsStr) == 0)
+                {
+                    return;
+                }
+
+                int str = p.ReadShort();   // ascending order: Str, Dex, Ap
+                int dex = p.ReadShort();
+                int ap = p.ReadShort();
+                Result.TrySetResult((str, dex, ap));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AbilityMassUp_SpreadsAllAp_AcrossStats()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Hero", MapId = 100000000, Str = 4, Dex = 4, Ap = 5 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var client = new MassSpender(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        (int str, int dex, int ap) = await client.Result.Task.WaitAsync(cts.Token);
+        Assert.Equal(7, str);  // 4 + 3
+        Assert.Equal(6, dex);  // 4 + 2
+        Assert.Equal(0, ap);   // all 5 AP spent
+        Assert.Equal(0, hero.Ap);
+    }
 }

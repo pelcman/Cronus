@@ -299,6 +299,12 @@ Each milestone means adding one "working vertical slice".
       and replies `LP_StatChanged`. Rejected clicks (no AP / capped) send nothing, matching the client.
       Completes the level-up loop with the skill-up (`CP_UserSkillUpRequest`) already in place.
       End-to-end tested (STR 4→5, AP 3→2) plus the no-AP / capped / bad-flag units.
+- [x] **M31: Auto-assign AP** — `CP_UserAbilityMassUpRequest` (the auto-assign button) spends all
+      remaining AP across several base stats at once (ports `OnUserAbilityMassUpRequest`).
+      `CharacterProgression.SpendAllAbilityPoints` validates each `[stat,points]` pair (STR/DEX/INT/LUK,
+      non-negative) and that they sum to exactly the remaining AP, applies them, zeroes AP, and one
+      `LP_StatChanged` carries all the raised stats. End-to-end tested (STR +3 / DEX +2 empties 5 AP)
+      plus total-mismatch / non-base-stat rejects.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
