@@ -1,4 +1,5 @@
 using Cronus.Common;
+using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network.Packets;
 
@@ -855,6 +856,54 @@ public sealed class ChannelPackets
             w.WriteByte(0);
         }
 
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_OpenShopDlg</c> — the NPC shop window (ports <c>ResCShopDlg.OpenShopDlg</c>, JMS
+    /// v186): the NPC template id, the item count, then per item <c>[itemId][price][reqItem][reqItemQ]
+    /// [period=0][levelLimit=0]</c> followed by an 8-byte <c>double</c> unit price for rechargeables
+    /// or the constant quantity <c>1</c> (short) otherwise, then the wz <c>slotMax</c>.
+    /// </summary>
+    public byte[] OpenShopDlg(Shop shop, IItemProvider items)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.OpenShopDlg);
+        w.WriteInt(shop.NpcId);
+        w.WriteShort((short)shop.Items.Count);
+        foreach (ShopItem item in shop.Items)
+        {
+            w.WriteInt(item.ItemId);
+            w.WriteInt(item.Price);
+            w.WriteInt(item.ReqItem);   // token-shop currency item (JMS >= 180)
+            w.WriteInt(item.ReqItemQ);  // token-shop currency amount
+            w.WriteInt(0);              // nItemPeriod (JMS >= 186)
+            w.WriteInt(0);              // nLevelLimited (JMS >= 180)
+            if (ShopItems.IsRechargeable(item.ItemId))
+            {
+                double unit = items.GetPrice(item.ItemId) ?? item.Price;
+                w.WriteLong(BitConverter.DoubleToInt64Bits(unit)); // EncodeDouble (LE)
+            }
+            else
+            {
+                w.WriteShort(1);        // nQuantity constant
+            }
+
+            w.WriteShort((short)ShopSlotMax(items, item.ItemId));
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>The stack limit shown for a shop item (wz <c>slotMax</c>; equips 1, else 100).</summary>
+    private static int ShopSlotMax(IItemProvider items, int itemId)
+        => items.GetConsume(itemId)?.SlotMax ?? (itemId / 1000000 == 1 ? 1 : 100);
+
+    /// <summary>Builds <c>LP_ShopResult</c> — a one-byte buy/sell/recharge result (ports
+    /// <c>ResCShopDlg.ShopResult</c>, JMS v186: just the result code).</summary>
+    public byte[] ShopResult(ShopResultCode code)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ShopResult);
+        w.WriteByte((byte)code);
         return w.ToArray();
     }
 

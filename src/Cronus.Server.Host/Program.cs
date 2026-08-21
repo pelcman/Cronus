@@ -70,6 +70,7 @@ var fields = new FieldRegistry(maps, mobs);
 ISkillProvider skills = CreateSkillProvider();
 IItemProvider items = CreateItemProvider();
 IDropProvider drops = CreateDropProvider();
+IShopProvider shops = CreateShopProvider();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
@@ -83,7 +84,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops),
         "channel"),
     keepAlive);
 
@@ -218,6 +219,22 @@ static IDropProvider CreateDropProvider()
 
     SqlDropProvider provider = SqlDropProvider.LoadFile(dropFile);
     Console.WriteLine($"[drops] loaded drop tables from {dropFile}");
+    return provider;
+}
+
+// NPC shops from a shops+shopitems SQL dump if CRONUS_SHOPS points at one, else no shops (vendor
+// NPCs open nothing). The dump is the same asset the Java build loads into its shops tables.
+static IShopProvider CreateShopProvider()
+{
+    string? shopFile = Environment.GetEnvironmentVariable("CRONUS_SHOPS");
+    if (string.IsNullOrWhiteSpace(shopFile) || !File.Exists(shopFile))
+    {
+        Console.WriteLine("[shops] CRONUS_SHOPS not set — NPC shops disabled.");
+        return new InMemoryShopProvider(Array.Empty<Shop>());
+    }
+
+    SqlShopProvider provider = SqlShopProvider.LoadFile(shopFile);
+    Console.WriteLine($"[shops] loaded shops from {shopFile}");
     return provider;
 }
 

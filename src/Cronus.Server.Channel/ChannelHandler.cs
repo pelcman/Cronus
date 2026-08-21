@@ -33,6 +33,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly ISkillProvider _skills;
     private readonly IItemProvider _items;
     private readonly IDropProvider _dropTable;
+    private readonly IShopProvider _shops;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -53,6 +54,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opDropMoney;
     private readonly int _opUseItem;
     private readonly int _opChangeSlot;
+    private readonly int _opShopRequest;
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
@@ -71,6 +73,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     private Field? _field;
     private NpcConversation? _conversation;
 
+    /// <summary>The NPC shop the player currently has open, or null; scoped to this session.</summary>
+    private Shop? _openShop;
+
     /// <summary>Character ids this player has famed this session (a simplified daily limit).</summary>
     private readonly HashSet<int> _famedCharacterIds = new();
 
@@ -88,7 +93,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         PartyRegistry? parties = null,
         PortalScriptEngine? portalScripts = null,
         IItemProvider? items = null,
-        IDropProvider? drops = null)
+        IDropProvider? drops = null,
+        IShopProvider? shops = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -97,6 +103,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _skills = skills ?? NullSkillProvider.Instance;
         _items = items ?? new InMemoryItemProvider(Array.Empty<ConsumeSpec>());
         _dropTable = drops ?? new InMemoryDropProvider(new Dictionary<int, IReadOnlyList<DropEntry>>());
+        _shops = shops ?? new InMemoryShopProvider(Array.Empty<Shop>());
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -117,6 +124,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opUseItem = clientOpcodes.Get(ClientOpcode.UserStatChangeItemUseRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
+        _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
@@ -231,7 +239,11 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
         else if (opcode == _opSelectNpc)
         {
-            HandleSelectNpc(session, packet);
+            await HandleSelectNpcAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opShopRequest)
+        {
+            await HandleShopRequestAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opPortalScript)
         {
@@ -965,6 +977,145 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
     }
 
+    /// <summary>Opens an NPC shop for this session: binds it and sends <c>LP_OpenShopDlg</c>.</summary>
+    private async ValueTask OpenShopAsync(MapleSession session, Shop shop)
+    {
+        _openShop = shop;
+        await session.SendAsync(_packets.OpenShopDlg(shop, _items)).ConfigureAwait(false);
+    }
+
+    // CP_UserShopRequest flags (ports OpsShop, JMS v186): note Close is 4, not 3.
+    private const byte ShopReqBuy = 0;
+    private const byte ShopReqSell = 1;
+    private const byte ShopReqRecharge = 2;
+    private const byte ShopReqClose = 4;
+
+    /// <summary>
+    /// Handles <c>CP_UserShopRequest</c> — buy / sell / recharge / close on an open NPC shop (ports
+    /// <c>ReqCShopDlg</c> + <c>MapleShop</c>, JMS v186). Buy debits meso and adds the item; sell
+    /// removes the slot and credits the wz price; every buy/sell replies with a one-byte
+    /// <c>LP_ShopResult</c>. Equip buys and rechargeables are deferred (equips need wz base stats).
+    /// </summary>
+    private async ValueTask HandleShopRequestAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        byte flag = packet.ReadByte();
+        if (flag == ShopReqClose)
+        {
+            _openShop = null;
+            return;
+        }
+
+        Shop? shop = _openShop;
+        if (shop is null)
+        {
+            return; // no shop open — ignore
+        }
+
+        switch (flag)
+        {
+            case ShopReqBuy:
+                await HandleShopBuyAsync(session, shop, packet).ConfigureAwait(false);
+                break;
+            case ShopReqSell:
+                await HandleShopSellAsync(session, packet).ConfigureAwait(false);
+                break;
+            case ShopReqRecharge:
+                // Rechargeables (stars/bullets) aren't modelled yet.
+                await session.SendAsync(_packets.ShopResult(ShopResultCode.RechargeNoStock)).ConfigureAwait(false);
+                break;
+        }
+    }
+
+    private async ValueTask HandleShopBuyAsync(MapleSession session, Shop shop, PacketReader packet)
+    {
+        // JMS v186 buy body: [shopPos:2 (discarded — matched by id)][itemId:4][quantity:2]
+        packet.ReadShort();
+        int itemId = packet.ReadInt();
+        int quantity = packet.ReadShort();
+
+        ShopItem? entry = shop.Items.FirstOrDefault(i => i.ItemId == itemId);
+        if (entry is null || quantity <= 0)
+        {
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.BuyNoStock)).ConfigureAwait(false);
+            return;
+        }
+
+        // Equip buys and token-currency shops need work still absent (wz equip stats / token debit).
+        if (Inventory.Tab(itemId) == 1 || entry.ReqItem > 0)
+        {
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.BuyUnknown)).ConfigureAwait(false);
+            return;
+        }
+
+        Character c = _player!.Character;
+        long price = (long)entry.Price * quantity;
+        if (entry.Price < 0 || c.Meso < price)
+        {
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.BuyNoMoney)).ConfigureAwait(false);
+            return;
+        }
+
+        c.Meso -= (int)price;
+        int slotMax = _items.GetConsume(itemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+        List<InventoryChange> changes = Inventory.Add(c, itemId, quantity, slotMax);
+        _characters.Save(c);
+
+        if (changes.Count > 0)
+        {
+            await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        await session.SendAsync(_packets.ShopResult(ShopResultCode.BuySuccess)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleShopSellAsync(MapleSession session, PacketReader packet)
+    {
+        // JMS v186 sell body: [invSlot:2][itemId:4][quantity:2]
+        short slot = packet.ReadShort();
+        int itemId = packet.ReadInt();
+        int quantity = packet.ReadShort();
+        if (quantity <= 0)
+        {
+            quantity = 1;
+        }
+
+        Character c = _player!.Character;
+        int tab = Inventory.Tab(itemId);
+        InventoryItem? item = Inventory.ItemAt(c, tab, slot);
+        if (item is null || item.ItemId != itemId || item.Quantity < quantity)
+        {
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.SellNoStock)).ConfigureAwait(false);
+            return;
+        }
+
+        // Sell price is the wz item price; without one (e.g. equips) we can't price it, so refuse
+        // rather than destroy the item for nothing.
+        int? unit = _items.GetPrice(itemId);
+        if (unit is not { } price || price <= 0)
+        {
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.SellIncorrectRequest)).ConfigureAwait(false);
+            return;
+        }
+
+        InventoryChange? change = Inventory.RemoveFromSlot(c, tab, slot, quantity);
+        c.Meso = (int)Math.Clamp((long)c.Meso + (long)price * quantity, 0, int.MaxValue);
+        _characters.Save(c);
+
+        if (change is { } ch)
+        {
+            await session.SendAsync(_packets.InventoryOperation(new[] { ch })).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        await session.SendAsync(_packets.ShopResult(ShopResultCode.SellSuccess)).ConfigureAwait(false);
+    }
+
     private const int MinFameLevel = 15;
     private const int FameCap = 30000;
 
@@ -1635,6 +1786,19 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
             }
 
+            case "shop" when parts.Length >= 2 && int.TryParse(parts[1], out int shopId):
+            {
+                Shop? shop = _shops.GetShop(shopId);
+                if (shop is null)
+                {
+                    await ReplyAsync(session, $"no shop {shopId}").ConfigureAwait(false);
+                    break;
+                }
+
+                await OpenShopAsync(session, shop).ConfigureAwait(false);
+                break;
+            }
+
             case "warp" when parts.Length >= 2:
             {
                 FieldPlayer? target = _fields.FindPlayerByName(parts[1]);
@@ -1672,7 +1836,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, "
-                    + "/ap <n>, /sp <n>, /fame <n>, /item <id> [qty], /save, /players, /notice <msg>, /pos, /help")
+                    + "/ap <n>, /sp <n>, /fame <n>, /item <id> [qty], /shop <id>, /save, /players, /notice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 
@@ -1695,18 +1859,31 @@ public sealed class ChannelHandler : PacketHandlerBase
     private ValueTask ReplyAsync(MapleSession session, string text)
         => session.SendAsync(_packets.UserChat(_player!.Character.Id, isGm: true, text, onlyBalloon: false));
 
-    private void HandleSelectNpc(MapleSession session, PacketReader packet)
+    private async ValueTask HandleSelectNpcAsync(MapleSession session, PacketReader packet)
     {
         // One conversation at a time; ignore a new NPC while a script is still running.
-        if (_player is null || _npcScripts is null || _conversation is { IsEnded: false })
+        if (_player is null || _conversation is { IsEnded: false })
         {
             return;
         }
 
         // JMS v186 CP_UserSelectNpc: [npcObjectId:4][x:2][y:2]. The client sends the runtime
-        // object id; resolve it to the template id (the script key) via the field.
+        // object id; resolve it to the template id (the script/shop key) via the field.
         int objectId = packet.ReadInt();
         int templateId = _field?.FindNpc(objectId)?.TemplateId ?? objectId;
+
+        // A vendor NPC opens its shop directly on click (ports MapleNPC.sendShop's auto-shop).
+        Shop? shop = _shops.GetShopByNpc(templateId);
+        if (shop is not null)
+        {
+            await OpenShopAsync(session, shop).ConfigureAwait(false);
+            return;
+        }
+
+        if (_npcScripts is null)
+        {
+            return;
+        }
 
         var dialog = new ChannelNpcDialog(session, _packets);
         var player = new ChannelPlayer(
