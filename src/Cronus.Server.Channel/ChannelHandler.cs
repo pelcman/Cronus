@@ -1024,9 +1024,19 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         // Item drop: stack it into the inventory and update the client's slot + show the gain message.
-        int slotMax = _items.GetConsume(drop.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
-        List<InventoryChange> changes = Inventory.Add(c, drop.ItemId, drop.Quantity, slotMax);
-        PopulateEquipStats(changes); // a dropped equip gets its wz base stats
+        List<InventoryChange> changes;
+        if (drop.ItemInstance is { } instance)
+        {
+            // A player-thrown equip: restore the exact item (stats intact).
+            changes = new List<InventoryChange> { Inventory.Place(c, instance) };
+        }
+        else
+        {
+            int slotMax = _items.GetConsume(drop.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+            changes = Inventory.Add(c, drop.ItemId, drop.Quantity, slotMax);
+            PopulateEquipStats(changes); // a mob-dropped equip gets its wz base stats
+        }
+
         _characters.Save(c);
         if (changes.Count > 0)
         {
@@ -1288,14 +1298,13 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     /// <summary>
-    /// Drops a bundle item from a slot onto the ground at the player's feet (the <c>dst == 0</c> case
-    /// of a slot-change): removes the quantity from the inventory and spawns a player item drop others
-    /// can pick up. Equips are deferred (they'd lose their stats through drop→pickup until dropped
-    /// items carry the full item).
+    /// Drops an item from a slot onto the ground at the player's feet (the <c>dst == 0</c> case of a
+    /// slot-change): removes it from the inventory and spawns a player item drop others can pick up.
+    /// Equips ride the drop as their actual instance, so their stats survive drop → pickup.
     /// </summary>
     private async ValueTask DropItemToFieldAsync(MapleSession session, int tab, short src, short qty)
     {
-        if (_player is null || _field is null || tab == 1)
+        if (_player is null || _field is null)
         {
             return;
         }
@@ -1307,17 +1316,32 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        int dropQty = qty <= 0 || qty > item.Quantity ? item.Quantity : qty;
         int itemId = item.ItemId;
-
-        InventoryChange? change = Inventory.RemoveFromSlot(c, tab, src, dropQty);
-        _characters.Save(c);
-        if (change is { } ch)
+        FieldDrop drop;
+        if (tab == 1)
         {
-            await session.SendAsync(_packets.InventoryOperation(new[] { ch })).ConfigureAwait(false);
+            // Equips move as the whole object so the picked-up item keeps its stats.
+            c.EquippedItems.Remove(item);
+            _characters.Save(c);
+            await session.SendAsync(_packets.InventoryOperation(new[]
+            {
+                new InventoryChange(InvMode.Remove, tab, src, null, 0),
+            })).ConfigureAwait(false);
+            drop = _field.AddPlayerItemDrop(itemId, 1, _player.X, _player.Y, c.Id, instance: item);
+        }
+        else
+        {
+            int dropQty = qty <= 0 || qty > item.Quantity ? item.Quantity : qty;
+            InventoryChange? change = Inventory.RemoveFromSlot(c, tab, src, dropQty);
+            _characters.Save(c);
+            if (change is { } ch)
+            {
+                await session.SendAsync(_packets.InventoryOperation(new[] { ch })).ConfigureAwait(false);
+            }
+
+            drop = _field.AddPlayerItemDrop(itemId, (short)dropQty, _player.X, _player.Y, c.Id);
         }
 
-        FieldDrop drop = _field.AddPlayerItemDrop(itemId, (short)dropQty, _player.X, _player.Y, c.Id);
         await _field.BroadcastAsync(_packets.DropEnterFieldItem(drop)).ConfigureAwait(false);
     }
 

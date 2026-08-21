@@ -240,6 +240,95 @@ public class ItemEquipTests
         Assert.True(drop.IsPlayerDrop);
     }
 
+    /// <summary>Drops its equip to the ground, picks it straight back up, flags on the second slot update.</summary>
+    private sealed class EquipDropper : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opInvOp = ServerOps.Get(ServerOpcode.InventoryOperation);
+        private readonly int _opDropEnter = ServerOps.Get(ServerOpcode.DropEnterField);
+        private bool _sent;
+        private int _invOps;
+
+        public EquipDropper(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource RoundTripped { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChangeSlotPositionRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);
+                w.WriteByte(1);    // EQUIP tab
+                w.WriteShort(3);   // from slot 3
+                w.WriteShort(0);   // dst 0 = drop to ground
+                w.WriteShort(1);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opDropEnter)
+            {
+                p.ReadByte();
+                int dropOid = p.ReadInt();
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.DropPickUpRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteByte(0);
+                w.WriteInt(0);
+                w.WriteShort(0);
+                w.WriteShort(0);
+                w.WriteInt(dropOid);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opInvOp && ++_invOps == 2) // 1 = the drop's remove, 2 = the pickup's add
+            {
+                RoundTripped.TrySetResult();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task DroppedEquip_KeepsItsStatsThroughPickup()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Lender", MapId = 100000000 });
+        var sword = Equip(1302000, pos: 3, charId: hero.Id);
+        sword.Watk = 17;
+        sword.UpgradeSlots = 5; // scrolled twice — instance state that must survive
+        hero.EquippedItems.Add(sword);
+        repo.Save(hero);
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new EquipDropper(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.RoundTripped.Task.WaitAsync(cts.Token);
+
+        InventoryItem back = Assert.Single(hero.EquippedItems, i => i.ItemId == 1302000);
+        Assert.Equal((short)17, back.Watk);        // the same instance came back
+        Assert.Equal((byte)5, back.UpgradeSlots);  // scroll state intact
+        Assert.Empty(fields.Get(100000000).Drops);
+    }
+
     /// <summary>Migrates in, spawns a sword via /item, flags on the slot update.</summary>
     private sealed class Requester : PacketHandlerBase
     {

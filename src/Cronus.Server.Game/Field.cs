@@ -22,6 +22,12 @@ public sealed class FieldDrop
     /// <summary>Stack count for an item drop (applied to inventory on pickup); 1 by default.</summary>
     public short Quantity { get; init; } = 1;
 
+    /// <summary>
+    /// The actual item instance riding this drop (player-thrown equips keep their stats through
+    /// drop → pickup); null for generated drops (mob loot creates a fresh item on pickup).
+    /// </summary>
+    public InventoryItem? ItemInstance { get; init; }
+
     /// <summary>True when this is a meso pile rather than an item stack.</summary>
     public bool IsMeso => ItemId == 0;
 
@@ -395,9 +401,10 @@ public sealed class Field
 
     /// <summary>
     /// Registers an item stack a player threw onto the ground at their own position, and returns it
-    /// (others can pick it up); the drop-from source is the player.
+    /// (others can pick it up); the drop-from source is the player. When
+    /// <paramref name="instance"/> is given, the drop carries that exact item (equips keep stats).
     /// </summary>
-    public FieldDrop AddPlayerItemDrop(int itemId, short quantity, short x, short y, int sourceCharacterId)
+    public FieldDrop AddPlayerItemDrop(int itemId, short quantity, short x, short y, int sourceCharacterId, InventoryItem? instance = null)
     {
         lock (_gate)
         {
@@ -406,6 +413,7 @@ public sealed class Field
                 ObjectId = _nextDropOid++,
                 ItemId = itemId,
                 Quantity = quantity < 1 ? (short)1 : quantity,
+                ItemInstance = instance,
                 X = x,
                 Y = y,
                 SourceObjectId = sourceCharacterId,
