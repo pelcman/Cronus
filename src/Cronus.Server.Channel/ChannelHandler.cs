@@ -2597,6 +2597,66 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await SetStatAsync(session, StatFlag.Job, c => c.Job = (short)job).ConfigureAwait(false);
                 break;
 
+            case "level" when parts.Length >= 2 && int.TryParse(parts[1], out int level):
+            {
+                Character lc = _player!.Character;
+                lc.Level = (byte)Math.Clamp(level, 1, 200);
+                lc.Exp = 0; // reset so the new level's bar starts clean
+                _characters.Save(lc);
+                await session.SendAsync(_packets.StatChanged(lc, StatFlag.Level | StatFlag.Exp)).ConfigureAwait(false);
+                await RefreshPartyWindowAsync(_player).ConfigureAwait(false); // party window shows levels
+                break;
+            }
+
+            case "hp" when parts.Length >= 2 && int.TryParse(parts[1], out int hp):
+            {
+                Character sc = _player!.Character;
+                sc.Hp = (short)Math.Clamp(hp, 0, sc.MaxHp);
+                _characters.Save(sc);
+                await session.SendAsync(_packets.StatChanged(sc, StatFlag.Hp)).ConfigureAwait(false);
+                await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+                break;
+            }
+
+            case "maxhp" when parts.Length >= 2 && int.TryParse(parts[1], out int maxHp):
+            {
+                Character sc = _player!.Character;
+                sc.MaxHp = (short)Math.Clamp(maxHp, 1, 30000);
+                sc.Hp = Math.Min(sc.Hp, sc.MaxHp);
+                _characters.Save(sc);
+                await session.SendAsync(_packets.StatChanged(sc, StatFlag.Hp | StatFlag.MaxHp)).ConfigureAwait(false);
+                await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+                break;
+            }
+
+            case "mp" when parts.Length >= 2 && int.TryParse(parts[1], out int mp):
+                await SetStatAsync(session, StatFlag.Mp, c => c.Mp = (short)Math.Clamp(mp, 0, c.MaxMp)).ConfigureAwait(false);
+                break;
+
+            case "maxmp" when parts.Length >= 2 && int.TryParse(parts[1], out int maxMp):
+                await SetStatAsync(session, StatFlag.Mp | StatFlag.MaxMp, c =>
+                {
+                    c.MaxMp = (short)Math.Clamp(maxMp, 1, 30000);
+                    c.Mp = Math.Min(c.Mp, c.MaxMp);
+                }).ConfigureAwait(false);
+                break;
+
+            case "str" when parts.Length >= 2 && int.TryParse(parts[1], out int str):
+                await SetStatAsync(session, StatFlag.Str, c => c.Str = (short)Math.Clamp(str, 4, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "dex" when parts.Length >= 2 && int.TryParse(parts[1], out int dex):
+                await SetStatAsync(session, StatFlag.Dex, c => c.Dex = (short)Math.Clamp(dex, 4, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "int" when parts.Length >= 2 && int.TryParse(parts[1], out int intStat):
+                await SetStatAsync(session, StatFlag.Int, c => c.Int = (short)Math.Clamp(intStat, 4, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "luk" when parts.Length >= 2 && int.TryParse(parts[1], out int luk):
+                await SetStatAsync(session, StatFlag.Luk, c => c.Luk = (short)Math.Clamp(luk, 4, short.MaxValue)).ConfigureAwait(false);
+                break;
+
             case "ap" when parts.Length >= 2 && int.TryParse(parts[1], out int ap):
                 await SetStatAsync(session, StatFlag.Ap, c => c.Ap = (short)Math.Clamp(c.Ap + ap, 0, short.MaxValue)).ConfigureAwait(false);
                 break;
@@ -2684,8 +2744,9 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
 
             case "help":
-                await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, "
-                    + "/ap <n>, /sp <n>, /fame <n>, /item <id> [qty], /shop <id>, /storage, /save, /players, /notice <msg>, /pos, /help")
+                await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
+                    + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
+                    + "/item <id> [qty], /shop <id>, /storage, /save, /players, /notice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 

@@ -21,6 +21,10 @@ when the server restarts (see [SERVER_SETUP.md](SERVER_SETUP.md)).
 | `/meso <n>` | Add `n` meso (negative subtracts) |
 | `/heal` | Restore full HP/MP |
 | `/job <jobId>` | Set your job |
+| `/level <n>` | **Set** your level (1–200; exp resets to 0) |
+| `/hp <n>` · `/mp <n>` | **Set** current HP / MP (clamped to the max) |
+| `/maxhp <n>` · `/maxmp <n>` | **Set** max HP / MP (1–30000) |
+| `/str /dex /int /luk <n>` | **Set** a base stat (4–32767) |
 | `/ap <n>` | Add `n` ability points |
 | `/sp <n>` | Add `n` skill points |
 | `/fame <n>` | **Set** fame to `n` |
@@ -66,6 +70,18 @@ Sets your job id. Common pre-Big-Bang ids (2nd job = base+10; 3rd/4th job add +1
 | 300 | Archer | 310 Hunter / 320 Crossbowman |
 | 400 | Rogue | 410 Assassin / 420 Bandit |
 | 500 | Pirate | 510 Brawler / 520 Gunslinger |
+
+### `/level <n>`
+**Sets** your level (1–200) and resets exp to 0 so the bar starts clean. The party window updates.
+
+### `/hp <n>` · `/mp <n>` · `/maxhp <n>` · `/maxmp <n>`
+**Set** the current or maximum HP/MP. Current values clamp to the max (setting `/hp 0` kills you —
+handy for testing death/revive); max values clamp to 1–30000 and pull the current value down with
+them. Party members see HP changes.
+
+### `/str <n>` · `/dex <n>` · `/int <n>` · `/luk <n>`
+**Set** a base stat directly (4–32767). The client recomputes derived values (damage, accuracy…)
+from the new stat.
 
 ### `/ap <n>` · `/sp <n>`
 Add `n` ability / skill points (deltas; the result is clamped to ≥ 0). Spend SP in the skill

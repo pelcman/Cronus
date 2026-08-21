@@ -204,4 +204,76 @@ public class CommandTests
         Assert.Equal(100, job);
         Assert.Equal(100, hero.Job);
     }
+
+    [Fact]
+    public async Task StrCommand_OverwritesTheStat()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Mighty", MapId = 100000000 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new Commander(hero.Id, "/str 999", statBit: 0x40); // StatFlag.Str
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        int str = await client.StatValue.Task.WaitAsync(cts.Token);
+        Assert.Equal(999, str);
+        Assert.Equal(999, hero.Str);
+    }
+
+    [Fact]
+    public async Task LevelCommand_SetsLevelAndResetsExp()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Elder", MapId = 100000000, Exp = 42 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new Commander(hero.Id, "/level 50", statBit: 0x10); // StatFlag.Level (signal only)
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.StatValue.Task.WaitAsync(cts.Token); // the packet mixes Level+Exp; assert on the model
+        Assert.Equal(50, hero.Level);
+        Assert.Equal(0, hero.Exp);
+    }
+
+    [Fact]
+    public async Task MaxHpCommand_ClampsCurrentHp()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Tank", MapId = 100000000 }); // 50/50 HP
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new Commander(hero.Id, "/maxhp 30", statBit: 0x800); // StatFlag.MaxHp (signal only)
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.StatValue.Task.WaitAsync(cts.Token); // Hp+MaxHp packet; assert on the model
+        Assert.Equal(30, hero.MaxHp);
+        Assert.Equal(30, hero.Hp); // current HP pulled down with the max
+    }
 }
