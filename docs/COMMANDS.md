@@ -147,3 +147,22 @@ by the server's whisper handler.
 Towns: `100000000` Henesys · `101000000` Ellinia · `102000000` Perion · `103000000` Kerning City ·
 `104000000` Lith Harbor · `120000000` Nautilus.
 Hunting maps near Henesys: `100010000`, `100020000`, `100030000`.
+Free Market rooms (personal shops / hired merchants): `910000001`–`910000022`.
+Guild HQ (client-side guild creation / emblem): `200000301` (Orbis).
+
+Fun items to `/item` yourself:
+
+| Id | Item |
+|---|---|
+| `4080000`–`4080004` | Omok stone sets (open an Omok room) |
+| `4080100` | Match-card (神経衰弱) set |
+| `5140000` | Store permit (露店, personal shop; FM rooms only) |
+| `5030000` | Employee permit (雇用商人; FM rooms only) |
+| `5000000`+ | Pets (double-click in the cash tab to summon) |
+| `2120000` | Pet food |
+| `5070000` / `5071000` | Megaphone / Super Megaphone |
+| `5073000` / `5074000` | Heart / Skull Megaphone |
+| `5370000` | Ad board (黒板) |
+| `3010000`+ | Portable chairs |
+| `2340000` | White Scroll (protects an upgrade slot on scroll failure) |
+| `2049000` / `2049100` | Clean Slate Scroll / Chaos Scroll |
