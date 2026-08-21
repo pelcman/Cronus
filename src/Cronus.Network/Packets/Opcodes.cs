@@ -33,6 +33,7 @@ public static class ClientOpcode
     public const string DropPickUpRequest = "CP_DropPickUpRequest";
     public const string UserDropMoneyRequest = "CP_UserDropMoneyRequest";
     public const string UserGivePopularityRequest = "CP_UserGivePopularityRequest";
+    public const string UserCharacterInfoRequest = "CP_UserCharacterInfoRequest";
     public const string UserSkillUpRequest = "CP_UserSkillUpRequest";
     public const string UserAbilityUpRequest = "CP_UserAbilityUpRequest";
     public const string UserAbilityMassUpRequest = "CP_UserAbilityMassUpRequest";
@@ -80,6 +81,7 @@ public static class ServerOpcode
     public const string GivePopularityResult = "LP_GivePopularityResult";
     public const string FieldEffect = "LP_FieldEffect";
     public const string Message = "LP_Message";
+    public const string CharacterInfo = "LP_CharacterInfo";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string UserShootAttack = "LP_UserShootAttack";

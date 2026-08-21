@@ -716,6 +716,46 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_CharacterInfo</c> — another player's info window (ports
+    /// <c>ResCWvsContext.CharacterInfo</c>, JMS v186 path). Carries id/level/job/fame, then the
+    /// community/pet/mount/wishlist/monster-book/medal/chair blocks. Cronus models none of the latter
+    /// yet, so they encode as their empty forms; the guild "community" is <c>"-"</c> (the reference
+    /// never actually fills it in). The layout is fixed and golden-tested.
+    /// </summary>
+    public byte[] CharacterInfo(Character c)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.CharacterInfo);
+        w.WriteInt(c.Id);
+        w.WriteByte(c.Level);
+        w.WriteShort(c.Job);
+        w.WriteShort(c.Fame);
+        w.WriteByte(0);              // bIsMarried (JMS >= 147)
+        w.WriteString("-");          // sCommunity (guild name; the reference always leaves it "-")
+        w.WriteString(string.Empty); // sAlliance (JMS >= 147)
+        w.WriteInt(0);               // JMS 180-186 pair
+        w.WriteInt(0);
+        w.WriteByte(0);              // bPetActivated (no pet)
+        w.WriteByte(0);              // SetPetInfo: slot 0 empty terminates the list
+        w.WriteByte(0);              // taming-mob enabled
+        w.WriteByte(0);              // wishlist size
+
+        // MonsterBookInfo (level, normal, special, total, coverMobId) — all zero.
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteInt(0);
+
+        // Medal / achievement (JMS >= 180): equipped medal id, then the medal-quest count.
+        w.WriteInt(0);
+        w.WriteShort(0);
+
+        // Chair list (JMS 180-186): the SETUP-inventory chair count (empty).
+        w.WriteInt(0);
+        return w.ToArray();
+    }
+
     /// <summary>User effect type: the level-up show (ports <c>OpsUserEffect.UserEffect_LevelUp</c>).</summary>
     public const byte UserEffectLevelUp = 0x00;
 

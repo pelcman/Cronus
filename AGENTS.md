@@ -333,6 +333,13 @@ Each milestone means adding one "working vertical slice".
       tested (kill shows the mob's 42 exp) plus both encoder layouts. Also capped the Channel test
       assembly's parallelism (`MaxParallelThreads = 4`) so the growing integration suite stays reliable
       under CPU load.
+- [x] **M36: Character info window** — `CP_UserCharacterInfoRequest` (clicking another player) returns
+      their info window `LP_CharacterInfo` (ports `ReqCUser.OnCharacterInfoRequest` +
+      `ResCWvsContext.CharacterInfo`, JMS v186 path): id/level/job/fame, then the
+      community/pet/mount/wishlist/monster-book/medal/chair blocks in their empty forms (Cronus models
+      none of those yet; the guild "community" is `"-"`, which is what the reference always emits). The
+      fixed layout is golden-tested exactly, and it's end-to-end tested (Alice sees Bob's lvl 55 / job
+      412 / fame 21). Contained failure mode — it's a separate packet, not the entry blob.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

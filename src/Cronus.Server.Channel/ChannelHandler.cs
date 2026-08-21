@@ -49,6 +49,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opDropPickUp;
     private readonly int _opDropMoney;
     private readonly int _opGivePopularity;
+    private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
     private readonly int _opAbilityUp;
     private readonly int _opAbilityMassUp;
@@ -103,6 +104,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
+        _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
         _opAbilityUp = clientOpcodes.Get(ClientOpcode.UserAbilityUpRequest);
         _opAbilityMassUp = clientOpcodes.Get(ClientOpcode.UserAbilityMassUpRequest);
@@ -179,6 +181,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opGivePopularity)
         {
             await HandleGivePopularityAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opCharacterInfo)
+        {
+            await HandleCharacterInfoAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opSkillUp)
         {
@@ -803,6 +809,30 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.GivePopularitySuccess(tc.Name, isUp, tc.Fame)).ConfigureAwait(false);
         await target.Session.SendAsync(_packets.GivePopularityNotify(_player.Character.Name, isUp)).ConfigureAwait(false);
         await target.Session.SendAsync(_packets.StatChanged(tc, StatFlag.Fame)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserCharacterInfoRequest</c> — clicking another player opens their info window
+    /// (ports <c>ReqCUser.OnCharacterInfoRequest</c>). Looks the target up on the same map and replies
+    /// <c>LP_CharacterInfo</c>; ignored if they aren't there.
+    /// </summary>
+    private async ValueTask HandleCharacterInfoAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        packet.ReadInt();               // update time
+        int targetId = packet.ReadInt();
+
+        FieldPlayer? target = _field.Players.FirstOrDefault(p => p.Character.Id == targetId);
+        if (target is null)
+        {
+            return;
+        }
+
+        await session.SendAsync(_packets.CharacterInfo(target.Character)).ConfigureAwait(false);
     }
 
     private async ValueTask GrantKillExpAsync(int exp)
