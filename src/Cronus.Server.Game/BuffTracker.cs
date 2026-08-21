@@ -6,7 +6,7 @@ namespace Cronus.Server.Game;
 /// One buff currently active on a character: the wire reason that identifies it (positive skill id /
 /// negative item id), the mask word[0] bits it occupies, and when it lapses.
 /// </summary>
-public sealed record ActiveBuff(int Reason, uint Word0Mask, DateTime ExpiresAt);
+public sealed record ActiveBuff(int Reason, ulong Mask, DateTime ExpiresAt);
 
 /// <summary>
 /// Server-side registry of every character's active temporary stats (ports the schedule kept by
@@ -22,9 +22,9 @@ public sealed class BuffTracker
     /// Registers (or refreshes) a buff. Re-casting replaces the entry with the same reason,
     /// like the reference's cancel-then-register.
     /// </summary>
-    public void Register(int characterId, int reason, uint word0Mask, int durationMs, DateTime? now = null)
+    public void Register(int characterId, int reason, ulong mask, int durationMs, DateTime? now = null)
     {
-        if (word0Mask == 0 || durationMs <= 0)
+        if (mask == 0 || durationMs <= 0)
         {
             return;
         }
@@ -34,12 +34,12 @@ public sealed class BuffTracker
         lock (buffs)
         {
             buffs.RemoveAll(b => b.Reason == reason);
-            buffs.Add(new ActiveBuff(reason, word0Mask, expiresAt));
+            buffs.Add(new ActiveBuff(reason, mask, expiresAt));
         }
     }
 
     /// <summary>Removes one buff by reason (player cancelled it); returns its mask, or 0.</summary>
-    public uint Remove(int characterId, int reason)
+    public ulong Remove(int characterId, int reason)
     {
         if (!_byCharacter.TryGetValue(characterId, out List<ActiveBuff>? buffs))
         {
@@ -48,12 +48,12 @@ public sealed class BuffTracker
 
         lock (buffs)
         {
-            uint mask = 0;
+            ulong mask = 0;
             for (int i = buffs.Count - 1; i >= 0; i--)
             {
                 if (buffs[i].Reason == reason)
                 {
-                    mask |= buffs[i].Word0Mask;
+                    mask |= buffs[i].Mask;
                     buffs.RemoveAt(i);
                 }
             }
@@ -168,7 +168,7 @@ public sealed class BuffExpiryService
                 {
                     try
                     {
-                        await player.Session.SendAsync(_packets.TemporaryStatReset(buff.Word0Mask)).ConfigureAwait(false);
+                        await player.Session.SendAsync(_packets.TemporaryStatReset(buff.Mask)).ConfigureAwait(false);
                         sent++;
                     }
                     catch (Exception)

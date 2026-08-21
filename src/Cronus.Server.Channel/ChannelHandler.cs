@@ -1304,7 +1304,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         byte[] buffPacket = _packets.TemporaryStatSet(buffs);
-        uint mask = BuffEffect.Word0Mask(buffs);
+        ulong mask = BuffEffect.Mask64(buffs);
         _buffs.Register(c.Id, skillId, mask, effect.DurationMs); // state before the packet
         if (skillId == SkillBuff.ComboAttackSkill)
         {
@@ -1348,7 +1348,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        uint mask = BuffEffect.Word0Mask(SkillBuff.FromEffect(skillId, effect));
+        ulong mask = BuffEffect.Mask64(SkillBuff.FromEffect(skillId, effect));
         if (mask != 0)
         {
             _buffs.Remove(c.Id, skillId);
@@ -1578,7 +1578,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             List<BuffStat> buffs = BuffEffect.FromSpec(spec);
             if (buffs.Count > 0)
             {
-                _buffs.Register(c.Id, -spec.ItemId, BuffEffect.Word0Mask(buffs), spec.Time); // state first
+                _buffs.Register(c.Id, -spec.ItemId, BuffEffect.Mask64(buffs), spec.Time); // state first
                 await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
             }
         }
@@ -1604,7 +1604,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        uint mask = BuffEffect.Word0Mask(BuffEffect.FromSpec(spec));
+        ulong mask = BuffEffect.Mask64(BuffEffect.FromSpec(spec));
         if (mask != 0)
         {
             _buffs.Remove(_player.Character.Id, buffId);

@@ -1519,11 +1519,12 @@ public sealed class ChannelPackets
     /// </summary>
     public byte[] TemporaryStatSet(IReadOnlyList<BuffStat> stats)
     {
+        ulong mask = BuffEffect.Mask64(stats);
         PacketWriter w = NewPacket(ServerOpcode.TemporaryStatSet);
         w.WriteInt(0);                                 // mask word[3]
         w.WriteInt(0);                                 // mask word[2]
-        w.WriteInt(0);                                 // mask word[1]
-        w.WriteInt((int)BuffEffect.Word0Mask(stats));  // mask word[0]
+        w.WriteInt((int)(uint)(mask >> 32));           // mask word[1] (bits 32-63)
+        w.WriteInt((int)(uint)mask);                   // mask word[0]
         foreach (BuffStat s in stats)
         {
             w.WriteShort(s.Value);       // nValue (2 bytes in v186)
@@ -1543,13 +1544,13 @@ public sealed class ChannelPackets
     /// <c>ResCWvsContext.TemporaryStatReset</c>, JMS v186): the 128-bit mask (reverse word order) and
     /// a trailing 0 byte. <paramref name="word0Mask"/> holds the simple-stat bits (word[0]).
     /// </summary>
-    public byte[] TemporaryStatReset(uint word0Mask)
+    public byte[] TemporaryStatReset(ulong mask)
     {
         PacketWriter w = NewPacket(ServerOpcode.TemporaryStatReset);
         w.WriteInt(0);
         w.WriteInt(0);
-        w.WriteInt(0);
-        w.WriteInt((int)word0Mask);
+        w.WriteInt((int)(uint)(mask >> 32));
+        w.WriteInt((int)(uint)mask);
         w.WriteByte(0);
         return w.ToArray();
     }

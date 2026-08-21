@@ -56,12 +56,15 @@ public static class BuffEffect
     }
 
     /// <summary>The mask word[0] (the only word simple potion stats use) for a set of buff stats.</summary>
-    public static uint Word0Mask(IEnumerable<BuffStat> stats)
+    public static uint Word0Mask(IEnumerable<BuffStat> stats) => (uint)Mask64(stats);
+
+    /// <summary>The CTS mask covering bits 0-63 (word[0] low, word[1] high) for a set of stats.</summary>
+    public static ulong Mask64(IEnumerable<BuffStat> stats)
     {
-        uint mask = 0;
+        ulong mask = 0;
         foreach (BuffStat s in stats)
         {
-            mask |= 1u << s.Bit;
+            mask |= 1ul << s.Bit;
         }
 
         return mask;
@@ -89,6 +92,21 @@ public static class SkillBuff
 
     /// <summary>Crusader Combo Attack (the orb buff).</summary>
     public const int ComboAttackSkill = 1111002;
+
+    // Further signature bits (OpsSecondaryStat, JMS v186; 32+ live in mask word[1]).
+    private const int Invincible = 15;
+    private const int SoulArrow = 16;
+    private const int WeaponCharge = 22;
+    private const int DragonBlood = 23;
+    private const int HolySymbol = 24;
+    private const int MesoUp = 25;
+    private const int ShadowPartner = 26;
+    private const int PickPocket = 27;
+    private const int MesoGuard = 28;
+    private const int BasicStatUp = 35; // Maple Warrior
+    private const int Stance = 36;
+    private const int SharpEyes = 37;
+    private const int ManaReflection = 38;
 
     /// <summary>The active buff stats a self-buff skill grants, in ascending bit order (empty if none).</summary>
     public static List<BuffStat> FromEffect(int skillId, SkillEffect effect)
@@ -136,6 +154,67 @@ public static class SkillBuff
             case 1301006: // Spearman: Hyper Body
                 Add(effect.X, MaxHp);
                 Add(effect.Y, MaxMp);
+                break;
+            case 2301003: // Cleric: Invincible
+                Add(effect.X, Invincible);
+                break;
+            case 3101004: // Hunter / Crossbowman: Soul Arrow
+            case 3201004:
+                Add(effect.X, SoulArrow);
+                break;
+            case 1211003: // White Knight charges (sword/BW fire/ice/thunder)
+            case 1211004:
+            case 1211005:
+            case 1211006:
+            case 1211007:
+            case 1211008:
+                Add(effect.X, WeaponCharge);
+                break;
+            case 1311008: // Dragon Knight: Dragon Blood
+                Add(effect.X, DragonBlood);
+                break;
+            case 2311003: // Priest: Holy Symbol
+                Add(effect.X, HolySymbol);
+                break;
+            case 4111001: // Hermit: Meso Up
+                Add(effect.X, MesoUp);
+                break;
+            case 4111002: // Hermit: Shadow Partner
+                Add(effect.X, ShadowPartner);
+                break;
+            case 4211003: // Chief Bandit: Pick Pocket
+                Add(effect.X, PickPocket);
+                break;
+            case 4211005: // Chief Bandit: Meso Guard
+                Add(effect.X, MesoGuard);
+                break;
+            case 1121002: // Hero / Paladin / Dark Knight: Stance
+            case 1221002:
+            case 1321002:
+                Add(effect.X, Stance);
+                break;
+            case 3121002: // Bowmaster / Marksman: Sharp Eyes (value = x<<8 | y)
+            case 3221002:
+                Add((effect.X << 8) | effect.Y, SharpEyes);
+                break;
+            case 2121002: // Arch Mage / Bishop: Mana Reflection
+            case 2221002:
+            case 2321002:
+                Add(1, ManaReflection);
+                break;
+            case 1121000: // Maple Warrior (every 4th job)
+            case 1221000:
+            case 1321000:
+            case 2121000:
+            case 2221000:
+            case 2321000:
+            case 3121000:
+            case 3221000:
+            case 4121000:
+            case 4221000:
+            case 5121000:
+            case 5221000:
+                Add(effect.X, BasicStatUp);
                 break;
             default:
                 if (IsBooster(skillId))

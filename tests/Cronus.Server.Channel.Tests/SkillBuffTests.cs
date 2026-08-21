@@ -63,6 +63,46 @@ public class SkillBuffTests
         Assert.Empty(SkillBuff.FromEffect(1001003, new SkillEffect { Pdd = 40, DurationMs = 0 }));
     }
 
+    [Theory]
+    [InlineData(2301003, 15)]  // Invincible
+    [InlineData(3101004, 16)]  // Soul Arrow
+    [InlineData(1211004, 22)]  // WK charge
+    [InlineData(1311008, 23)]  // Dragon Blood
+    [InlineData(2311003, 24)]  // Holy Symbol
+    [InlineData(4111001, 25)]  // Meso Up
+    [InlineData(4111002, 26)]  // Shadow Partner
+    [InlineData(4211005, 28)]  // Meso Guard
+    [InlineData(1121002, 36)]  // Stance (mask word[1])
+    [InlineData(2321000, 35)]  // Maple Warrior (mask word[1])
+    public void FromEffect_SignatureBuffs_UseTheirCtsBit(int skillId, int bit)
+    {
+        BuffStat s = Assert.Single(SkillBuff.FromEffect(skillId, new SkillEffect { X = 10, DurationMs = 60000 }));
+        Assert.Equal(bit, s.Bit);
+        Assert.Equal((short)10, s.Value);
+    }
+
+    [Fact]
+    public void SharpEyes_PacksXAndYIntoTheValue()
+    {
+        BuffStat s = Assert.Single(SkillBuff.FromEffect(3121002, new SkillEffect { X = 15, Y = 40, DurationMs = 60000 }));
+        Assert.Equal(37, s.Bit);
+        Assert.Equal((short)((15 << 8) | 40), s.Value);
+    }
+
+    [Fact]
+    public void HighBits_LandInMaskWord1OnTheWire()
+    {
+        var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
+        List<BuffStat> stance = SkillBuff.FromEffect(1121002, new SkillEffect { X = 60, DurationMs = 300000 });
+        byte[] p = packets.TemporaryStatSet(stance);
+
+        // Words are written [3][2][1][0] after the 2-byte opcode.
+        Assert.Equal(0, BitConverter.ToInt32(p, 2));                 // word3
+        Assert.Equal(0, BitConverter.ToInt32(p, 6));                 // word2
+        Assert.Equal(1 << (36 - 32), BitConverter.ToInt32(p, 10));   // word1: Stance bit 36
+        Assert.Equal(0, BitConverter.ToInt32(p, 14));                // word0
+    }
+
     /// <summary>Casts a buff skill on entry and captures the buff packet's reason field.</summary>
     private sealed class Caster : PacketHandlerBase
     {

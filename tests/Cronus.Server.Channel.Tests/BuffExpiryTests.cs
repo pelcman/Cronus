@@ -34,7 +34,7 @@ public class BuffExpiryTests
 
         ActiveBuff buff = Assert.Single(expired);
         Assert.Equal(1001003, buff.Reason);
-        Assert.Equal(0b10u, buff.Word0Mask);
+        Assert.Equal(0b10ul, buff.Mask);
         Assert.Single(tracker.Snapshot(1)); // the potion is still running
     }
 
