@@ -208,6 +208,11 @@ Each milestone means adding one "working vertical slice".
 - [x] **M16: Emotes** — `CP_UserEmotion` relays a player's face emote to the rest of the field
       (`LP_UserEmotion`, grounded in `DataCUser.Emotion`) — a small social touch for an in-group
       server. Item-based expressions (id > 7) aren't inventory-checked yet.
+- [x] **M17: Sitting / chairs** — `CP_UserSitRequest` (`[seatId:2]`, -1 = stand) seats the player
+      and echoes `LP_UserSitResult` (`[sitting:1][seatId:2 if sitting]`). Seated players rest:
+      `PlayerRegen` recovers 3× while `FieldPlayer.Seated`, and the regen tick skips the idle wait
+      for them. Moving or attacking stands you back up (`Seated = false`). Map-chair objects and
+      portable (cash) chair items aren't validated against inventory yet — any seat id is accepted.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

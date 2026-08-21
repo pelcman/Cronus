@@ -54,4 +54,18 @@ public class PlayerRegenTests
         Assert.True(changed.HasFlag(StatFlag.Hp));
         Assert.False(changed.HasFlag(StatFlag.Mp));
     }
+
+    [Fact]
+    public void Apply_Seated_RecoversThreeTimesFaster()
+    {
+        var standing = new Character { Name = "Stand", Hp = 0, MaxHp = 500, Mp = 0, MaxMp = 500 };
+        var sitting = new Character { Name = "Sit", Hp = 0, MaxHp = 500, Mp = 0, MaxMp = 500 };
+
+        PlayerRegen.Apply(standing, seated: false);
+        PlayerRegen.Apply(sitting, seated: true);
+
+        Assert.Equal(10, standing.Hp); // max(3, 500/50) = 10
+        Assert.Equal(30, sitting.Hp);  // x3 while seated
+        Assert.Equal(30, sitting.Mp);
+    }
 }

@@ -10,22 +10,23 @@ public static class PlayerRegen
 
     /// <summary>
     /// Recovers a modest amount of HP/MP toward the maximum and returns the stats that changed
-    /// (0 when already full). Mutates <paramref name="c"/>. A simplification of MapleStory's
-    /// level/job-scaled idle recovery — enough to keep idle players topping up.
+    /// (0 when already full). Mutates <paramref name="c"/>. Sitting (<paramref name="seated"/>)
+    /// triples the amount. A simplification of MapleStory's level/job-scaled recovery.
     /// </summary>
-    public static StatFlag Apply(Character c)
+    public static StatFlag Apply(Character c, bool seated = false)
     {
+        int factor = seated ? 3 : 1;
         StatFlag changed = 0;
 
         if (c.Hp < c.MaxHp)
         {
-            c.Hp = (short)Math.Min(c.MaxHp, c.Hp + Math.Max(3, c.MaxHp / 50));
+            c.Hp = (short)Math.Min(c.MaxHp, c.Hp + (Math.Max(3, c.MaxHp / 50) * factor));
             changed |= StatFlag.Hp;
         }
 
         if (c.Mp < c.MaxMp)
         {
-            c.Mp = (short)Math.Min(c.MaxMp, c.Mp + Math.Max(3, c.MaxMp / 50));
+            c.Mp = (short)Math.Min(c.MaxMp, c.Mp + (Math.Max(3, c.MaxMp / 50) * factor));
             changed |= StatFlag.Mp;
         }
 
@@ -74,12 +75,13 @@ public sealed class PlayerRegenService
         {
             foreach (FieldPlayer player in field.Players)
             {
-                if (nowTick - player.LastActiveTick < PlayerRegen.IdleThresholdMs)
+                // Sitting rests immediately; otherwise wait for the idle threshold.
+                if (!player.Seated && nowTick - player.LastActiveTick < PlayerRegen.IdleThresholdMs)
                 {
                     continue; // recently moved or attacked — not resting
                 }
 
-                StatFlag changed = PlayerRegen.Apply(player.Character);
+                StatFlag changed = PlayerRegen.Apply(player.Character, player.Seated);
                 if (changed == 0)
                 {
                     continue; // already at full HP/MP

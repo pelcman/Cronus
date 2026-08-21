@@ -127,6 +127,9 @@ public sealed class FieldPlayer
     /// regen only kicks in after they've been idle for a bit (see <c>PlayerRegenService</c>).
     /// </summary>
     public long LastActiveTick { get; set; }
+
+    /// <summary>True while the player is sitting on a chair — regen is faster and immediate.</summary>
+    public bool Seated { get; set; }
 }
 
 /// <summary>

@@ -649,6 +649,24 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_UserSitResult</c> (ports <c>ResCUserLocal.UserSitResult</c>): whether the
+    /// player is now seated, and the seat id when they are. <paramref name="seatId"/> == -1 stands.
+    /// </summary>
+    public byte[] UserSitResult(short seatId)
+    {
+        bool sitting = seatId != -1;
+
+        PacketWriter w = NewPacket(ServerOpcode.UserSitResult);
+        w.WriteBool(sitting);
+        if (sitting)
+        {
+            w.WriteShort(seatId);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_UserMove</c> relaying a raw CMovePath buffer (ports
     /// <c>ResCUserRemote.UserMove</c>: character id + the path bytes as received).
     /// </summary>

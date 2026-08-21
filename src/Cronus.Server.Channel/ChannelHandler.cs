@@ -39,6 +39,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opUserMove;
     private readonly int _opUserChat;
     private readonly int _opUserEmotion;
+    private readonly int _opUserSit;
     private readonly int _opMeleeAttack;
     private readonly int _opMagicAttack;
     private readonly int _opShootAttack;
@@ -78,6 +79,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
         _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
         _opUserEmotion = clientOpcodes.Get(ClientOpcode.UserEmotion);
+        _opUserSit = clientOpcodes.Get(ClientOpcode.UserSitRequest);
         _opMeleeAttack = clientOpcodes.Get(ClientOpcode.UserMeleeAttack);
         _opMagicAttack = clientOpcodes.Get(ClientOpcode.UserMagicAttack);
         _opShootAttack = clientOpcodes.Get(ClientOpcode.UserShootAttack);
@@ -110,6 +112,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opUserEmotion)
         {
             await HandleUserEmotionAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opUserSit)
+        {
+            await HandleUserSitAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opMeleeAttack)
         {
@@ -300,6 +306,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         UpdatePositionFromMovePath(_player, movePath);
         _player.LastActiveTick = Environment.TickCount64; // moving delays HP/MP regen
+        _player.Seated = false;                            // and stands you up
 
         await _field.BroadcastAsync(
             _packets.UserMove(_player.Character.Id, movePath),
@@ -362,6 +369,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         if (_player is not null)
         {
             _player.LastActiveTick = Environment.TickCount64; // attacking delays HP/MP regen
+            _player.Seated = false;                            // and stands you up
         }
 
         foreach (AttackTarget target in attack.Targets)
@@ -568,6 +576,23 @@ public sealed class ChannelHandler : PacketHandlerBase
         StatFlag changed = CharacterProgression.GainExp(c, exp); // processes level-ups
         _characters.Save(c);
         await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserSitRequest</c> — seats the player on a chair (or stands them when the
+    /// seat id is -1) and echoes <c>LP_UserSitResult</c>. Sitting makes HP/MP regen fast and
+    /// immediate (see <c>PlayerRegenService</c>).
+    /// </summary>
+    private async ValueTask HandleUserSitAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        short seatId = packet.ReadShort(); // JMS v186 CP_UserSitRequest: [seatId:2] (-1 = stand)
+        _player.Seated = seatId != -1;
+        await session.SendAsync(_packets.UserSitResult(seatId)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleUserEmotionAsync(PacketReader packet)
