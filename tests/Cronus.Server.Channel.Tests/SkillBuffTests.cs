@@ -145,4 +145,99 @@ public class SkillBuffTests
         Assert.Equal(1001003, reason);   // the positive skill id
         Assert.Equal(42, hero.Mp);       // 50 - 8 MP cost
     }
+
+    /// <summary>Swings a skill-based melee attack (no targets) and waits for the MP StatChanged.</summary>
+    private sealed class SkillAttacker : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _skillId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opStat = ServerOps.Get(ServerOpcode.StatChanged);
+        private bool _sent;
+
+        public SkillAttacker(int characterId, int skillId)
+        {
+            _characterId = characterId;
+            _skillId = skillId;
+        }
+
+        public TaskCompletionSource MpChanged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+
+                // A skill melee swing with zero targets (hitKey 0).
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserMeleeAttack), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteByte(0);            // FieldKey
+                w.WriteInt(0); w.WriteInt(0);
+                w.WriteByte(0);            // hitKey: 0 targets
+                w.WriteInt(0); w.WriteInt(0);
+                w.WriteInt(_skillId);      // skill id
+                w.WriteInt(0); w.WriteInt(0); w.WriteInt(0);
+                w.WriteByte(0);            // buff key
+                w.WriteShort(0);           // action key
+                w.WriteByte(0);            // action type
+                w.WriteByte(0);            // attack speed
+                w.WriteInt(0);             // attack time
+                w.WriteInt(0);             // dwID
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opStat)
+            {
+                p.ReadByte();              // unlock
+                if (p.ReadInt() != 0)      // skip the entry's mask-0 updateStat
+                {
+                    MpChanged.TrySetResult();
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SkillAttack_SpendsTheSkillsMpAtTheLearnedLevel()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Slasher", MapId = 100000000, Mp = 50, MaxMp = 50,
+        });
+        hero.Skills[1001005] = 3; // Slash Blast learned at level 3
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        var skills = new InMemorySkillProvider(effects: new Dictionary<(int, int), SkillEffect>
+        {
+            [(1001005, 3)] = new SkillEffect { MpCon = 6 }, // attack skill: MP cost, no buff
+        });
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var client = new SkillAttacker(hero.Id, 1001005);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, skills: skills);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.MpChanged.Task.WaitAsync(cts.Token);
+
+        Assert.Equal(44, hero.Mp); // 50 - 6 (the level-3 cost was used)
+    }
 }

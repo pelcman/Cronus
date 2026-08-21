@@ -21,7 +21,9 @@ public sealed class AttackInfo
     /// <summary>The raw hit key: low nibble = hits/target, high nibble = target count.</summary>
     public required int HitKey { get; init; }
 
-    public required int SkillLevel { get; init; }
+    /// <summary>The caster's level in <see cref="SkillId"/> — the parser leaves it 0 and the
+    /// handler fills it from the character's learned skills before mirroring the attack.</summary>
+    public int SkillLevel { get; set; }
 
     public required int BuffKey { get; init; }
 
@@ -106,7 +108,6 @@ public static class AttackParser
         {
             SkillId = skillId,
             HitKey = hitKey,
-            SkillLevel = 0, // no skills modeled yet
             BuffKey = buffKey,
             AttackActionKey = attackActionKey,
             AttackSpeed = attackSpeed,

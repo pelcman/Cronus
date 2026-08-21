@@ -478,6 +478,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         AttackInfo attack = AttackParser.ParseMelee(packet);
+        await PrepareSkillAttackAsync(session, attack).ConfigureAwait(false);
         await _field.BroadcastAsync(
             _packets.UserMeleeAttack(_player.Character.Id, _player.Character.Level, attack),
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
@@ -492,6 +493,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         AttackInfo attack = AttackParser.ParseMagic(packet); // v186: same layout as melee
+        await PrepareSkillAttackAsync(session, attack).ConfigureAwait(false);
         await _field.BroadcastAsync(
             _packets.UserMagicAttack(_player.Character.Id, _player.Character.Level, attack),
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
@@ -506,6 +508,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         AttackInfo attack = AttackParser.ParseShoot(packet);
+        await PrepareSkillAttackAsync(session, attack).ConfigureAwait(false);
 
         // The bullet item id isn't resolved yet (no USE-inventory model) — send 0; the shot still
         // fires and applies damage, it just may not render a specific arrow. Follow-up: resolve
@@ -514,6 +517,30 @@ public sealed class ChannelHandler : PacketHandlerBase
             _packets.UserShootAttack(_player.Character.Id, _player.Character.Level, attack, bulletItemId: 0, _player.X, _player.Y),
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
         await ApplyAttackDamageAsync(session, attack).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// For a skill-based attack: fills in the caster's learned level (so the field mirror renders
+    /// the skill correctly) and deducts the skill's MP cost from wz. Shared by the three attack
+    /// handlers; a plain (skill-less) attack is untouched.
+    /// </summary>
+    private async ValueTask PrepareSkillAttackAsync(MapleSession session, AttackInfo attack)
+    {
+        if (attack.SkillId <= 0 || _player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        int level = c.Skills.TryGetValue(attack.SkillId, out int lvl) && lvl > 0 ? lvl : 1;
+        attack.SkillLevel = level;
+
+        if (_skills.GetSkillEffect(attack.SkillId, level) is { MpCon: > 0 } effect && c.Mp >= effect.MpCon)
+        {
+            c.Mp = (short)(c.Mp - effect.MpCon);
+            _characters.Save(c);
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Mp)).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
