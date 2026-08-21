@@ -5791,7 +5791,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
                     + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /shop <id>, /storage, /save, /players, /notice <msg>, /pos, /help")
+                    + "/item <id> [qty], /shop <id>, /storage, /guildcreate <name>, /save, /players, /notice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 
