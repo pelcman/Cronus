@@ -275,6 +275,11 @@ Each milestone means adding one "working vertical slice".
       existing `Field.Drops` with `LP_DropEnterField` using `NO_ANIMATION` (already-on-ground, no fall;
       ports `ResCDropPool.EnterType`). End-to-end tested (late arrival sees a pre-existing drop). Also
       bumped the integration-test timeouts (5 s → 15 s) so the suite stays green under parallel load.
+- [x] **M27: Party HP bars on regen** — completes M24: the HP-regen tick now also pushes the
+      recovered HP to same-map party members, so a partner's bar ticks up as they rest, not only on
+      damage/revive. `PlayerRegenService` takes the shared `PartyRegistry` and calls
+      `PushHpToPartyAsync` whenever a regen changed HP. End-to-end tested (partner sees 380 → 390 after
+      a regen tick). The party HP-bar feature is now complete for all HP-change paths.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

@@ -86,7 +86,7 @@ var channelListener = new MapleListener(
 
 // Server ticks: respawn dead mobs, and regenerate idle players' HP/MP.
 var mobRespawn = new MobRespawnService(fields, new ChannelPackets(serverOps, config));
-var playerRegen = new PlayerRegenService(fields, new ChannelPackets(serverOps, config));
+var playerRegen = new PlayerRegenService(fields, new ChannelPackets(serverOps, config), parties);
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>

@@ -43,12 +43,14 @@ public sealed class PlayerRegenService
 {
     private readonly FieldRegistry _fields;
     private readonly ChannelPackets _packets;
+    private readonly PartyRegistry? _parties;
     private readonly TimeSpan _interval;
 
-    public PlayerRegenService(FieldRegistry fields, ChannelPackets packets, TimeSpan? interval = null)
+    public PlayerRegenService(FieldRegistry fields, ChannelPackets packets, PartyRegistry? parties = null, TimeSpan? interval = null)
     {
         _fields = fields;
         _packets = packets;
+        _parties = parties;
         _interval = interval ?? TimeSpan.FromSeconds(5);
     }
 
@@ -95,6 +97,41 @@ public sealed class PlayerRegenService
                 {
                     // the session is going away; its disconnect path will clean up
                 }
+
+                // Recovered HP should tick up on party members' health bars too.
+                if (changed.HasFlag(StatFlag.Hp))
+                {
+                    await PushHpToPartyAsync(player).ConfigureAwait(false);
+                }
+            }
+        }
+    }
+
+    /// <summary>Pushes a regenerating player's HP bar to their same-map party members (if any).</summary>
+    private async Task PushHpToPartyAsync(FieldPlayer player)
+    {
+        Party? party = _parties?.GetForCharacter(player.Character.Id);
+        if (party is null)
+        {
+            return;
+        }
+
+        Character c = player.Character;
+        byte[] hp = _packets.UserHP(c.Id, c.Hp, c.MaxHp);
+        foreach (FieldPlayer member in party.Members)
+        {
+            if (member.Character.Id == c.Id || member.Character.MapId != c.MapId)
+            {
+                continue;
+            }
+
+            try
+            {
+                await member.Session.SendAsync(hp).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // dead session cleans up on its own path
             }
         }
     }
