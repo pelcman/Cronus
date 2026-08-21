@@ -68,6 +68,7 @@ IMapProvider maps = CreateMapProvider();
 IMobProvider mobs = CreateMobProvider();
 var fields = new FieldRegistry(maps, mobs);
 ISkillProvider skills = CreateSkillProvider();
+IItemProvider items = CreateItemProvider();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
@@ -81,7 +82,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items),
         "channel"),
     keepAlive);
 
@@ -189,6 +190,17 @@ static ISkillProvider CreateSkillProvider()
     }
 
     return new WzSkillProvider(wzRoot);
+}
+
+static IItemProvider CreateItemProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
+    {
+        return new InMemoryItemProvider(Array.Empty<ConsumeSpec>()); // no wz → no item effects
+    }
+
+    return new WzItemProvider(wzRoot);
 }
 
 static NpcScriptEngine? CreateNpcScriptEngine()

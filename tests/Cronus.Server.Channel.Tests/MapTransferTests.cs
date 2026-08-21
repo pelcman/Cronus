@@ -224,7 +224,7 @@ public class MapTransferTests
         await using MapleSession s2 = clientSession;
 
         await client.EnteredGame.Task.WaitAsync(cts.Token);
-        await client.ChatAsync("!map 104040000");
+        await client.ChatAsync("/map 104040000");
 
         (int mapId, short _) = await client.MapChanged.Task.WaitAsync(cts.Token);
         Assert.Equal(104040000, mapId);

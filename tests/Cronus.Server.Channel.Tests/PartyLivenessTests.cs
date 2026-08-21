@@ -69,7 +69,7 @@ public class PartyLivenessTests
                     _warped = true;
                     var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChat), session.Config.PacketHeaderSize, session.Config.CodePage);
                     w.WriteInt(0);                       // timestamp
-                    w.WriteString("!map " + OtherMap);   // GM command
+                    w.WriteString("/map " + OtherMap);   // GM command
                     w.WriteBool(false);                  // onlyBalloon
                     await session.SendAsync(w.ToArray());
                 }

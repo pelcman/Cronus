@@ -769,6 +769,43 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_InventoryOperation</c> — live inventory changes (add / update-quantity / remove)
+    /// so the client updates without a relog (ports <c>ResCWvsContext.InventoryOperation</c>, JMS
+    /// v186). Add carries the full item body; update carries the new quantity; remove just the slot.
+    /// </summary>
+    public byte[] InventoryOperation(IReadOnlyList<InventoryChange> changes)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.InventoryOperation);
+        w.WriteByte(1);                        // unlock (m_bExclRequestSent)
+        w.WriteByte((byte)changes.Count);
+        // JMS >= 302 writes an extra byte here; v186 does not.
+
+        foreach (InventoryChange ch in changes)
+        {
+            w.WriteByte((byte)ch.Mode);
+            w.WriteByte((byte)ch.Tab);
+            switch (ch.Mode)
+            {
+                case InvMode.Add:
+                    w.WriteShort(ch.Position);
+                    Cronus.Server.Login.ItemEncoder.WriteItem(w, ch.Item!);
+                    break;
+                case InvMode.Update:
+                    w.WriteShort(ch.Position);
+                    w.WriteShort(ch.Quantity);
+                    break;
+                case InvMode.Remove:
+                    w.WriteShort(ch.Position);
+                    break;
+            }
+        }
+
+        // The equip-changed trailing byte only applies to equipped-slot moves/removes, which the
+        // add/consume paths here never produce.
+        return w.ToArray();
+    }
+
     /// <summary>User effect type: the level-up show (ports <c>OpsUserEffect.UserEffect_LevelUp</c>).</summary>
     public const byte UserEffectLevelUp = 0x00;
 

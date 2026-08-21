@@ -32,6 +32,7 @@ public static class ClientOpcode
     public const string UserHit = "CP_UserHit";
     public const string DropPickUpRequest = "CP_DropPickUpRequest";
     public const string UserDropMoneyRequest = "CP_UserDropMoneyRequest";
+    public const string UserStatChangeItemUseRequest = "CP_UserStatChangeItemUseRequest";
     public const string UserGivePopularityRequest = "CP_UserGivePopularityRequest";
     public const string UserCharacterInfoRequest = "CP_UserCharacterInfoRequest";
     public const string UserSkillUpRequest = "CP_UserSkillUpRequest";
@@ -89,6 +90,7 @@ public static class ServerOpcode
     public const string UserMagicAttack = "LP_UserMagicAttack";
     public const string ScriptMessage = "LP_ScriptMessage";
     public const string StatChanged = "LP_StatChanged";
+    public const string InventoryOperation = "LP_InventoryOperation";
     public const string ForcedStatReset = "LP_ForcedStatReset";
     public const string FuncKeyMappedInit = "LP_FuncKeyMappedInit";
     public const string MacroSysDataInit = "LP_MacroSysDataInit";

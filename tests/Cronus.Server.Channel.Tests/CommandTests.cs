@@ -85,7 +85,7 @@ public class CommandTests
                 _warped = true;
                 var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChat), session.Config.PacketHeaderSize, session.Config.CodePage);
                 w.WriteInt(0);                     // timestamp
-                w.WriteString("!warp " + _targetName);
+                w.WriteString("/warp " + _targetName);
                 w.WriteBool(false);                // onlyBalloon
                 await session.SendAsync(w.ToArray());
             }
@@ -191,7 +191,7 @@ public class CommandTests
 
         using var cts = new CancellationTokenSource(Timeout);
 
-        var client = new Commander(hero.Id, "!job 100", statBit: 0x20); // StatFlag.Job
+        var client = new Commander(hero.Id, "/job 100", statBit: 0x20); // StatFlag.Job
         var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
         var c2s = new Pipe();
         var s2c = new Pipe();

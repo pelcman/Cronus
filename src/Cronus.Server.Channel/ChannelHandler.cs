@@ -31,6 +31,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly FieldRegistry _fields;
     private readonly IMapProvider _maps;
     private readonly ISkillProvider _skills;
+    private readonly IItemProvider _items;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -49,6 +50,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opUserHit;
     private readonly int _opDropPickUp;
     private readonly int _opDropMoney;
+    private readonly int _opUseItem;
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
@@ -82,13 +84,15 @@ public sealed class ChannelHandler : PacketHandlerBase
         int channelId = 0,
         MessengerRegistry? messengers = null,
         PartyRegistry? parties = null,
-        PortalScriptEngine? portalScripts = null)
+        PortalScriptEngine? portalScripts = null,
+        IItemProvider? items = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
         _fields = fields ?? new FieldRegistry();
         _maps = maps ?? new InMemoryMapProvider(Array.Empty<MapData>());
         _skills = skills ?? NullSkillProvider.Instance;
+        _items = items ?? new InMemoryItemProvider(Array.Empty<ConsumeSpec>());
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -107,6 +111,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opUserHit = clientOpcodes.Get(ClientOpcode.UserHit);
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
+        _opUseItem = clientOpcodes.Get(ClientOpcode.UserStatChangeItemUseRequest);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
@@ -182,6 +187,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opDropMoney)
         {
             await HandleDropMoneyAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opUseItem)
+        {
+            await HandleUseItemAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opGivePopularity)
         {
@@ -765,6 +774,68 @@ public sealed class ChannelHandler : PacketHandlerBase
         await _field.BroadcastAsync(_packets.DropEnterFieldMeso(drop)).ConfigureAwait(false);
     }
 
+    /// <summary>The USE inventory tab number.</summary>
+    private const int UseTab = 2;
+
+    /// <summary>
+    /// Handles <c>CP_UserStatChangeItemUseRequest</c> — using a recovery consumable (ports
+    /// <c>ReqCUser.OnUserStatChangeItemUseRequest</c> + <c>MapleCharacter.useItem</c>). Validates the
+    /// slot, applies the item's HP/MP recovery (flat and %), decrements the stack, and pushes the
+    /// inventory change plus the stat change so the icon and bars update live.
+    /// </summary>
+    private async ValueTask HandleUseItemAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        packet.ReadInt();                 // timestamp
+        short slot = packet.ReadShort();
+        int itemId = packet.ReadInt();
+
+        Character c = _player.Character;
+        InventoryItem? item = Inventory.ItemAt(c, UseTab, slot);
+        if (item is null || item.ItemId != itemId || item.Quantity < 1)
+        {
+            return; // desync / already gone
+        }
+
+        // Apply the recovery effect from wz (flat + percent of max), clamped to the max.
+        ConsumeSpec? spec = _items.GetConsume(itemId);
+        StatFlag statChange = 0;
+        if (spec is not null)
+        {
+            int hpGain = spec.Hp + (spec.HpRate > 0 ? c.MaxHp * spec.HpRate / 100 : 0);
+            int mpGain = spec.Mp + (spec.MpRate > 0 ? c.MaxMp * spec.MpRate / 100 : 0);
+            if (hpGain > 0 && c.Hp < c.MaxHp)
+            {
+                c.Hp = (short)Math.Min(c.MaxHp, c.Hp + hpGain);
+                statChange |= StatFlag.Hp;
+            }
+
+            if (mpGain > 0 && c.Mp < c.MaxMp)
+            {
+                c.Mp = (short)Math.Min(c.MaxMp, c.Mp + mpGain);
+                statChange |= StatFlag.Mp;
+            }
+        }
+
+        InventoryChange? change = Inventory.RemoveFromSlot(c, UseTab, slot, 1);
+        _characters.Save(c);
+
+        if (change is { } ch)
+        {
+            await session.SendAsync(_packets.InventoryOperation(new[] { ch })).ConfigureAwait(false);
+        }
+
+        if (statChange != 0)
+        {
+            await session.SendAsync(_packets.StatChanged(c, statChange)).ConfigureAwait(false);
+            await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+        }
+    }
+
     private const int MinFameLevel = 15;
     private const int FameCap = 30000;
 
@@ -943,8 +1014,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         string message = packet.ReadString();
         bool onlyBalloon = packet.Remaining > 0 && packet.ReadBool();
 
-        // Commands (prefix '!') are handled server-side and not broadcast.
-        if (message.StartsWith('!'))
+        // Commands (prefix '/') are handled server-side and not broadcast.
+        if (message.StartsWith('/'))
         {
             await HandleCommandAsync(session, message[1..]).ConfigureAwait(false);
             return;
@@ -1423,18 +1494,15 @@ public sealed class ChannelHandler : PacketHandlerBase
             {
                 int qty = parts.Length >= 3 && int.TryParse(parts[2], out int q) ? q : 1;
                 Character ic = _player!.Character;
-                int type = Cronus.Server.Login.ItemEncoder.ItemType(itemId);
-                short slot = NextFreeInventorySlot(ic, type);
-                ic.EquippedItems.Add(new InventoryItem
-                {
-                    ItemId = itemId,
-                    Position = slot,
-                    Quantity = (short)Math.Clamp(qty, 1, short.MaxValue),
-                    CharacterId = ic.Id,
-                });
+                int slotMax = _items.GetConsume(itemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+                List<InventoryChange> changes = Inventory.Add(ic, itemId, qty, slotMax);
                 _characters.Save(ic);
-                await ReplyAsync(session, $"added {itemId} x{qty} to tab {type} slot {slot} — relog to see it")
-                    .ConfigureAwait(false);
+                if (changes.Count > 0)
+                {
+                    await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+                }
+
+                await ReplyAsync(session, $"added {itemId} x{qty}").ConfigureAwait(false);
                 break;
             }
 
@@ -1474,8 +1542,8 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
 
             case "help":
-                await ReplyAsync(session, "commands: !map <id>, !warp <name>, !meso <n>, !heal, !job <n>, "
-                    + "!ap <n>, !sp <n>, !fame <n>, !item <id> [qty], !save, !players, !notice <msg>, !pos, !help")
+                await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, "
+                    + "/ap <n>, /sp <n>, /fame <n>, /item <id> [qty], /save, /players, /notice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 
@@ -1483,23 +1551,6 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await ReplyAsync(session, $"unknown command: {parts[0]}").ConfigureAwait(false);
                 break;
         }
-    }
-
-    /// <summary>Lowest unused positive slot for an item tab (by id-type), for the <c>!item</c> command.</summary>
-    private static short NextFreeInventorySlot(Character c, int type)
-    {
-        var used = c.EquippedItems
-            .Where(i => i.Position > 0 && Cronus.Server.Login.ItemEncoder.ItemType(i.ItemId) == type)
-            .Select(i => (int)i.Position)
-            .ToHashSet();
-
-        short slot = 1;
-        while (used.Contains(slot))
-        {
-            slot++;
-        }
-
-        return slot;
     }
 
     /// <summary>Applies a stat mutation to the caller, persists it, and pushes the changed stat.</summary>

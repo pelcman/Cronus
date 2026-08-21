@@ -102,7 +102,7 @@ public class StatChangedTests
             {
                 var w = New(session, ClientOpcode.UserChat);
                 w.WriteInt(0);
-                w.WriteString("!meso 5000");
+                w.WriteString("/meso 5000");
                 w.WriteByte(0);
                 await session.SendAsync(w.ToArray());
             }

@@ -1,0 +1,139 @@
+using Cronus.Domain;
+using Cronus.Server.Login;
+
+namespace Cronus.Server.Channel;
+
+/// <summary>An <c>LP_InventoryOperation</c> mode (ports the InvOp modes).</summary>
+public enum InvMode : byte
+{
+    /// <summary>A new item appeared in a slot (carries the full item).</summary>
+    Add = 0,
+
+    /// <summary>An existing slot's quantity changed.</summary>
+    Update = 1,
+
+    /// <summary>A slot was emptied.</summary>
+    Remove = 3,
+}
+
+/// <summary>One inventory change to relay to the client via <c>LP_InventoryOperation</c>.</summary>
+public readonly record struct InventoryChange(InvMode Mode, int Tab, short Position, InventoryItem? Item, short Quantity);
+
+/// <summary>
+/// Inventory manipulation on a <see cref="Character"/>'s item list (ports the essentials of
+/// <c>MapleInventoryManipulator</c>): stacking add and quantity-removing, returning the changes so
+/// the caller can push <c>LP_InventoryOperation</c> and persist. Positive positions are inventory
+/// slots; the tab is chosen by the item id's type digit.
+/// </summary>
+public static class Inventory
+{
+    /// <summary>Fallback stack limit when an item has no wz <c>slotMax</c>.</summary>
+    public const int DefaultSlotMax = 100;
+
+    /// <summary>Inventory tab (1 equip, 2 use, 3 setup, 4 etc, 5 cash) for an item id.</summary>
+    public static int Tab(int itemId) => ItemEncoder.ItemType(itemId);
+
+    /// <summary>The item in a tab's slot, or null.</summary>
+    public static InventoryItem? ItemAt(Character c, int tab, short position)
+        => c.EquippedItems.FirstOrDefault(i => i.Position == position && Tab(i.ItemId) == tab);
+
+    /// <summary>
+    /// Adds <paramref name="quantity"/> of an item, stacking onto existing non-full slots first (for
+    /// bundle items), then filling new slots up to <paramref name="slotMax"/>. Equips take one slot
+    /// each. Returns the changes (adds and updates) to relay and persist.
+    /// </summary>
+    public static List<InventoryChange> Add(Character c, int itemId, int quantity, int slotMax)
+    {
+        var changes = new List<InventoryChange>();
+        if (quantity <= 0)
+        {
+            return changes;
+        }
+
+        int tab = Tab(itemId);
+        int max = Math.Max(1, slotMax);
+
+        if (tab == 1) // equips don't stack — one slot per item
+        {
+            for (int i = 0; i < quantity; i++)
+            {
+                short slot = NextFreeSlot(c, tab);
+                var item = new InventoryItem { ItemId = itemId, Position = slot, Quantity = 1, CharacterId = c.Id };
+                c.EquippedItems.Add(item);
+                changes.Add(new InventoryChange(InvMode.Add, tab, slot, item, 1));
+            }
+
+            return changes;
+        }
+
+        int remaining = quantity;
+
+        // Top up existing stacks of the same item.
+        foreach (InventoryItem existing in c.EquippedItems
+                     .Where(i => i.Position > 0 && i.ItemId == itemId && i.Quantity < max)
+                     .OrderBy(i => i.Position)
+                     .ToList())
+        {
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            int add = Math.Min(remaining, max - existing.Quantity);
+            existing.Quantity += (short)add;
+            remaining -= add;
+            changes.Add(new InventoryChange(InvMode.Update, tab, existing.Position, existing, existing.Quantity));
+        }
+
+        // New stacks for whatever is left.
+        while (remaining > 0)
+        {
+            short slot = NextFreeSlot(c, tab);
+            int add = Math.Min(remaining, max);
+            var item = new InventoryItem { ItemId = itemId, Position = slot, Quantity = (short)add, CharacterId = c.Id };
+            c.EquippedItems.Add(item);
+            remaining -= add;
+            changes.Add(new InventoryChange(InvMode.Add, tab, slot, item, (short)add));
+        }
+
+        return changes;
+    }
+
+    /// <summary>
+    /// Removes <paramref name="quantity"/> from a specific slot (e.g. consuming a potion). Returns
+    /// the change (an update, or a remove when the stack empties), or null if the slot is empty.
+    /// </summary>
+    public static InventoryChange? RemoveFromSlot(Character c, int tab, short position, int quantity)
+    {
+        InventoryItem? item = ItemAt(c, tab, position);
+        if (item is null || quantity <= 0)
+        {
+            return null;
+        }
+
+        if (item.Quantity <= quantity)
+        {
+            c.EquippedItems.Remove(item);
+            return new InventoryChange(InvMode.Remove, tab, position, null, 0);
+        }
+
+        item.Quantity -= (short)quantity;
+        return new InventoryChange(InvMode.Update, tab, position, item, item.Quantity);
+    }
+
+    private static short NextFreeSlot(Character c, int tab)
+    {
+        var used = c.EquippedItems
+            .Where(i => i.Position > 0 && Tab(i.ItemId) == tab)
+            .Select(i => (int)i.Position)
+            .ToHashSet();
+
+        short slot = 1;
+        while (used.Contains(slot))
+        {
+            slot++;
+        }
+
+        return slot;
+    }
+}
