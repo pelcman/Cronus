@@ -13,6 +13,9 @@ public interface ICharacterRepository
     /// <summary>True if the name is already taken (case-insensitive).</summary>
     bool NameExists(string name);
 
+    /// <summary>A character by name (case-insensitive), online or not; null when unknown.</summary>
+    Character? FindByName(string name);
+
     Character Create(Character character);
 
     /// <summary>Persists changes to an existing character.</summary>
@@ -39,6 +42,9 @@ public sealed class InMemoryCharacterRepository : ICharacterRepository
 
     public bool NameExists(string name)
         => _characters.Values.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    public Character? FindByName(string name)
+        => _characters.Values.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
 
     public Character Create(Character character)
     {

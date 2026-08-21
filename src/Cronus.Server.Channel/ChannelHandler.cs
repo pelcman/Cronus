@@ -447,6 +447,15 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         await SpawnNpcsAsync(session, field).ConfigureAwait(false);
         await NotifyBuddiesOfPresenceAsync(character.Id, channel: 0).ConfigureAwait(false); // "came online"
+
+        // Friend requests that arrived while offline pop up now.
+        foreach ((int fromId, BuddyEntry entry) in character.Buddies.ToList())
+        {
+            if (entry.Hidden && _characters.Find(fromId) is { } from)
+            {
+                await session.SendAsync(_packets.BuddyInvite(fromId, from.Name, from.Level, from.Job)).ConfigureAwait(false);
+            }
+        }
     }
 
     private async ValueTask SpawnNpcsAsync(MapleSession session, Field field)
@@ -2461,13 +2470,13 @@ public sealed class ChannelHandler : PacketHandlerBase
                 }
 
                 FieldPlayer? target = _fields.FindPlayerByName(name);
-                if (target is null || target.Character.Id == c.Id)
+                Character? t = target?.Character ?? _characters.FindByName(name);
+                if (t is null || t.Id == c.Id)
                 {
                     await session.SendAsync(_packets.BuddyMessage(ChannelPackets.FriendSetUnknownUser)).ConfigureAwait(false);
                     return;
                 }
 
-                Character t = target.Character;
                 if (c.Buddies.ContainsKey(t.Id))
                 {
                     await session.SendAsync(_packets.BuddyMessage(ChannelPackets.FriendSetAlready)).ConfigureAwait(false);
@@ -2480,11 +2489,15 @@ public sealed class ChannelHandler : PacketHandlerBase
                     return;
                 }
 
-                // The target gets a hidden pending entry + the invite popup; the asker's entry is live.
+                // The target gets a hidden pending entry; when online they also get the invite popup
+                // now (an offline target sees it on their next login).
                 t.Buddies[c.Id] = new BuddyEntry(c.Name, ChannelPackets.DefaultBuddyTag, Hidden: true);
                 _characters.Save(t);
-                await TrySendAsync(target, BuildBuddyList(t, ChannelPackets.FriendSetDone)).ConfigureAwait(false);
-                await TrySendAsync(target, _packets.BuddyInvite(c.Id, c.Name, c.Level, c.Job)).ConfigureAwait(false);
+                if (target is not null)
+                {
+                    await TrySendAsync(target, BuildBuddyList(t, ChannelPackets.FriendSetDone)).ConfigureAwait(false);
+                    await TrySendAsync(target, _packets.BuddyInvite(c.Id, c.Name, c.Level, c.Job)).ConfigureAwait(false);
+                }
 
                 c.Buddies[t.Id] = new BuddyEntry(t.Name, tag, Hidden: false);
                 _characters.Save(c);

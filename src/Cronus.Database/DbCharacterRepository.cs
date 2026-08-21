@@ -39,6 +39,15 @@ public sealed class DbCharacterRepository : ICharacterRepository
         return db.Characters.Any(c => c.Name.ToLower() == lowered);
     }
 
+    public Character? FindByName(string name)
+    {
+        using CronusDbContext db = _contextFactory();
+        string lowered = name.ToLowerInvariant();
+        return db.Characters
+            .Include(c => c.EquippedItems)
+            .FirstOrDefault(c => c.Name.ToLower() == lowered);
+    }
+
     public Character Create(Character character)
     {
         using CronusDbContext db = _contextFactory();

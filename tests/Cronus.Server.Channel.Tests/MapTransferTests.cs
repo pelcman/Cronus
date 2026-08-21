@@ -174,6 +174,8 @@ public class MapTransferTests
         public IReadOnlyList<Character> ListByAccount(int accountId, int worldId) => _inner.ListByAccount(accountId, worldId);
         public Character? Find(int characterId) => _inner.Find(characterId);
         public bool NameExists(string name) => _inner.NameExists(name);
+
+        public Character? FindByName(string name) => _inner.FindByName(name);
         public Character Create(Character character) => _inner.Create(character);
         public bool Delete(int characterId) => _inner.Delete(characterId);
         public void Save(Character character) { SaveCount++; _inner.Save(character); }
