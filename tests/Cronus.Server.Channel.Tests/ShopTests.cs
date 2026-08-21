@@ -278,4 +278,121 @@ public class ShopTests
         InventoryItem potion = Assert.Single(hero.EquippedItems, i => i.ItemId == 2000000);
         Assert.Equal(3, potion.Quantity);
     }
+
+    /// <summary>Buys one of a token-priced entry (paying with an ETC item, not meso).</summary>
+    private sealed class TokenShopper : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opOpenShop = ServerOps.Get(ServerOpcode.OpenShopDlg);
+        private readonly int _opShopResult = ServerOps.Get(ServerOpcode.ShopResult);
+        private bool _openedRequested;
+
+        public TokenShopper(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource<byte> BuyResult { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_openedRequested)
+            {
+                _openedRequested = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChat), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);
+                w.WriteString("/shop 100");
+                w.WriteByte(0);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opOpenShop)
+            {
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserShopRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteByte(0);        // ShopReq_Buy
+                w.WriteShort(0);
+                w.WriteInt(2000000);
+                w.WriteShort(1);       // token entries allow one per purchase
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opShopResult)
+            {
+                BuyResult.TrySetResult(p.ReadByte());
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Buy_TokenEntry_ConsumesTokensInsteadOfMeso()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Buyer", MapId = 100000000, Meso = 0 });
+        hero.EquippedItems.Add(new InventoryItem { ItemId = 4000313, Position = 1, Quantity = 8, CharacterId = hero.Id }); // tokens
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var shops = new InMemoryShopProvider(new[]
+        {
+            // Costs 5 tokens (item 4000313) and no meso.
+            new Shop { ShopId = 100, NpcId = 9000000, Items = new[] { new ShopItem(2000000, 0, 1, 4000313, 5) } },
+        });
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var client = new TokenShopper(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, shops: shops);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        byte result = await client.BuyResult.Task.WaitAsync(cts.Token);
+
+        Assert.Equal((byte)ShopResultCode.BuySuccess, result);
+        Assert.Equal(3, Assert.Single(hero.EquippedItems, i => i.ItemId == 4000313).Quantity); // 8 - 5
+        Assert.Equal(1, Assert.Single(hero.EquippedItems, i => i.ItemId == 2000000).Quantity);
+        Assert.Equal(0, hero.Meso);
+    }
+
+    [Fact]
+    public async Task Buy_TokenEntry_WithoutEnoughTokens_Bounces()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Buyer", MapId = 100000000 });
+        hero.EquippedItems.Add(new InventoryItem { ItemId = 4000313, Position = 1, Quantity = 4, CharacterId = hero.Id });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var shops = new InMemoryShopProvider(new[]
+        {
+            new Shop { ShopId = 100, NpcId = 9000000, Items = new[] { new ShopItem(2000000, 0, 1, 4000313, 5) } },
+        });
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var client = new TokenShopper(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, shops: shops);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        byte result = await client.BuyResult.Task.WaitAsync(cts.Token);
+
+        Assert.Equal((byte)ShopResultCode.BuyUnknown, result);
+        Assert.Equal(4, Assert.Single(hero.EquippedItems, i => i.ItemId == 4000313).Quantity); // untouched
+        Assert.DoesNotContain(hero.EquippedItems, i => i.ItemId == 2000000);
+    }
 }

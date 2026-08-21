@@ -1719,13 +1719,6 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        // Token-currency (second-currency) shops aren't modelled yet.
-        if (entry.ReqItem > 0)
-        {
-            await session.SendAsync(_packets.ShopResult(ShopResultCode.BuyUnknown)).ConfigureAwait(false);
-            return;
-        }
-
         Character c = _player!.Character;
         long price = (long)entry.Price * quantity;
         if (entry.Price < 0 || c.Meso < price)
@@ -1734,11 +1727,30 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
+        // Token-currency entries: pay ReqItemQ of the ReqItem too (ports MapleShop.buy — one
+        // bundle per purchase, and the meso price still applies on top).
+        List<InventoryChange>? tokenChanges = null;
+        if (entry.ReqItem > 0)
+        {
+            if (quantity >= 2 || CountInventoryItem(c, entry.ReqItem) < entry.ReqItemQ)
+            {
+                await session.SendAsync(_packets.ShopResult(ShopResultCode.BuyUnknown)).ConfigureAwait(false);
+                return;
+            }
+
+            tokenChanges = RemoveInventoryQuantity(c, entry.ReqItem, entry.ReqItemQ);
+        }
+
         c.Meso -= (int)price;
         int slotMax = _items.GetConsume(itemId)?.SlotMax ?? Inventory.DefaultSlotMax;
         List<InventoryChange> changes = Inventory.Add(c, itemId, quantity, slotMax);
         PopulateEquipStats(changes); // a bought equip gets its wz base stats
         _characters.Save(c);
+
+        if (tokenChanges is { Count: > 0 })
+        {
+            await session.SendAsync(_packets.InventoryOperation(tokenChanges)).ConfigureAwait(false);
+        }
 
         if (changes.Count > 0)
         {
