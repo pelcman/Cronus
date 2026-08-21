@@ -3610,10 +3610,20 @@ public sealed class ChannelHandler : PacketHandlerBase
         PlayerShopItem listing = shop.Items[index];
         long units = (long)quantity * listing.Item.Quantity;
         long cost = (long)listing.Price * quantity;
-        if (listing.Bundles < quantity || units <= 0 || units > 32767 || cost <= 0 || cost > int.MaxValue
-            || c.Meso < cost)
+        if (units <= 0 || units > 32767 || cost <= 0 || cost > int.MaxValue || c.Meso < cost)
         {
             return;
+        }
+
+        // Claim the bundles under the shop lock so two visitors can't oversell a listing.
+        lock (shop.Items)
+        {
+            if (listing.Bundles < quantity)
+            {
+                return;
+            }
+
+            listing.Bundles -= quantity;
         }
 
         Character owner = shop.Owner.Character;
@@ -3630,7 +3640,6 @@ public sealed class ChannelHandler : PacketHandlerBase
             changes = Inventory.Add(c, listing.Item.ItemId, (int)units, slotMax);
         }
 
-        listing.Bundles -= quantity;
         c.Meso -= (int)cost;
         owner.Meso = (int)Math.Clamp((long)owner.Meso + cost, 0, int.MaxValue);
         _characters.Save(c);
@@ -3790,10 +3799,20 @@ public sealed class ChannelHandler : PacketHandlerBase
         PlayerShopItem listing = merchant.Items[index];
         long units = (long)quantity * listing.Item.Quantity;
         long cost = (long)listing.Price * quantity;
-        if (listing.Bundles < quantity || units <= 0 || units > 32767 || cost <= 0 || cost > int.MaxValue
-            || c.Meso < cost)
+        if (units <= 0 || units > 32767 || cost <= 0 || cost > int.MaxValue || c.Meso < cost)
         {
             return;
+        }
+
+        // Claim the bundles under the merchant lock so two shoppers can't oversell a listing.
+        lock (merchant.Items)
+        {
+            if (listing.Bundles < quantity)
+            {
+                return;
+            }
+
+            listing.Bundles -= quantity;
         }
 
         List<InventoryChange> changes;
@@ -3807,7 +3826,6 @@ public sealed class ChannelHandler : PacketHandlerBase
             changes = Inventory.Add(c, listing.Item.ItemId, (int)units, slotMax);
         }
 
-        listing.Bundles -= quantity;
         c.Meso -= (int)cost;
         merchant.Sold.Add(new SoldRecord(listing.Item.ItemId, quantity, (int)cost, c.Name));
         long banked = merchant.Meso + cost;
@@ -4635,13 +4653,19 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        if (data.IsTerminal(reactor.State))
+        bool broke;
+        lock (reactor)
         {
-            return; // already spent
+            if (reactor.IsDead || data.IsTerminal(reactor.State))
+            {
+                return; // already spent (or a simultaneous hit beat us to it)
+            }
+
+            reactor.State = (byte)data.NextState(reactor.State);
+            broke = data.IsTerminal(reactor.State);
         }
 
-        reactor.State = (byte)data.NextState(reactor.State);
-        if (data.IsTerminal(reactor.State))
+        if (broke)
         {
             // Broken: show the final state, then remove it and schedule the respawn.
             reactor.Break(Environment.TickCount64);
