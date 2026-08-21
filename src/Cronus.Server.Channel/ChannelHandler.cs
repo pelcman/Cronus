@@ -41,6 +41,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opMeleeAttack;
     private readonly int _opMagicAttack;
     private readonly int _opShootAttack;
+    private readonly int _opUserHit;
     private readonly int _opDropPickUp;
     private readonly int _opSkillUp;
     private readonly int _opMobMove;
@@ -78,6 +79,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opMeleeAttack = clientOpcodes.Get(ClientOpcode.UserMeleeAttack);
         _opMagicAttack = clientOpcodes.Get(ClientOpcode.UserMagicAttack);
         _opShootAttack = clientOpcodes.Get(ClientOpcode.UserShootAttack);
+        _opUserHit = clientOpcodes.Get(ClientOpcode.UserHit);
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
         _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
@@ -114,6 +116,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opShootAttack)
         {
             await HandleShootAttackAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opUserHit)
+        {
+            await HandleUserHitAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opDropPickUp)
         {
@@ -444,6 +450,34 @@ public sealed class ChannelHandler : PacketHandlerBase
         await _field.BroadcastAsync(
             _packets.MobMove(mob.ObjectId, nextAttackPossible, left, mobSkill, movePath),
             exceptCharacterId: characterId).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserHit</c> — the client reports the damage its player took from a mob.
+    /// Applies the HP loss and pushes <c>LP_StatChanged</c>. HP is floored at 1 for now (death /
+    /// revive is a follow-up). Damage is client-reported, the MapleStory norm (see AGENTS.md).
+    /// </summary>
+    private async ValueTask HandleUserHitAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_UserHit prefix: [time:4][nAttackIdx:1][nMagicElemAttr:1][nDamage:4] ...
+        packet.ReadInt();   // time
+        packet.ReadByte();  // nAttackIdx
+        packet.ReadByte();  // nMagicElemAttr
+        int damage = packet.ReadInt();
+        if (damage <= 0)
+        {
+            return; // a miss / no damage
+        }
+
+        Character c = _player.Character;
+        _player.LastActiveTick = Environment.TickCount64; // taking a hit counts as activity
+        c.Hp = (short)Math.Max(1, c.Hp - damage);          // floor at 1 HP for now (no death yet)
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Hp)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleSkillUpAsync(MapleSession session, PacketReader packet)
