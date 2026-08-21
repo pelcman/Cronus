@@ -165,8 +165,18 @@ Each milestone means adding one "working vertical slice".
       (LP_MobChangeController on entry); CP_MobMove is acked (LP_MobCtrlAck) and relayed
       (LP_MobMove); control hands off to a remaining player on disconnect/transfer and clears
       on death; server tracks mob position from the path.
-- [ ] **M10: Combat depth & content** — item drops (wz drop tables), magic/ranged attacks,
-      quest/skill DB persistence, wz skill data. **← current**
+- [ ] **M10: Combat depth & content** — item drops (wz drop tables), wz skill data. **← current**
+  - [x] **M10a: quest/skill DB persistence** — `Skills`/`StartedQuests`/`CompletedQuests` now
+        persist as JSON columns on the `characters` row (EF value converter + comparer), so
+        progression survives a restart. Verified over SQLite (which, unlike the InMemory
+        provider, applies the converters). *Note:* schema is still `EnsureCreated`, so an
+        existing DB needs a recreate (or a real migration) to gain the new columns.
+  - [x] **M10b: magic + ranged attacks** — `AttackParser` handles `CP_UserMagicAttack` (v186:
+        byte-identical to melee) and `CP_UserShootAttack` (melee + bullet slot / cash-bullet /
+        shoot-range fields), grounded in `ParseCUser_Attack`; a unified attack-mirror encoder
+        emits `LP_UserMeleeAttack`/`Magic`/`Shoot`; the three handlers share damage application.
+        Follow-ups: resolve+consume the bullet item (no USE-inventory model yet, sent as 0) and
+        render skill effects (skill level sent as 0).
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

@@ -287,24 +287,40 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
-    /// <summary>
-    /// Builds <c>LP_UserMeleeAttack</c> mirroring a player's attack to onlookers (ports
-    /// <c>ResCUserRemote.UserAttack</c>, JMS v186 melee path): attacker, hit key, level, and per-
-    /// target damages with a critical flag byte each.
-    /// </summary>
+    /// <summary>Mirrors a melee attack to onlookers (<c>LP_UserMeleeAttack</c>).</summary>
     public byte[] UserMeleeAttack(int characterId, int level, AttackInfo attack)
+        => UserAttack(ServerOpcode.UserMeleeAttack, characterId, level, attack, bulletItemId: 0, x: 0, y: 0, isShoot: false);
+
+    /// <summary>Mirrors a magic attack to onlookers (<c>LP_UserMagicAttack</c>).</summary>
+    public byte[] UserMagicAttack(int characterId, int level, AttackInfo attack)
+        => UserAttack(ServerOpcode.UserMagicAttack, characterId, level, attack, bulletItemId: 0, x: 0, y: 0, isShoot: false);
+
+    /// <summary>
+    /// Mirrors a ranged attack to onlookers (<c>LP_UserShootAttack</c>): as melee, but the bullet
+    /// item id is sent and the shooter's position is appended.
+    /// </summary>
+    public byte[] UserShootAttack(int characterId, int level, AttackInfo attack, int bulletItemId, short x, short y)
+        => UserAttack(ServerOpcode.UserShootAttack, characterId, level, attack, bulletItemId, x, y, isShoot: true);
+
+    /// <summary>
+    /// Builds an attack-mirror packet (ports <c>ResCUserRemote.UserAttack</c>, JMS v186 pre-BB):
+    /// attacker, hit key, level, skill level (0 = basic — no skill id), buff/action/speed, bullet
+    /// item id, then per-target damages with a critical-flag byte each; ranged appends the
+    /// shooter's position. All three attack kinds share this layout at v186.
+    /// </summary>
+    private byte[] UserAttack(string opcode, int characterId, int level, AttackInfo attack, int bulletItemId, short x, short y, bool isShoot)
     {
-        PacketWriter w = NewPacket(ServerOpcode.UserMeleeAttack);
+        PacketWriter w = NewPacket(opcode);
         w.WriteInt(characterId);
         w.WriteByte((byte)attack.HitKey);
         w.WriteByte((byte)level);            // m_nLevel (JMS >= 164)
         w.WriteByte((byte)attack.SkillLevel);
-        // skillLevel == 0 → no skill id; no PostBB sniper passive.
+        // skillLevel == 0 → no skill id (basic); skill-effect rendering is a follow-up.
         w.WriteByte((byte)attack.BuffKey);
         w.WriteShort((short)attack.AttackActionKey); // JMS > 147
         w.WriteByte((byte)attack.AttackSpeed);
         w.WriteByte(0);                      // nMastery (not modeled)
-        w.WriteInt(0);                       // nBulletItemID (melee)
+        w.WriteInt(bulletItemId);            // nBulletItemID (0 for melee/magic)
 
         foreach (AttackTarget target in attack.Targets)
         {
@@ -315,6 +331,12 @@ public sealed class ChannelPackets
                 w.WriteByte((damage & unchecked((int)0x80000000)) != 0 ? (byte)1 : (byte)0); // critical
                 w.WriteInt(damage & 0x7FFFFFFF);
             }
+        }
+
+        if (isShoot)
+        {
+            w.WriteShort(x); // shooter position (used by the client to draw the projectile)
+            w.WriteShort(y);
         }
 
         return w.ToArray();

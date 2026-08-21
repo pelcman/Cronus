@@ -38,6 +38,8 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opUserMove;
     private readonly int _opUserChat;
     private readonly int _opMeleeAttack;
+    private readonly int _opMagicAttack;
+    private readonly int _opShootAttack;
     private readonly int _opDropPickUp;
     private readonly int _opSkillUp;
     private readonly int _opMobMove;
@@ -71,6 +73,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
         _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
         _opMeleeAttack = clientOpcodes.Get(ClientOpcode.UserMeleeAttack);
+        _opMagicAttack = clientOpcodes.Get(ClientOpcode.UserMagicAttack);
+        _opShootAttack = clientOpcodes.Get(ClientOpcode.UserShootAttack);
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
         _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
@@ -99,6 +103,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opMeleeAttack)
         {
             await HandleMeleeAttackAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opMagicAttack)
+        {
+            await HandleMagicAttackAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opShootAttack)
+        {
+            await HandleShootAttackAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opDropPickUp)
         {
@@ -286,15 +298,54 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         AttackInfo attack = AttackParser.ParseMelee(packet);
-
-        // Show the swing + damage numbers to everyone else in the field.
         await _field.BroadcastAsync(
             _packets.UserMeleeAttack(_player.Character.Id, _player.Character.Level, attack),
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+        await ApplyAttackDamageAsync(session, attack).ConfigureAwait(false);
+    }
 
+    private async ValueTask HandleMagicAttackAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        AttackInfo attack = AttackParser.ParseMagic(packet); // v186: same layout as melee
+        await _field.BroadcastAsync(
+            _packets.UserMagicAttack(_player.Character.Id, _player.Character.Level, attack),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+        await ApplyAttackDamageAsync(session, attack).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleShootAttackAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        AttackInfo attack = AttackParser.ParseShoot(packet);
+
+        // The bullet item id isn't resolved yet (no USE-inventory model) — send 0; the shot still
+        // fires and applies damage, it just may not render a specific arrow. Follow-up: resolve
+        // the bullet from the shooter's inventory slot and consume it.
+        await _field.BroadcastAsync(
+            _packets.UserShootAttack(_player.Character.Id, _player.Character.Level, attack, bulletItemId: 0, _player.X, _player.Y),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+        await ApplyAttackDamageAsync(session, attack).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies an attack's per-target damage to the mobs in the field: hurts each live target,
+    /// and on death releases control, announces the leave, grants exp, and drops meso. Shared by
+    /// the melee / magic / ranged handlers. Damage is currently client-reported (see AGENTS.md).
+    /// </summary>
+    private async ValueTask ApplyAttackDamageAsync(MapleSession session, AttackInfo attack)
+    {
         foreach (AttackTarget target in attack.Targets)
         {
-            FieldMob? mob = _field.FindMob(target.MobObjectId);
+            FieldMob? mob = _field!.FindMob(target.MobObjectId);
             if (mob is null || mob.IsDead)
             {
                 continue;

@@ -60,6 +60,33 @@ the thing that hurts most in a rewrite — subtle behavioral drift.
    `System.IO.Pipelines`. Use the DI / structured-logging / EF Core stack that
    Maple2 (MS2Community) established as a template.
 
+### Networking design reference (conceptual)
+
+We do **not** use Valve's SDK, but the
+[Source Multiplayer Networking](https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking)
+model is a useful lens for reasoning about Cronus' networking and game loop. Map the concepts
+onto our slower, event-driven 2D MMORPG (not a fast FPS):
+
+- **Server authority (most applicable).** The server is the single source of truth: it owns
+  world state, validates combat, and grants exp/drops. Cronus should trend *more* authoritative
+  over time — today it trusts client-reported damage (M9b) and client movement, which is the
+  MapleStory norm but a known soft spot to tighten (validate damage vs. mob/skill data).
+- **Tick / fixed simulation step.** Server-owned periodic work — mob AI/respawn, buff and drop
+  expiry, spawn timers — belongs on a server tick, decoupled from client packets.
+- **Input commands.** Client → server packets are *commands* the server processes; never treat
+  them as trusted state.
+- **"Send only what changed" (delta idea).** MapleStory is event-based (spawn/leave/move/stat
+  packets) rather than full-world snapshots, but the principle — push minimal per-change updates
+  to only the clients that need them (same field) — is exactly how `Field`/broadcast works.
+- **Client prediction / interpolation (adapted).** MapleStory pushes prediction to the extreme:
+  the local player is client-authoritative for movement and *sends its own CMovePath*, which the
+  server relays verbatim to others (our `CP_UserMove` → `LP_UserMove`). Remote entities are drawn
+  from those relayed paths. Full snapshot interpolation / lag compensation (FPS-grade) are **not**
+  applicable here.
+
+Takeaway: keep the server authoritative and event-driven; put timed world logic on a tick; treat
+all client input as untrusted commands; broadcast minimal deltas per field.
+
 ---
 
 ## 3. Architecture (Project Layout)

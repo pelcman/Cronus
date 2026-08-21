@@ -1,5 +1,9 @@
+using System.Linq.Expressions;
+using System.Text.Json;
 using Cronus.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Cronus.Database;
 
@@ -44,9 +48,11 @@ public sealed class CronusDbContext : DbContext
             .WithOne()
             .HasForeignKey(i => i.CharacterId)
             .OnDelete(DeleteBehavior.Cascade);
-        character.Ignore(c => c.StartedQuests);   // quest persistence is a follow-up
-        character.Ignore(c => c.CompletedQuests);
-        character.Ignore(c => c.Skills);          // skill persistence is a follow-up
+        // Skills and quest state persist as JSON columns on the character row (small,
+        // character-scoped maps — simpler than side tables and enough for these dictionaries).
+        MapJsonDictionary(character, c => c.Skills);          // skillId -> level
+        MapJsonDictionary(character, c => c.StartedQuests);   // questId -> progress string
+        MapJsonDictionary(character, c => c.CompletedQuests); // questId -> completion time
 
         var item = modelBuilder.Entity<InventoryItem>();
         item.ToTable("items");
@@ -54,5 +60,25 @@ public sealed class CronusDbContext : DbContext
         item.Property(i => i.Id).ValueGeneratedOnAdd();
         item.HasIndex(i => i.CharacterId);
         item.Property(i => i.Owner).HasMaxLength(13);
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new();
+
+    /// <summary>
+    /// Maps an <c>int</c>-keyed dictionary property to a single JSON text column, with a value
+    /// comparer so EF Core detects in-place mutations (skill-ups, quest updates) on SaveChanges.
+    /// </summary>
+    private static void MapJsonDictionary<TValue>(
+        EntityTypeBuilder<Character> entity,
+        Expression<Func<Character, Dictionary<int, TValue>>> property)
+    {
+        entity.Property(property).HasConversion(
+            map => JsonSerializer.Serialize(map, JsonOptions),
+            json => JsonSerializer.Deserialize<Dictionary<int, TValue>>(json, JsonOptions) ?? new Dictionary<int, TValue>(),
+            new ValueComparer<Dictionary<int, TValue>>(
+                (a, b) => JsonSerializer.Serialize(a, JsonOptions) == JsonSerializer.Serialize(b, JsonOptions),
+                map => JsonSerializer.Serialize(map, JsonOptions).GetHashCode(),
+                map => JsonSerializer.Deserialize<Dictionary<int, TValue>>(
+                    JsonSerializer.Serialize(map, JsonOptions), JsonOptions) ?? new Dictionary<int, TValue>()));
     }
 }
