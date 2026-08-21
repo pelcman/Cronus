@@ -393,6 +393,32 @@ public sealed class Field
         }
     }
 
+    /// <summary>
+    /// Registers an item stack a player threw onto the ground at their own position, and returns it
+    /// (others can pick it up); the drop-from source is the player.
+    /// </summary>
+    public FieldDrop AddPlayerItemDrop(int itemId, short quantity, short x, short y, int sourceCharacterId)
+    {
+        lock (_gate)
+        {
+            var drop = new FieldDrop
+            {
+                ObjectId = _nextDropOid++,
+                ItemId = itemId,
+                Quantity = quantity < 1 ? (short)1 : quantity,
+                X = x,
+                Y = y,
+                SourceObjectId = sourceCharacterId,
+                SourceX = x,
+                SourceY = y,
+                DropAtTick = Environment.TickCount64,
+                IsPlayerDrop = true,
+            };
+            _drops[drop.ObjectId] = drop;
+            return drop;
+        }
+    }
+
     /// <summary>Removes a drop by object id (e.g. on pickup); returns it if it was present.</summary>
     public FieldDrop? RemoveDrop(int objectId)
     {

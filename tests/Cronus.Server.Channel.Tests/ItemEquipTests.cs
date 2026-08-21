@@ -165,4 +165,156 @@ public class ItemEquipTests
         InventoryItem sword = Assert.Single(hero.EquippedItems);
         Assert.Equal((short)-11, sword.Position); // moved from bag slot 3 to the weapon slot
     }
+
+    /// <summary>Migrates in, drops its potion stack to the ground (dst==0), flags on the slot update.</summary>
+    private sealed class Dropper : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opInvOp = ServerOps.Get(ServerOpcode.InventoryOperation);
+        private bool _sent;
+
+        public Dropper(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource Dropped { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChangeSlotPositionRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);     // timestamp
+                w.WriteByte(2);    // USE tab
+                w.WriteShort(1);   // from slot 1
+                w.WriteShort(0);   // dst 0 = drop to ground
+                w.WriteShort(5);   // whole stack
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opInvOp)
+            {
+                Dropped.TrySetResult();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task DropToGround_RemovesFromInventoryAndSpawnsFieldDrop()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Giver", MapId = 100000000 });
+        hero.EquippedItems.Add(new InventoryItem { ItemId = 2000000, Position = 1, Quantity = 5, CharacterId = hero.Id });
+        repo.Save(hero);
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var client = new Dropper(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.Dropped.Task.WaitAsync(cts.Token);
+
+        Assert.DoesNotContain(hero.EquippedItems, i => i.ItemId == 2000000); // left the inventory
+        FieldDrop drop = Assert.Single(fields.Get(100000000).Drops);
+        Assert.Equal(2000000, drop.ItemId);
+        Assert.Equal((short)5, drop.Quantity);
+        Assert.True(drop.IsPlayerDrop);
+    }
+
+    /// <summary>Migrates in, spawns a sword via /item, flags on the slot update.</summary>
+    private sealed class Requester : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly string _command;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opInvOp = ServerOps.Get(ServerOpcode.InventoryOperation);
+        private bool _sent;
+
+        public Requester(int characterId, string command)
+        {
+            _characterId = characterId;
+            _command = command;
+        }
+
+        public TaskCompletionSource Done { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChat), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);
+                w.WriteString(_command);
+                w.WriteByte(0);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opInvOp)
+            {
+                Done.TrySetResult();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CreatedEquip_GetsWzBaseStats()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Smith", MapId = 100000000 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        // The item provider knows the sword's base stats (as the wz would supply).
+        var items = new InMemoryItemProvider(
+            Array.Empty<ConsumeSpec>(),
+            equips: new Dictionary<int, EquipStats> { [1302000] = new EquipStats { Watk = 17, UpgradeSlots = 7 } });
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var client = new Requester(hero.Id, "/item 1302000");
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, items: items);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.Done.Task.WaitAsync(cts.Token);
+
+        InventoryItem sword = Assert.Single(hero.EquippedItems, i => i.ItemId == 1302000);
+        Assert.Equal((short)17, sword.Watk);     // wz base attack
+        Assert.Equal((byte)7, sword.UpgradeSlots);
+    }
 }

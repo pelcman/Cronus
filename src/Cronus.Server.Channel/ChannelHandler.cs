@@ -549,12 +549,6 @@ public sealed class ChannelHandler : PacketHandlerBase
                 continue;
             }
 
-            // Equips need the (not-yet-client-verified) equip item body on pickup; skip for now.
-            if (entry.ItemId != 0 && Inventory.Tab(entry.ItemId) == 1)
-            {
-                continue;
-            }
-
             short x = (short)(mob.X + DropRoller.ScatterX(dropped));
             if (entry.ItemId == 0)
             {
@@ -824,6 +818,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         // Item drop: stack it into the inventory and update the client's slot + show the gain message.
         int slotMax = _items.GetConsume(drop.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
         List<InventoryChange> changes = Inventory.Add(c, drop.ItemId, drop.Quantity, slotMax);
+        PopulateEquipStats(changes); // a dropped equip gets its wz base stats
         _characters.Save(c);
         if (changes.Count > 0)
         {
@@ -831,6 +826,44 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         await session.SendAsync(_packets.ShowItemGain(drop.ItemId, drop.Quantity)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Fills in the wz base stats (attack/defense/upgrade slots/…) on any newly-created equip in
+    /// <paramref name="changes"/>, so a dropped/bought/spawned equip isn't a statless blank. Must run
+    /// before the item is serialized into <c>LP_InventoryOperation</c> and saved.
+    /// </summary>
+    private void PopulateEquipStats(IReadOnlyList<InventoryChange> changes)
+    {
+        foreach (InventoryChange ch in changes)
+        {
+            if (ch.Item is not { } item || Inventory.Tab(item.ItemId) != 1)
+            {
+                continue;
+            }
+
+            if (_items.GetEquipStats(item.ItemId) is not { } s)
+            {
+                continue;
+            }
+
+            item.UpgradeSlots = s.UpgradeSlots;
+            item.Str = s.Str;
+            item.Dex = s.Dex;
+            item.Int = s.Int;
+            item.Luk = s.Luk;
+            item.Hp = s.Hp;
+            item.Mp = s.Mp;
+            item.Watk = s.Watk;
+            item.Matk = s.Matk;
+            item.Wdef = s.Wdef;
+            item.Mdef = s.Mdef;
+            item.Acc = s.Acc;
+            item.Avoid = s.Avoid;
+            item.Hands = s.Hands;
+            item.Speed = s.Speed;
+            item.Jump = s.Jump;
+        }
     }
 
     /// <summary>Meso-drop bounds (ports <c>OnUserDropMoneyRequest</c>): a throw is 10..50000 mesos.</summary>
@@ -951,11 +984,17 @@ public sealed class ChannelHandler : PacketHandlerBase
         int tab = packet.ReadByte();
         short src = packet.ReadShort(); // signed; negative = equipped slot
         short dst = packet.ReadShort(); // signed; negative = equip slot
-        packet.ReadShort();             // split quantity (unused for whole-slot moves)
+        short qty = packet.ReadShort(); // split/drop quantity
 
-        // Dropping to the field (dst == 0) and equipped→equipped moves aren't handled; ignore both
-        // rather than desync the client.
-        if (dst == 0 || (tab == equipTab && src < 0 && dst < 0))
+        // dst == 0 drops the item onto the ground for others to pick up.
+        if (dst == 0)
+        {
+            await DropItemToFieldAsync(session, tab, src, qty).ConfigureAwait(false);
+            return;
+        }
+
+        // Equipped→equipped moves aren't allowed; ignore rather than desync.
+        if (tab == equipTab && src < 0 && dst < 0)
         {
             return;
         }
@@ -975,6 +1014,40 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await _field.BroadcastAsync(_packets.UserAvatarModified(c), exceptCharacterId: c.Id).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Drops a bundle item from a slot onto the ground at the player's feet (the <c>dst == 0</c> case
+    /// of a slot-change): removes the quantity from the inventory and spawns a player item drop others
+    /// can pick up. Equips are deferred (they'd lose their stats through drop→pickup until dropped
+    /// items carry the full item).
+    /// </summary>
+    private async ValueTask DropItemToFieldAsync(MapleSession session, int tab, short src, short qty)
+    {
+        if (_player is null || _field is null || tab == 1)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        InventoryItem? item = Inventory.ItemAt(c, tab, src);
+        if (item is null)
+        {
+            return;
+        }
+
+        int dropQty = qty <= 0 || qty > item.Quantity ? item.Quantity : qty;
+        int itemId = item.ItemId;
+
+        InventoryChange? change = Inventory.RemoveFromSlot(c, tab, src, dropQty);
+        _characters.Save(c);
+        if (change is { } ch)
+        {
+            await session.SendAsync(_packets.InventoryOperation(new[] { ch })).ConfigureAwait(false);
+        }
+
+        FieldDrop drop = _field.AddPlayerItemDrop(itemId, (short)dropQty, _player.X, _player.Y, c.Id);
+        await _field.BroadcastAsync(_packets.DropEnterFieldItem(drop)).ConfigureAwait(false);
     }
 
     /// <summary>Opens an NPC shop for this session: binds it and sends <c>LP_OpenShopDlg</c>.</summary>
@@ -1045,8 +1118,8 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        // Equip buys and token-currency shops need work still absent (wz equip stats / token debit).
-        if (Inventory.Tab(itemId) == 1 || entry.ReqItem > 0)
+        // Token-currency (second-currency) shops aren't modelled yet.
+        if (entry.ReqItem > 0)
         {
             await session.SendAsync(_packets.ShopResult(ShopResultCode.BuyUnknown)).ConfigureAwait(false);
             return;
@@ -1063,6 +1136,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         c.Meso -= (int)price;
         int slotMax = _items.GetConsume(itemId)?.SlotMax ?? Inventory.DefaultSlotMax;
         List<InventoryChange> changes = Inventory.Add(c, itemId, quantity, slotMax);
+        PopulateEquipStats(changes); // a bought equip gets its wz base stats
         _characters.Save(c);
 
         if (changes.Count > 0)
@@ -1776,6 +1850,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                 Character ic = _player!.Character;
                 int slotMax = _items.GetConsume(itemId)?.SlotMax ?? Inventory.DefaultSlotMax;
                 List<InventoryChange> changes = Inventory.Add(ic, itemId, qty, slotMax);
+                PopulateEquipStats(changes); // a spawned equip gets its wz base stats
                 _characters.Save(ic);
                 if (changes.Count > 0)
                 {
