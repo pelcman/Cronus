@@ -42,6 +42,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly BuffTracker _buffs;
     private readonly GuildRegistry _guilds;
     private readonly MiniGameRegistry _miniGames;
+    private readonly PlayerShopRegistry _playerShops;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -126,7 +127,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         TradeRegistry? trades = null,
         BuffTracker? buffs = null,
         GuildRegistry? guilds = null,
-        MiniGameRegistry? miniGames = null)
+        MiniGameRegistry? miniGames = null,
+        PlayerShopRegistry? playerShops = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -144,6 +146,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _buffs = buffs ?? new BuffTracker();
         _guilds = guilds ?? new GuildRegistry();
         _miniGames = miniGames ?? new MiniGameRegistry();
+        _playerShops = playerShops ?? new PlayerShopRegistry();
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -385,6 +388,12 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await ExitMiniGameAsync(miniGame, _player.Character.Id).ConfigureAwait(false);
             }
 
+            // Leave any personal shop (the owner dropping closes it and reclaims the stock).
+            if (_playerShops.GetForCharacter(_player.Character.Id) is { } playerShop)
+            {
+                await ExitPlayerShopAsync(playerShop, _player.Character.Id).ConfigureAwait(false);
+            }
+
             // Buddies see this player go offline.
             await NotifyBuddiesOfPresenceAsync(_player.Character.Id, channel: -1).ConfigureAwait(false);
 
@@ -503,10 +512,15 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         await SpawnNpcsAsync(session, field).ConfigureAwait(false);
 
-        // Open game rooms in this map show their balloons to the newcomer.
+        // Open game rooms and shops in this map show their balloons to the newcomer.
         foreach (MiniGame game in _miniGames.GamesInMap(character.MapId))
         {
             await session.SendAsync(_packets.MiniRoomBalloon(game.Owner.Character.Id, game)).ConfigureAwait(false);
+        }
+
+        foreach (PlayerShop shop in _playerShops.ShopsInMap(character.MapId))
+        {
+            await session.SendAsync(_packets.PlayerShopBalloon(shop.Owner.Character.Id, shop)).ConfigureAwait(false);
         }
 
         await NotifyBuddiesOfPresenceAsync(character.Id, channel: 0).ConfigureAwait(false); // "came online"
@@ -2302,9 +2316,15 @@ public sealed class ChannelHandler : PacketHandlerBase
                     return;
                 }
 
+                if (roomType == 4)
+                {
+                    await CreatePlayerShopAsync(session, c, packet).ConfigureAwait(false);
+                    return;
+                }
+
                 if (roomType != 3 || _trades.Get(c.Id) is not null)
                 {
-                    return; // trades and game rooms only; one room at a time
+                    return; // trades, game rooms, and personal shops; one room at a time
                 }
 
                 var trade = new Trade(_player);
@@ -2363,7 +2383,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                     return;
                 }
 
-                await EnterMiniGameAsync(session, c, packet).ConfigureAwait(false);
+                await EnterMiniRoomAsync(session, c, packet).ConfigureAwait(false);
                 break;
             }
 
@@ -2384,6 +2404,10 @@ public sealed class ChannelHandler : PacketHandlerBase
                 {
                     await BroadcastToMiniGameAsync(game, _packets.TradeChat((byte)seat, $"{c.Name} : {message}")).ConfigureAwait(false);
                 }
+                else if (_playerShops.GetForCharacter(c.Id) is { } shop && shop.SeatOf(c.Id) is int shopSeat and >= 0)
+                {
+                    await BroadcastToPlayerShopAsync(shop, _packets.TradeChat((byte)shopSeat, $"{c.Name} : {message}")).ConfigureAwait(false);
+                }
 
                 break;
             }
@@ -2398,9 +2422,33 @@ public sealed class ChannelHandler : PacketHandlerBase
                 {
                     await ExitMiniGameAsync(game, c.Id).ConfigureAwait(false);
                 }
+                else if (_playerShops.GetForCharacter(c.Id) is { } shop)
+                {
+                    await ExitPlayerShopAsync(shop, c.Id).ConfigureAwait(false);
+                }
 
                 break;
             }
+
+            case ChannelPackets.MiniRoomBalloonReq:
+                await OpenPlayerShopForBusinessAsync(c).ConfigureAwait(false);
+                break;
+
+            case ChannelPackets.PsPutItem:
+                await HandleShopPutItemAsync(session, c, packet).ConfigureAwait(false);
+                break;
+
+            case ChannelPackets.PsBuyItem:
+                await HandleShopBuyItemAsync(session, c, packet).ConfigureAwait(false);
+                break;
+
+            case ChannelPackets.PsMoveItemToInventory:
+                await HandleShopReclaimItemAsync(session, c, packet).ConfigureAwait(false);
+                break;
+
+            case ChannelPackets.PsBan:
+                await HandleShopBanAsync(c, packet).ConfigureAwait(false);
+                break;
 
             case ChannelPackets.TradePutItem:
                 await HandleTradePutItemAsync(session, c, packet).ConfigureAwait(false);
@@ -2625,38 +2673,66 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     /// <summary>
-    /// Joins a game room from its balloon (ports the MRP_Enter game branch): seat 1 if the room is
-    /// open, not full, and the password matches; both sides see the updated room.
+    /// Joins a game room or a personal shop from its balloon (ports the MRP_Enter branch): a free
+    /// seat if the room is open (password-gated for games); everyone sees the updated room.
     /// </summary>
-    private async ValueTask EnterMiniGameAsync(MapleSession session, Character c, PacketReader packet)
+    private async ValueTask EnterMiniRoomAsync(MapleSession session, Character c, PacketReader packet)
     {
         int objectId = packet.ReadInt();
-        MiniGame? game = _miniGames.Get(objectId);
-        if (game is null || game.Visitor is not null || !game.Open || game.SeatOf(c.Id) >= 0
-            || _miniGames.GetForCharacter(c.Id) is not null)
+        if (_miniGames.GetForCharacter(c.Id) is not null || _playerShops.GetForCharacter(c.Id) is not null)
         {
             await session.SendAsync(_packets.MiniGameFull()).ConfigureAwait(false);
             return;
         }
 
-        if (game.Password.Length > 0)
+        if (_miniGames.Get(objectId) is { } game)
         {
-            byte hasPassword = packet.Remaining > 0 ? packet.ReadByte() : (byte)0;
-            string password = hasPassword > 0 ? packet.ReadString() : string.Empty;
-            if (!string.Equals(password, game.Password, StringComparison.Ordinal))
+            if (game.Visitor is not null || !game.Open || game.SeatOf(c.Id) >= 0)
             {
                 await session.SendAsync(_packets.MiniGameFull()).ConfigureAwait(false);
                 return;
             }
+
+            if (game.Password.Length > 0)
+            {
+                byte hasPassword = packet.Remaining > 0 ? packet.ReadByte() : (byte)0;
+                string password = hasPassword > 0 ? packet.ReadString() : string.Empty;
+                if (!string.Equals(password, game.Password, StringComparison.Ordinal))
+                {
+                    await session.SendAsync(_packets.MiniGameFull()).ConfigureAwait(false);
+                    return;
+                }
+            }
+
+            _miniGames.SetVisitor(game, _player!);
+            await TrySendAsync(game.Owner, _packets.MiniGameNewVisitor(game, c, seat: 1)).ConfigureAwait(false);
+            await session.SendAsync(_packets.MiniGameRoom(game, viewerSeat: 1)).ConfigureAwait(false);
+            if (_field is not null)
+            {
+                await _field.BroadcastAsync(_packets.MiniRoomBalloon(game.Owner.Character.Id, game)).ConfigureAwait(false);
+            }
+
+            return;
         }
 
-        _miniGames.SetVisitor(game, _player!);
-        await TrySendAsync(game.Owner, _packets.MiniGameNewVisitor(game, c, seat: 1)).ConfigureAwait(false);
-        await session.SendAsync(_packets.MiniGameRoom(game, viewerSeat: 1)).ConfigureAwait(false);
-        if (_field is not null)
+        if (_playerShops.Get(objectId) is { } shop)
         {
-            await _field.BroadcastAsync(_packets.MiniRoomBalloon(game.Owner.Character.Id, game)).ConfigureAwait(false);
+            int seat = shop.FreeSeat();
+            if (!shop.Open || seat < 0 || shop.SeatOf(c.Id) >= 0)
+            {
+                await session.SendAsync(_packets.MiniGameFull()).ConfigureAwait(false);
+                return;
+            }
+
+            byte[] visitorAdd = _packets.PlayerShopVisitorAdd(c, seat);
+            await BroadcastToPlayerShopAsync(shop, visitorAdd).ConfigureAwait(false);
+            _playerShops.SetVisitor(shop, seat, _player!);
+            await session.SendAsync(_packets.PlayerShopRoom(shop, seat)).ConfigureAwait(false);
+            await UpdatePlayerShopBalloonAsync(shop).ConfigureAwait(false);
+            return;
         }
+
+        await session.SendAsync(_packets.MiniGameFull()).ConfigureAwait(false);
     }
 
     /// <summary>Sends a packet to both seats of a game room.</summary>
@@ -2923,6 +2999,303 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
             }
         }
+    }
+
+    /// <summary>The Free Market rooms where personal shops may open (the reference's map gate).</summary>
+    private static bool IsFreeMarketMap(int mapId) => mapId is >= 910000001 and <= 910000022;
+
+    /// <summary>
+    /// Sets up a personal shop (ports the MRP_Create shop branch): needs a store-permit cash item
+    /// and a Free Market room. The shop opens in stocking mode; MRP_Balloon opens it for business.
+    /// </summary>
+    private async ValueTask CreatePlayerShopAsync(MapleSession session, Character c, PacketReader packet)
+    {
+        string description = packet.ReadString();
+        packet.ReadByte();
+        short slot = packet.ReadShort();
+        int itemId = packet.ReadInt();
+
+        if (!IsFreeMarketMap(c.MapId)
+            || _playerShops.GetForCharacter(c.Id) is not null
+            || _miniGames.GetForCharacter(c.Id) is not null
+            || _trades.Get(c.Id) is not null)
+        {
+            return;
+        }
+
+        InventoryItem? permit = Inventory.ItemAt(c, Inventory.Tab(itemId), slot);
+        if (permit is null || permit.ItemId != itemId)
+        {
+            return;
+        }
+
+        PlayerShop shop = _playerShops.Create(_player!, description, itemId);
+        await session.SendAsync(_packets.PlayerShopRoom(shop, viewerSeat: 0)).ConfigureAwait(false);
+    }
+
+    /// <summary>MRP_Balloon — the owner finishes stocking and opens for business.</summary>
+    private async ValueTask OpenPlayerShopForBusinessAsync(Character c)
+    {
+        if (_playerShops.GetForCharacter(c.Id) is { } shop && shop.SeatOf(c.Id) == 0 && !shop.Open)
+        {
+            shop.Open = true;
+            await UpdatePlayerShopBalloonAsync(shop).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Sends a packet to everyone in the shop.</summary>
+    private async ValueTask BroadcastToPlayerShopAsync(PlayerShop shop, byte[] packet, int exceptCharacterId = -1)
+    {
+        if (shop.Owner.Character.Id != exceptCharacterId)
+        {
+            await TrySendAsync(shop.Owner, packet).ConfigureAwait(false);
+        }
+
+        foreach (FieldPlayer? visitor in shop.Visitors)
+        {
+            if (visitor is not null && visitor.Character.Id != exceptCharacterId)
+            {
+                await TrySendAsync(visitor, packet).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async ValueTask UpdatePlayerShopBalloonAsync(PlayerShop shop, bool closed = false)
+    {
+        Field field = _fields.Get(shop.Owner.Character.MapId);
+        await field.BroadcastAsync(_packets.PlayerShopBalloon(shop.Owner.Character.Id, closed ? null : shop)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// PSP_PutItem — the owner lists items for sale (ports the reference's checks): the stock
+    /// leaves the inventory immediately; rechargeables list as one bundle of the whole stack.
+    /// </summary>
+    private async ValueTask HandleShopPutItemAsync(MapleSession session, Character c, PacketReader packet)
+    {
+        int tab = packet.ReadByte();
+        short slot = packet.ReadShort();
+        short bundles = packet.ReadShort();
+        short perBundle = packet.ReadShort();
+        int price = packet.ReadInt();
+
+        PlayerShop? shop = _playerShops.GetForCharacter(c.Id);
+        if (shop is null || shop.SeatOf(c.Id) != 0 || price <= 0 || bundles <= 0 || perBundle <= 0)
+        {
+            return;
+        }
+
+        InventoryItem? item = Inventory.ItemAt(c, tab, slot);
+        long total = (long)bundles * perBundle;
+        if (item is null || total <= 0 || total > 32767)
+        {
+            return;
+        }
+
+        bool rechargeable = item.ItemId / 10000 is 207 or 233; // stars / bullets
+        if (!rechargeable && item.Quantity < total)
+        {
+            return;
+        }
+
+        InventoryChange? change;
+        if (rechargeable)
+        {
+            // The whole stack lists as a single bundle (ports the star/bullet special case).
+            change = Inventory.RemoveFromSlot(c, tab, slot, item.Quantity);
+            shop.Items.Add(new PlayerShopItem(
+                new InventoryItem { ItemId = item.ItemId, Quantity = item.Quantity }, bundles: 1, price));
+        }
+        else if (tab == 1)
+        {
+            // The equip instance itself goes on the shelf so its stats survive the sale.
+            change = Inventory.RemoveFromSlot(c, tab, slot, 1);
+            item.Quantity = 1;
+            shop.Items.Add(new PlayerShopItem(item, bundles: 1, price));
+        }
+        else
+        {
+            change = Inventory.RemoveFromSlot(c, tab, slot, (int)total);
+            shop.Items.Add(new PlayerShopItem(
+                new InventoryItem { ItemId = item.ItemId, Quantity = perBundle }, bundles, price));
+        }
+
+        _characters.Save(c);
+        if (change is { } ch)
+        {
+            await session.SendAsync(_packets.InventoryOperation(new[] { ch })).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.PlayerShopItemUpdate(shop)).ConfigureAwait(false);
+    }
+
+    /// <summary>PSP_BuyItem — a visitor buys bundles (ports <c>MaplePlayerShop.buy</c>).</summary>
+    private async ValueTask HandleShopBuyItemAsync(MapleSession session, Character c, PacketReader packet)
+    {
+        int index = packet.ReadByte();
+        short quantity = packet.ReadShort();
+
+        PlayerShop? shop = _playerShops.GetForCharacter(c.Id);
+        if (shop is null || shop.SeatOf(c.Id) <= 0 || index < 0 || index >= shop.Items.Count || quantity <= 0)
+        {
+            return;
+        }
+
+        PlayerShopItem listing = shop.Items[index];
+        long units = (long)quantity * listing.Item.Quantity;
+        long cost = (long)listing.Price * quantity;
+        if (listing.Bundles < quantity || units <= 0 || units > 32767 || cost <= 0 || cost > int.MaxValue
+            || c.Meso < cost)
+        {
+            return;
+        }
+
+        Character owner = shop.Owner.Character;
+
+        // Hand the goods over: an equip carries its instance; bundles stack normally.
+        List<InventoryChange> changes;
+        if (Inventory.Tab(listing.Item.ItemId) == 1)
+        {
+            changes = new List<InventoryChange> { Inventory.Place(c, listing.Item) };
+        }
+        else
+        {
+            int slotMax = _items.GetConsume(listing.Item.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+            changes = Inventory.Add(c, listing.Item.ItemId, (int)units, slotMax);
+        }
+
+        listing.Bundles -= quantity;
+        c.Meso -= (int)cost;
+        owner.Meso = (int)Math.Clamp((long)owner.Meso + cost, 0, int.MaxValue);
+        _characters.Save(c);
+        _characters.Save(owner);
+
+        if (changes.Count > 0)
+        {
+            await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        await TrySendAsync(shop.Owner, _packets.StatChanged(owner, StatFlag.Meso)).ConfigureAwait(false);
+        await BroadcastToPlayerShopAsync(shop, _packets.PlayerShopItemUpdate(shop)).ConfigureAwait(false);
+
+        if (shop.IsSoldOut)
+        {
+            await ClosePlayerShopAsync(shop, PlayerShop.CloseReasonSoldOut).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>PSP_MoveItemToInventory — the owner reclaims a listing.</summary>
+    private async ValueTask HandleShopReclaimItemAsync(MapleSession session, Character c, PacketReader packet)
+    {
+        int index = packet.ReadShort();
+        PlayerShop? shop = _playerShops.GetForCharacter(c.Id);
+        if (shop is null || shop.SeatOf(c.Id) != 0 || index < 0 || index >= shop.Items.Count)
+        {
+            return;
+        }
+
+        PlayerShopItem listing = shop.Items[index];
+        if (listing.Bundles > 0)
+        {
+            List<InventoryChange> changes = ReturnListingTo(c, listing);
+            _characters.Save(c);
+            if (changes.Count > 0)
+            {
+                await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+            }
+        }
+
+        shop.Items.RemoveAt(index);
+        await session.SendAsync(_packets.PlayerShopItemUpdate(shop)).ConfigureAwait(false);
+    }
+
+    /// <summary>PSP_Ban — the owner throws a visitor out (ports <c>banPlayer</c>).</summary>
+    private async ValueTask HandleShopBanAsync(Character c, PacketReader packet)
+    {
+        packet.ReadByte(); // claimed slot
+        string name = packet.ReadString();
+        PlayerShop? shop = _playerShops.GetForCharacter(c.Id);
+        if (shop is null || shop.SeatOf(c.Id) != 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < shop.Visitors.Length; i++)
+        {
+            if (shop.Visitors[i] is { } visitor
+                && string.Equals(visitor.Character.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                await TrySendAsync(visitor, _packets.MiniRoomClosed(1, PlayerShop.CloseReasonKicked)).ConfigureAwait(false);
+                _playerShops.RemoveVisitor(shop, i + 1);
+                await BroadcastToPlayerShopAsync(shop, _packets.MiniRoomVisitorLeave((byte)(i + 1))).ConfigureAwait(false);
+                await UpdatePlayerShopBalloonAsync(shop).ConfigureAwait(false);
+                return;
+            }
+        }
+    }
+
+    /// <summary>Puts a listing's remaining stock back into a character's inventory.</summary>
+    private List<InventoryChange> ReturnListingTo(Character c, PlayerShopItem listing)
+    {
+        if (Inventory.Tab(listing.Item.ItemId) == 1)
+        {
+            listing.Bundles = 0;
+            return new List<InventoryChange> { Inventory.Place(c, listing.Item) };
+        }
+
+        int units = listing.Bundles * listing.Item.Quantity;
+        listing.Bundles = 0;
+        int slotMax = _items.GetConsume(listing.Item.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+        return Inventory.Add(c, listing.Item.ItemId, units, slotMax);
+    }
+
+    /// <summary>A participant leaves the shop; the owner leaving (or a sell-out) closes it,
+    /// returning unsold stock (ports <c>MaplePlayerShop.closeShop</c> / <c>removeVisitor</c>).</summary>
+    private async ValueTask ExitPlayerShopAsync(PlayerShop shop, int leavingCharacterId)
+    {
+        int seat = shop.SeatOf(leavingCharacterId);
+        if (seat == 0)
+        {
+            await ClosePlayerShopAsync(shop, PlayerShop.CloseReasonClosed).ConfigureAwait(false);
+        }
+        else if (seat > 0)
+        {
+            _playerShops.RemoveVisitor(shop, seat);
+            await BroadcastToPlayerShopAsync(shop, _packets.MiniRoomVisitorLeave((byte)seat)).ConfigureAwait(false);
+            await UpdatePlayerShopBalloonAsync(shop).ConfigureAwait(false);
+        }
+    }
+
+    private async ValueTask ClosePlayerShopAsync(PlayerShop shop, byte reason)
+    {
+        // Visitors are shown the door first, then unsold stock returns to the owner.
+        foreach (FieldPlayer? visitor in shop.Visitors)
+        {
+            if (visitor is not null)
+            {
+                await TrySendAsync(visitor, _packets.MiniRoomClosed(1, reason)).ConfigureAwait(false);
+            }
+        }
+
+        Character owner = shop.Owner.Character;
+        var returned = new List<InventoryChange>();
+        foreach (PlayerShopItem listing in shop.Items)
+        {
+            if (listing.Bundles > 0)
+            {
+                returned.AddRange(ReturnListingTo(owner, listing));
+            }
+        }
+
+        _characters.Save(owner);
+        if (returned.Count > 0)
+        {
+            await TrySendAsync(shop.Owner, _packets.InventoryOperation(returned)).ConfigureAwait(false);
+        }
+
+        await TrySendAsync(shop.Owner, _packets.MiniRoomClosed(0, reason)).ConfigureAwait(false);
+        _playerShops.Remove(shop);
+        await UpdatePlayerShopBalloonAsync(shop, closed: true).ConfigureAwait(false);
     }
 
     // CP_FriendRequest flags (OpsFriend).
@@ -4685,10 +5058,15 @@ public sealed class ChannelHandler : PacketHandlerBase
         await newField.BroadcastAsync(_packets.UserEnterField(player, GuildOf(player.Character)), exceptCharacterId: player.Character.Id)
             .ConfigureAwait(false);
 
-        // Open game rooms in the new map show their balloons.
+        // Open game rooms and shops in the new map show their balloons.
         foreach (MiniGame game in _miniGames.GamesInMap(targetMapId))
         {
             await session.SendAsync(_packets.MiniRoomBalloon(game.Owner.Character.Id, game)).ConfigureAwait(false);
+        }
+
+        foreach (PlayerShop shop in _playerShops.ShopsInMap(targetMapId))
+        {
+            await session.SendAsync(_packets.PlayerShopBalloon(shop.Owner.Character.Id, shop)).ConfigureAwait(false);
         }
 
         await SpawnNpcsAsync(session, newField).ConfigureAwait(false);

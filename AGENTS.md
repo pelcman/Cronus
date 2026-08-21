@@ -324,6 +324,16 @@ Each milestone means adding one "working vertical slice".
         custom data ("L,T,W", persisted — the reference's own store). Owner leaving/disconnect
         closes the room. Rules unit tests + a full two-client create→join→ready→start→five-stones
         →result e2e.
+  - [x] **M10t: personal shops (露店)** — MiniRoom type 4 (ports `MaplePlayerShop`): set up with a
+        store-permit cash item in a Free Market room (910000001-22), stock listings (PSP_PutItem;
+        stars/bullets list as one whole-stack bundle, equips shelve their instance so stats
+        survive the sale), open for business via MRP_Balloon (the `AnnounceBox` balloon, type 4,
+        replayed to map entrants), up to 3 browsing visitors, buys (PSP_BuyItem: bundles×price
+        transfer meso both ways, `LP_InventoryOperation` + listing refresh to the whole room;
+        a full sell-out closes with reason 14), owner reclaim (PSP_MoveItemToInventory), kick by
+        name (PSP_Ban), and close-with-stock-return on owner leave/disconnect. Shop object ids are
+        offset from mini-game ids (MRP_Enter carries only the id). Two-client stock→open→buy e2e.
+        Deferred: hired merchants (type 5, the offline `EmployeePool` shop), blacklists.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

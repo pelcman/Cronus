@@ -1705,24 +1705,119 @@ public sealed class ChannelPackets
     /// <c>Structure.AnnounceBox/Interaction</c>). Pass null to clear the balloon.
     /// </summary>
     public byte[] MiniRoomBalloon(int ownerCharacterId, MiniGame? game)
+        => game is null
+            ? EmptyBalloon(ownerCharacterId)
+            : Balloon(ownerCharacterId, game.GameType, game.ObjectId, game.Description,
+                hasPassword: game.Password.Length > 0, game.ItemId, game.Size, MiniGame.MaxSize, gameOn: !game.Open);
+
+    /// <summary>The personal-shop balloon (same <c>Interaction</c> layout, game type 4).</summary>
+    public byte[] PlayerShopBalloon(int ownerCharacterId, PlayerShop? shop)
+        => shop is null
+            ? EmptyBalloon(ownerCharacterId)
+            : Balloon(ownerCharacterId, PlayerShop.GameType, shop.ObjectId, shop.Description,
+                hasPassword: false, shop.ItemId, shop.Size, PlayerShop.MaxSize, gameOn: false);
+
+    private byte[] EmptyBalloon(int ownerCharacterId)
     {
         PacketWriter w = NewPacket(ServerOpcode.UserMiniRoomBalloon);
         w.WriteInt(ownerCharacterId);
-        if (game is null)
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    private byte[] Balloon(int ownerCharacterId, int gameType, int objectId, string description,
+        bool hasPassword, int itemId, int size, int maxSize, bool gameOn)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserMiniRoomBalloon);
+        w.WriteInt(ownerCharacterId);
+        w.WriteByte((byte)gameType);
+        w.WriteInt(objectId);
+        w.WriteString(description);
+        w.WriteBool(hasPassword);
+        w.WriteByte((byte)(itemId % 10));
+        w.WriteByte((byte)size);
+        w.WriteByte((byte)maxSize);
+        w.WriteBool(gameOn); // games: 1 = a round is in progress; shops: always 0 (open)
+        return w.ToArray();
+    }
+
+    // Personal-shop protocol ops (OpsMiniRoomProtocol.init, JMS v186 values).
+    public const byte PsPutItem = 19;
+    public const byte PsBuyItem = 20;
+    public const byte PsBuyResult = 21;
+    public const byte PsRefresh = 22;
+    public const byte PsAddSoldItem = 23;
+    public const byte PsMoveItemToInventory = 24;
+    public const byte PsBan = 25;
+    public const byte MiniRoomBalloonReq = 11;
+
+    private const byte MiniRoomTypePersonalShop = 4;
+
+    /// <summary>
+    /// The personal-shop room for one viewer (ports <c>getPlayerStore</c>, shop branch): room type
+    /// 4, capacity 4, everyone's avatar+name+job, the title, then the current listings.
+    /// </summary>
+    public byte[] PlayerShopRoom(PlayerShop shop, int viewerSeat)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomEnterResult);
+        w.WriteByte(MiniRoomTypePersonalShop);
+        w.WriteByte(PlayerShop.MaxSize);
+        w.WriteShort((short)viewerSeat);
+
+        Character owner = shop.Owner.Character;
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, owner);
+        w.WriteString(owner.Name);
+        w.WriteShort(owner.Job); // JMS >= 186
+        for (int i = 0; i < shop.Visitors.Length; i++)
         {
-            w.WriteByte(0);
-            return w.ToArray();
+            if (shop.Visitors[i] is { } visitor)
+            {
+                w.WriteByte((byte)(i + 1));
+                Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, visitor.Character);
+                w.WriteString(visitor.Character.Name);
+                w.WriteShort(visitor.Character.Job);
+            }
         }
 
-        w.WriteByte((byte)game.GameType);
-        w.WriteInt(game.ObjectId);
-        w.WriteString(game.Description);
-        w.WriteBool(game.Password.Length > 0);
-        w.WriteByte((byte)(game.ItemId % 10));
-        w.WriteByte((byte)game.Size);
-        w.WriteByte(MiniGame.MaxSize);
-        w.WriteByte((byte)(game.Open ? 0 : 1)); // 1 = a round is in progress
+        w.WriteByte(0xFF);
+        w.WriteString(shop.Description);
+        w.WriteByte(10); // fixed constant in the reference
+        WriteShopListings(w, shop);
         return w.ToArray();
+    }
+
+    /// <summary>A visitor joined the shop (ports <c>shopVisitorAdd</c> — no game record).</summary>
+    public byte[] PlayerShopVisitorAdd(Character joiner, int seat)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomEnter);
+        w.WriteByte((byte)seat);
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, joiner);
+        w.WriteString(joiner.Name);
+        w.WriteShort(joiner.Job);
+        return w.ToArray();
+    }
+
+    /// <summary>The current listings (ports <c>shopItemUpdate</c>, personal-shop branch).</summary>
+    public byte[] PlayerShopItemUpdate(PlayerShop shop)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(PsRefresh);
+        WriteShopListings(w, shop);
+        return w.ToArray();
+    }
+
+    private static void WriteShopListings(PacketWriter w, PlayerShop shop)
+    {
+        w.WriteByte((byte)shop.Items.Count);
+        foreach (PlayerShopItem item in shop.Items)
+        {
+            w.WriteShort(item.Bundles);
+            w.WriteShort(item.Item.Quantity); // units per bundle
+            w.WriteInt(item.Price);
+            Cronus.Server.Login.ItemEncoder.WriteItem(w, item.Item);
+        }
     }
 
     /// <summary>
