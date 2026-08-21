@@ -39,6 +39,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly IQuestProvider _quests;
     private readonly Rates _rates;
     private readonly TradeRegistry _trades;
+    private readonly BuffTracker _buffs;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -115,7 +116,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         KeymapRegistry? keymaps = null,
         IQuestProvider? quests = null,
         Rates? rates = null,
-        TradeRegistry? trades = null)
+        TradeRegistry? trades = null,
+        BuffTracker? buffs = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -130,6 +132,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _quests = quests ?? new InMemoryQuestProvider(Array.Empty<QuestData>());
         _rates = rates ?? Rates.Default;
         _trades = trades ?? new TradeRegistry();
+        _buffs = buffs ?? new BuffTracker();
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -342,6 +345,9 @@ public sealed class ChannelHandler : PacketHandlerBase
 
             // Buddies see this player go offline.
             await NotifyBuddiesOfPresenceAsync(_player.Character.Id, channel: -1).ConfigureAwait(false);
+
+            // Buffs don't survive a logout.
+            _buffs.Clear(_player.Character.Id);
 
             // Leave any messenger so the other members' windows drop this player.
             Messenger? messenger = _messengers.GetFor(_player.Character.Id);
@@ -966,7 +972,9 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         byte[] buffPacket = _packets.TemporaryStatSet(buffs);
+        uint mask = BuffEffect.Word0Mask(buffs);
         await session.SendAsync(buffPacket).ConfigureAwait(false);
+        _buffs.Register(c.Id, skillId, mask, effect.DurationMs);
 
         // A party buff (Haste, Rage, Hyper Body, … — marked by the wz affect box) also lands on
         // party members in the same map (ports the isPartyBuff apply; range box simplified to map).
@@ -977,6 +985,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                 if (member.Character.Id != c.Id && member.Character.MapId == c.MapId)
                 {
                     await TrySendAsync(member, buffPacket).ConfigureAwait(false);
+                    _buffs.Register(member.Character.Id, skillId, mask, effect.DurationMs);
                 }
             }
         }
@@ -1005,6 +1014,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         uint mask = BuffEffect.Word0Mask(SkillBuff.FromEffect(skillId, effect));
         if (mask != 0)
         {
+            _buffs.Remove(c.Id, skillId);
             await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
         }
     }
@@ -1232,6 +1242,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             if (buffs.Count > 0)
             {
                 await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
+                _buffs.Register(c.Id, -spec.ItemId, BuffEffect.Word0Mask(buffs), spec.Time);
             }
         }
     }
@@ -1259,6 +1270,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         uint mask = BuffEffect.Word0Mask(BuffEffect.FromSpec(spec));
         if (mask != 0)
         {
+            _buffs.Remove(_player.Character.Id, buffId);
             await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
         }
     }

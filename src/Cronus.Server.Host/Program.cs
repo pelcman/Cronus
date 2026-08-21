@@ -84,12 +84,13 @@ var parties = new PartyRegistry();
 var storages = new StorageRegistry(storageRepo);
 var keymaps = new KeymapRegistry(keymapRepo);
 var trades = new TradeRegistry();
+var buffs = new BuffTracker();
 
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs),
         "channel"),
     keepAlive);
 
@@ -98,6 +99,7 @@ var channelListener = new MapleListener(
 var mobRespawn = new MobRespawnService(fields, new ChannelPackets(serverOps, config));
 var playerRegen = new PlayerRegenService(fields, new ChannelPackets(serverOps, config), parties);
 var autoSave = new CharacterAutoSaveService(fields, characters);
+var buffExpiry = new BuffExpiryService(fields, buffs, new ChannelPackets(serverOps, config));
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -122,7 +124,8 @@ try
         channelListener.RunAsync(cts.Token),
         mobRespawn.RunAsync(cts.Token),
         playerRegen.RunAsync(cts.Token),
-        autoSave.RunAsync(cts.Token));
+        autoSave.RunAsync(cts.Token),
+        buffExpiry.RunAsync(cts.Token));
 }
 finally
 {
