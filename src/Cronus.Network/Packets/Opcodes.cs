@@ -38,6 +38,8 @@ public static class ClientOpcode
     public const string UserGivePopularityRequest = "CP_UserGivePopularityRequest";
     public const string UserCharacterInfoRequest = "CP_UserCharacterInfoRequest";
     public const string UserSkillUpRequest = "CP_UserSkillUpRequest";
+    public const string UserSkillUseRequest = "CP_UserSkillUseRequest";
+    public const string UserSkillCancelRequest = "CP_UserSkillCancelRequest";
     public const string UserAbilityUpRequest = "CP_UserAbilityUpRequest";
     public const string UserAbilityMassUpRequest = "CP_UserAbilityMassUpRequest";
     public const string MobMove = "CP_MobMove";
@@ -111,6 +113,7 @@ public static class ServerOpcode
     public const string FriendResult = "LP_FriendResult";
     public const string FamilyInfoResult = "LP_FamilyInfoResult";
     public const string ChangeSkillRecordResult = "LP_ChangeSkillRecordResult";
+    public const string SkillUseResult = "LP_SkillUseResult";
     public const string BroadcastMsg = "LP_BroadcastMsg";
     public const string NpcEnterField = "LP_NpcEnterField";
     public const string MobEnterField = "LP_MobEnterField";

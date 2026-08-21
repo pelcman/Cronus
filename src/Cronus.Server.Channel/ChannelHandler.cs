@@ -63,6 +63,8 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
+    private readonly int _opSkillUse;
+    private readonly int _opSkillCancel;
     private readonly int _opAbilityUp;
     private readonly int _opAbilityMassUp;
     private readonly int _opMobMove;
@@ -143,6 +145,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
+        _opSkillUse = clientOpcodes.Get(ClientOpcode.UserSkillUseRequest);
+        _opSkillCancel = clientOpcodes.Get(ClientOpcode.UserSkillCancelRequest);
         _opAbilityUp = clientOpcodes.Get(ClientOpcode.UserAbilityUpRequest);
         _opAbilityMassUp = clientOpcodes.Get(ClientOpcode.UserAbilityMassUpRequest);
         _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
@@ -239,6 +243,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opSkillUp)
         {
             await HandleSkillUpAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opSkillUse)
+        {
+            await HandleSkillUseAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opSkillCancel)
+        {
+            await HandleSkillCancelAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opAbilityUp)
         {
@@ -807,6 +819,77 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Sp)).ConfigureAwait(false);
         await session.SendAsync(_packets.ChangeSkillRecordResult(skillId, level)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserSkillUseRequest</c> — casting a self-buff skill (ports
+    /// <c>ReqCUser.OnUserSkillUseRequest</c> + <c>TacosBuff.update</c>): acks with
+    /// <c>LP_SkillUseResult</c>, deducts the skill's MP cost, and applies its temporary stat buff via
+    /// <c>LP_TemporaryStatSet</c> (reason = the positive skill id, duration from wz). Attack skills go
+    /// through the attack handlers, not here. The client only offers skills the player owns, so skill
+    /// ownership isn't re-validated server-side yet.
+    /// </summary>
+    private async ValueTask HandleSkillUseAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_UserSkillUseRequest (self-buff): [updateTime:4][skillId:4][skillLevel:1]
+        packet.ReadInt();
+        int skillId = packet.ReadInt();
+        byte level = packet.ReadByte();
+
+        // The reference acks every cast unconditionally.
+        await session.SendAsync(_packets.SkillUseResult()).ConfigureAwait(false);
+
+        SkillEffect? effect = _skills.GetSkillEffect(skillId, level);
+        if (effect is null)
+        {
+            return; // unknown skill / no wz effect
+        }
+
+        Character c = _player.Character;
+        if (effect.MpCon > 0 && c.Mp >= effect.MpCon)
+        {
+            c.Mp = (short)(c.Mp - effect.MpCon);
+            _characters.Save(c);
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Mp)).ConfigureAwait(false);
+        }
+
+        List<BuffStat> buffs = SkillBuff.FromEffect(skillId, effect);
+        if (buffs.Count > 0)
+        {
+            await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserSkillCancelRequest</c> — the player ends a skill buff early (ports
+    /// <c>OnUserSkillCancelRequest</c>): clears that skill's temporary-stat mask with
+    /// <c>LP_TemporaryStatReset</c> (recomputed from the skill's wz effect at the player's level).
+    /// </summary>
+    private async ValueTask HandleSkillCancelAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        int skillId = packet.ReadInt();
+        Character c = _player.Character;
+        int level = c.Skills.TryGetValue(skillId, out int lvl) ? lvl : 1;
+        if (_skills.GetSkillEffect(skillId, level) is not { } effect)
+        {
+            return;
+        }
+
+        uint mask = BuffEffect.Word0Mask(SkillBuff.FromEffect(skillId, effect));
+        if (mask != 0)
+        {
+            await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
+        }
     }
 
     private async ValueTask HandleDropPickUpAsync(MapleSession session, PacketReader packet)

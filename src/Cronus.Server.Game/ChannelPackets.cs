@@ -845,6 +845,15 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>Builds <c>LP_SkillUseResult</c> — acks a skill cast (ports
+    /// <c>ResCWvsContext.SkillUseResult</c>, JMS v186: a single unused byte).</summary>
+    public byte[] SkillUseResult()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SkillUseResult);
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_TemporaryStatSet</c> — applies a temporary stat buff to the local player (ports
     /// <c>ResCWvsContext.TemporaryStatSet</c>, JMS v186): the 128-bit CTS mask (4 dwords in reverse
@@ -861,7 +870,7 @@ public sealed class ChannelPackets
         foreach (BuffStat s in stats)
         {
             w.WriteShort(s.Value);       // nValue (2 bytes in v186)
-            w.WriteInt(-s.ItemId);       // rReason = negative item id
+            w.WriteInt(s.Reason);        // rReason = -itemId (item buff) / +skillId (skill buff)
             w.WriteInt(s.DurationMs);    // tDuration (ms)
         }
 

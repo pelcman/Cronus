@@ -133,6 +133,8 @@ public class SkillTests
     private sealed class StubSkillProvider(int max) : Cronus.Data.ISkillProvider
     {
         public int GetMaxLevel(int skillId) => max;
+
+        public Cronus.Data.SkillEffect? GetSkillEffect(int skillId, int level) => null;
     }
 
     [Fact]
