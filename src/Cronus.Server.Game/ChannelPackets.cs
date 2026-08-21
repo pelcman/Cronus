@@ -860,6 +860,49 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_TemporaryStatSet</c> — applies a temporary stat buff to the local player (ports
+    /// <c>ResCWvsContext.TemporaryStatSet</c>, JMS v186): the 128-bit CTS mask (4 dwords in reverse
+    /// word order), then per active stat (ascending bit order) <c>[value:2][reason=-itemId:4]
+    /// [durationMs:4]</c>, then the 5-byte tail (nDefenseAtt, nDefenseState, delay:2, changed-point).
+    /// </summary>
+    public byte[] TemporaryStatSet(IReadOnlyList<BuffStat> stats)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TemporaryStatSet);
+        w.WriteInt(0);                                 // mask word[3]
+        w.WriteInt(0);                                 // mask word[2]
+        w.WriteInt(0);                                 // mask word[1]
+        w.WriteInt((int)BuffEffect.Word0Mask(stats));  // mask word[0]
+        foreach (BuffStat s in stats)
+        {
+            w.WriteShort(s.Value);       // nValue (2 bytes in v186)
+            w.WriteInt(-s.ItemId);       // rReason = negative item id
+            w.WriteInt(s.DurationMs);    // tDuration (ms)
+        }
+
+        w.WriteByte(0);   // nDefenseAtt
+        w.WriteByte(0);   // nDefenseState
+        w.WriteShort(0);  // delay
+        w.WriteByte(0);   // SetSecondaryStatChangedPoint
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_TemporaryStatReset</c> — clears the given CTS mask (ports
+    /// <c>ResCWvsContext.TemporaryStatReset</c>, JMS v186): the 128-bit mask (reverse word order) and
+    /// a trailing 0 byte. <paramref name="word0Mask"/> holds the simple-stat bits (word[0]).
+    /// </summary>
+    public byte[] TemporaryStatReset(uint word0Mask)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TemporaryStatReset);
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteInt((int)word0Mask);
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_OpenShopDlg</c> — the NPC shop window (ports <c>ResCShopDlg.OpenShopDlg</c>, JMS
     /// v186): the NPC template id, the item count, then per item <c>[itemId][price][reqItem][reqItemQ]
     /// [period=0][levelLimit=0]</c> followed by an 8-byte <c>double</c> unit price for rechargeables

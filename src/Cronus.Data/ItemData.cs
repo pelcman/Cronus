@@ -28,6 +28,36 @@ public sealed class ConsumeSpec
     /// </summary>
     public int MoveTo { get; init; }
 
+    /// <summary>Weapon-attack buff — wz <c>spec/pad</c>.</summary>
+    public int Pad { get; init; }
+
+    /// <summary>Magic-attack buff — wz <c>spec/mad</c>.</summary>
+    public int Mad { get; init; }
+
+    /// <summary>Weapon-defense buff — wz <c>spec/pdd</c>.</summary>
+    public int Pdd { get; init; }
+
+    /// <summary>Magic-defense buff — wz <c>spec/mdd</c>.</summary>
+    public int Mdd { get; init; }
+
+    /// <summary>Accuracy buff — wz <c>spec/acc</c>.</summary>
+    public int Acc { get; init; }
+
+    /// <summary>Avoidability buff — wz <c>spec/eva</c>.</summary>
+    public int Eva { get; init; }
+
+    /// <summary>Speed buff — wz <c>spec/speed</c>.</summary>
+    public int Speed { get; init; }
+
+    /// <summary>Jump buff — wz <c>spec/jump</c>.</summary>
+    public int Jump { get; init; }
+
+    /// <summary>Buff duration in milliseconds — wz <c>spec/time</c> (already stored in ms).</summary>
+    public int Time { get; init; }
+
+    /// <summary>True when this consumable grants a temporary stat buff.</summary>
+    public bool IsBuff => Time > 0 && (Pad | Mad | Pdd | Mdd | Acc | Eva | Speed | Jump) != 0;
+
     /// <summary>Maximum stack size for this item (default 100).</summary>
     public int SlotMax { get; init; } = 100;
 }
@@ -159,6 +189,15 @@ public sealed class WzItemProvider : IItemProvider
             HpRate = spec?.GetInt("hpR") ?? 0,
             MpRate = spec?.GetInt("mpR") ?? 0,
             MoveTo = spec?.GetInt("moveTo") ?? 0,
+            Pad = spec?.GetInt("pad") ?? 0,
+            Mad = spec?.GetInt("mad") ?? 0,
+            Pdd = spec?.GetInt("pdd") ?? 0,
+            Mdd = spec?.GetInt("mdd") ?? 0,
+            Acc = spec?.GetInt("acc") ?? 0,
+            Eva = spec?.GetInt("eva") ?? 0,
+            Speed = spec?.GetInt("speed") ?? 0,
+            Jump = spec?.GetInt("jump") ?? 0,
+            Time = spec?.GetInt("time") ?? 0,
             SlotMax = info?.GetInt("slotMax", 100) ?? 100,
         };
     }

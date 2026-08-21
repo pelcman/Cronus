@@ -33,6 +33,7 @@ public static class ClientOpcode
     public const string DropPickUpRequest = "CP_DropPickUpRequest";
     public const string UserDropMoneyRequest = "CP_UserDropMoneyRequest";
     public const string UserStatChangeItemUseRequest = "CP_UserStatChangeItemUseRequest";
+    public const string UserStatChangeItemCancelRequest = "CP_UserStatChangeItemCancelRequest";
     public const string UserChangeSlotPositionRequest = "CP_UserChangeSlotPositionRequest";
     public const string UserGivePopularityRequest = "CP_UserGivePopularityRequest";
     public const string UserCharacterInfoRequest = "CP_UserCharacterInfoRequest";
@@ -94,6 +95,8 @@ public static class ServerOpcode
     public const string ScriptMessage = "LP_ScriptMessage";
     public const string StatChanged = "LP_StatChanged";
     public const string InventoryOperation = "LP_InventoryOperation";
+    public const string TemporaryStatSet = "LP_TemporaryStatSet";
+    public const string TemporaryStatReset = "LP_TemporaryStatReset";
     public const string OpenShopDlg = "LP_OpenShopDlg";
     public const string ShopResult = "LP_ShopResult";
     public const string ForcedStatReset = "LP_ForcedStatReset";

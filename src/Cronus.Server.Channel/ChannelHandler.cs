@@ -53,6 +53,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opDropPickUp;
     private readonly int _opDropMoney;
     private readonly int _opUseItem;
+    private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
     private readonly int _opGivePopularity;
@@ -123,6 +124,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opUseItem = clientOpcodes.Get(ClientOpcode.UserStatChangeItemUseRequest);
+        _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
@@ -204,6 +206,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opUseItem)
         {
             await HandleUseItemAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opCancelBuff)
+        {
+            await HandleCancelBuffAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opChangeSlot)
         {
@@ -986,6 +992,43 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await session.SendAsync(_packets.StatChanged(c, statChange)).ConfigureAwait(false);
             await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+        }
+
+        // Buff potions (spec/pad, speed, …) grant a temporary stat buff for spec/time ms.
+        if (spec is not null)
+        {
+            List<BuffStat> buffs = BuffEffect.FromSpec(spec);
+            if (buffs.Count > 0)
+            {
+                await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserStatChangeItemCancelRequest</c> — the player right-clicks a buff icon to end
+    /// it early (ports <c>ReqCUser.OnUserStatChangeItemCancelRequest</c>): the buff id is the negative
+    /// item id, so we recompute that item's stat mask from wz and clear it with
+    /// <c>LP_TemporaryStatReset</c>.
+    /// </summary>
+    private async ValueTask HandleCancelBuffAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        int buffId = packet.ReadInt();       // negative item id
+        int itemId = -buffId;
+        if (itemId <= 0 || _items.GetConsume(itemId) is not { } spec)
+        {
+            return;
+        }
+
+        uint mask = BuffEffect.Word0Mask(BuffEffect.FromSpec(spec));
+        if (mask != 0)
+        {
+            await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
         }
     }
 
