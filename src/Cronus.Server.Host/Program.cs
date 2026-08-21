@@ -80,6 +80,9 @@ var channelListener = new MapleListener(
         "channel"),
     keepAlive);
 
+// Server tick: brings dead mobs back after a delay so hunting maps stay populated.
+var mobRespawn = new MobRespawnService(fields, new ChannelPackets(serverOps, config));
+
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
@@ -100,7 +103,8 @@ try
 {
     await Task.WhenAll(
         loginListener.RunAsync(cts.Token),
-        channelListener.RunAsync(cts.Token));
+        channelListener.RunAsync(cts.Token),
+        mobRespawn.RunAsync(cts.Token));
 }
 finally
 {

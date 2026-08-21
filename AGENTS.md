@@ -182,8 +182,20 @@ Each milestone means adding one "working vertical slice".
         cached); `CP_UserSkillUpRequest` caps at the wz max level so SP can't over-level a skill.
         Wired via `CRONUS_WZ`; `NullSkillProvider` (no data → uncapped) when unset.
 
+- [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
+      dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
+      `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated
+      instead of emptying out. First use of the "timed world logic on a tick" pattern (CLAUDE.md
+      §2). Fixed 7 s delay for now; wz per-spawn `mobTime` is a follow-up.
+
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
+
+**Blocked / needs a prerequisite:** *item drops* (the remaining M10 item) needs a general
+inventory system (USE/ETC/SETUP/CASH tabs + CharacterData encoding of them + pickup→inventory);
+today only equipped items are modelled. The drop table itself is available
+(`Reference/JMSv186/sql/drop_data.sql`: dropperid/itemid/min/max/questid/chance, roll is
+`rand(0..999) < chance*rate`). Build the inventory system first, then drops land cleanly.
 
 ---
 
