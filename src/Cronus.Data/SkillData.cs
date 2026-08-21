@@ -28,6 +28,13 @@ public sealed record SkillEffect
 
     /// <summary>The <c>y</c> value some special buffs use (e.g. Hyper Body's MaxMP).</summary>
     public int Y { get; init; }
+
+    /// <summary>
+    /// True when the level carries an affect box (wz <c>lt</c>/<c>rb</c>) — the marker for a
+    /// party-wide buff (Haste, Rage, Hyper Body, Bless, …), matching the reference's
+    /// <c>isPartyBuff</c>.
+    /// </summary>
+    public bool HasPartyArea { get; init; }
 }
 
 /// <summary>Provides skill data (max level, and per-level buff effects) from Skill wz.</summary>
@@ -106,6 +113,7 @@ public sealed class WzSkillProvider : ISkillProvider
                 Jump = lvl.GetInt("jump"),
                 X = lvl.GetInt("x"),
                 Y = lvl.GetInt("y"),
+                HasPartyArea = lvl.Child("lt") is not null,
             };
         }
 

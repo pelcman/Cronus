@@ -242,8 +242,12 @@ Each milestone means adding one "working vertical slice".
         `ISkillProvider.GetSkillEffect` loads the per-level effect; `SkillBuff.FromEffect` maps generic
         stats (reusing the item-buff bits) + signature buffs (Magic Guard/Dark Sight/Booster/Power
         Guard/Hyper Body via `x`/`y`). Deducts `mpCon` (`LP_StatChanged` MP); cancel clears the mask.
-        Deferred: server-side skill-ownership validation, party buffs, attack-skill effects, buff-expiry
-        tick. Cast-applies-buff test + FromEffect goldens.
+        **Party buffs**: a buff with a wz affect box (`lt`/`rb` = the reference's `isPartyBuff`
+        marker — Haste/Rage/Hyper Body/…) also lands on party members in the same map. **Attack
+        skills** deduct their `mpCon` at the learned level and mirror the real skill level to the
+        field (`PrepareSkillAttackAsync`). Deferred: server-side skill-ownership validation,
+        summons, the box-range check (map-wide for now), buff-expiry tick. Cast/attack tests +
+        FromEffect goldens.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

@@ -147,5 +147,5 @@ public static class SkillBuff
         1101004 or 1201004 or 1301004 or // warrior boosters (sword/BW/spear)
         2101004 or 2201004 or            // mage boosters (FP/IL)
         3101004 or 3201004 or            // archer boosters (bow/crossbow)
-        4101003 or 4201003;              // thief boosters (claw/dagger)
+        4101003 or 4201002;              // thief boosters (claw 4101003 / dagger 4201002 — 4201003 is Haste)
 }

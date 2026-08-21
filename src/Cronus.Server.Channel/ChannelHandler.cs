@@ -886,9 +886,25 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         List<BuffStat> buffs = SkillBuff.FromEffect(skillId, effect);
-        if (buffs.Count > 0)
+        if (buffs.Count == 0)
         {
-            await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
+            return;
+        }
+
+        byte[] buffPacket = _packets.TemporaryStatSet(buffs);
+        await session.SendAsync(buffPacket).ConfigureAwait(false);
+
+        // A party buff (Haste, Rage, Hyper Body, … — marked by the wz affect box) also lands on
+        // party members in the same map (ports the isPartyBuff apply; range box simplified to map).
+        if (effect.HasPartyArea && _parties.GetForCharacter(c.Id) is { } party)
+        {
+            foreach (FieldPlayer member in party.Members)
+            {
+                if (member.Character.Id != c.Id && member.Character.MapId == c.MapId)
+                {
+                    await TrySendAsync(member, buffPacket).ConfigureAwait(false);
+                }
+            }
         }
     }
 
