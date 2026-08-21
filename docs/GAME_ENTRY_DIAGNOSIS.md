@@ -102,17 +102,23 @@ DLL-injection fixes** (a dgVoodoo2 `d3d8.dll` triggered "不正なプログラ�
 されました") and **protects its process from termination**. So DirectX wrappers
 (dgVoodoo2/DXVK) are unusable here. dgVoodoo2 was reverted.
 
-**Fix: Riremito iGPUplz (anti-cheat-safe, owner-verified).** It replaces
-`NameSpace.dll` with a proxy that forwards to `NameSpace.old` and applies the
-JMS186 WZ patch at load. Built from source here
-(`DevTools/riremito/iGPUplz/build.bat`, 32-bit `cl`, `/DSIMPLE_LIB /DUNICODE`)
-into a 129 KB `NameSpace.dll` exporting `DllCanUnloadNow`/`DllGetClassObject`.
-Apply with `DevTools/apply_igpuplz.bat` (needs `NameSpace.ini` →
-`[NameSpace] PATCH_MODE=1`, i.e. PM_DISABLE_MM). The client must be closed first
-(anti-cheat blocks killing it). For this in-group private server the owner also
-authorised **removing the anti-cheat** (`aossdk`/`tricod` are static imports →
-stub DLLs or IAT patch) as a follow-up if needed. See root
-`CLIENT_RENDERING_FIX.md` and `AGENTS.md` §7.5.
+**FIX (CONFIRMED WORKING — the real client now enters the game):** apply the
+iGPUplz JMS186 change **directly to `NameSpace.dll` on disk** — flip `6A 01`→
+`6A 02` at file offsets **0xE923** (`CWzFileSystem::OpenDelayedArchive`) and
+**0xEDC6** (`CWzFileSystem::OnGetSubItemProp`). Script:
+`DevTools/wzpatch_namespace.py apply` (backup: `NameSpace.dll.orig`; close the
+client first — the DLL is locked while it runs). This is the same effect as
+iGPUplz and, like it, is accepted by the client's anti-cheat.
+
+We first built the real **iGPUplz NameSpace.dll proxy** from source
+(`DevTools/riremito/iGPUplz/build.bat`) but it **crashed this client at startup
+inside `PCOM.DLL`** (0xC0000005), even with `PATCH_MODE=2` (proxy/forward only,
+no patch) — so the `NameSpace.old` proxy + `LoadLibrary`-in-`DllMain` approach is
+incompatible with this client. The on-disk 2-byte patch avoids the proxy entirely
+and works. (Anti-cheat side notes for follow-ups: DLL-injection wrappers like
+dgVoodoo2 are rejected; the game process is termination-protected; the owner
+authorised removing the anti-cheat — `aossdk`/`tricod` are static imports.)
+See root `CLIENT_RENDERING_FIX.md` and `AGENTS.md` §7.5.
 
 ---
 

@@ -273,14 +273,15 @@ Real-client testing lives **outside** the Cronus repo, under the workspace root
 
 **Riremito's GitHub has a large toolbox for running/verifying these clients — reference it
 whenever stuck; cloning into `DevTools/riremito/` is fine.** Key repos:
-- `iGPUplz` — NameSpace.dll proxy that patches WZ archive open mode. For **JMS186 set
-  `PATCH_MODE=1` (PM_DISABLE_MM = "gfx fix (pre-bb)")**: it patches
-  `CWzFileSystem::OpenDelayedArchive`/`OnGetSubItemProp` (`6A 01`→`6A 02`). This is the
-  fix for the **game-entry crash** (client opens the field's delayed WZ archive on entry;
-  the default mode fails on this GPU → `STG_E_FILENOTFOUND 0x80030002` → crash). Built here
-  with `DevTools/riremito/iGPUplz/build.bat` (VS `cl`, 32-bit, `/DSIMPLE_LIB /DUNICODE`);
-  apply via `DevTools/apply_igpuplz.bat` (client must be closed first — anti-cheat blocks
-  killing it). It depends on the `tools` repo (`Simple` lib; Zydis-free for this path).
+- `iGPUplz` — its JMS186 change (`CWzFileSystem::OpenDelayedArchive`/`OnGetSubItemProp`
+  `6A 01`→`6A 02`, "gfx fix (pre-bb)") is **the confirmed fix** for the game-entry crash
+  (client opens the field's delayed WZ archive on entry; default mode fails here →
+  `STG_E_FILENOTFOUND 0x80030002` → crash). **The iGPUplz NameSpace.dll *proxy* (built from
+  source, `DevTools/riremito/iGPUplz/build.bat`) crashes THIS client at startup in PCOM.DLL**
+  (its LoadLibrary-in-DllMain is incompatible), so instead apply the same change **directly
+  to `NameSpace.dll` on disk** (offsets 0xE923/0xEDC6) via `DevTools/wzpatch_namespace.py
+  apply` — client entering the game confirmed. (Swap a locked NameSpace.dll by renaming it
+  first, then copying — the anti-cheat protects the process from taskkill.)
 - `EmuClient` / `LocalHost` / `RunEmu` / `Taco112` / `Teresa232` — localhost redirectors.
 - `RirePE` — packet editor/logger (differential packet verification vs Cronus).
 - `TeresaBeta` — "Remove BlackCipher/BlackCall" (anti-cheat removal, newer clients).
