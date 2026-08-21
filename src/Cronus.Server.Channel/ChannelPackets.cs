@@ -666,6 +666,61 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_Whisper flag = req_res | loc_whis (ports Ops_Whisper). req_res: WP_Result=0x08,
+    // WP_Receive=0x10; loc_whis: WP_Location=0x01, WP_Whisper=0x02.
+    private const int WpLocation = 0x01;
+    private const int WpWhisper = 0x02;
+    private const int WpResult = 0x08;
+    private const int WpReceive = 0x10;
+
+    /// <summary>
+    /// Builds the sender-side <c>LP_Whisper</c> (WP_Result | WP_Whisper) that acks a whisper: the
+    /// target name echoed back and whether it was delivered (ports <c>ResCField.Whisper</c>).
+    /// </summary>
+    public byte[] WhisperResult(string targetName, bool delivered)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Whisper);
+        w.WriteByte((byte)(WpResult | WpWhisper));
+        w.WriteString(targetName);
+        w.WriteBool(delivered);          // 1 = target online and message delivered
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the recipient-side <c>LP_Whisper</c> (WP_Receive | WP_Whisper) that delivers a
+    /// whisper: sender name, sender channel (0-based), an admin flag, and the message (ports
+    /// <c>ResCField.Whisper</c>).
+    /// </summary>
+    public byte[] WhisperReceive(string senderName, int senderChannel, string message)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Whisper);
+        w.WriteByte((byte)(WpReceive | WpWhisper));
+        w.WriteString(senderName);
+        w.WriteByte((byte)senderChannel);
+        w.WriteByte(0);                  // admin?
+        w.WriteString(message);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the <c>LP_Whisper</c> location result (WP_Result | WP_Location) that answers the
+    /// client's "/find" for <paramref name="targetName"/>. When the target is online on this
+    /// channel the result is <c>LR_GameSvr</c> (1) + their map id; otherwise <c>LR_None</c> (0)
+    /// + 0 (ports <c>ResCField.Whisper</c> + <c>OpsLocationResult</c>).
+    /// </summary>
+    public byte[] WhisperLocationResult(string targetName, int mapIdOrZero, bool online)
+    {
+        const byte LrNone = 0;
+        const byte LrGameSvr = 1;
+
+        PacketWriter w = NewPacket(ServerOpcode.Whisper);
+        w.WriteByte((byte)(WpResult | WpLocation));
+        w.WriteString(targetName);
+        w.WriteByte(online ? LrGameSvr : LrNone);
+        w.WriteInt(online ? mapIdOrZero : 0);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_UserMove</c> relaying a raw CMovePath buffer (ports
     /// <c>ResCUserRemote.UserMove</c>: character id + the path bytes as received).

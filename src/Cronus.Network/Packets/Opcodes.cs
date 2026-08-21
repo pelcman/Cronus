@@ -36,6 +36,7 @@ public static class ClientOpcode
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
     public const string UserSelectNpc = "CP_UserSelectNpc";
     public const string UserScriptMessageAnswer = "CP_UserScriptMessageAnswer";
+    public const string Whisper = "CP_Whisper";
 }
 
 /// <summary>
@@ -64,6 +65,7 @@ public static class ServerOpcode
     public const string UserChat = "LP_UserChat";
     public const string UserEmotion = "LP_UserEmotion";
     public const string UserSitResult = "LP_UserSitResult";
+    public const string Whisper = "LP_Whisper";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string UserShootAttack = "LP_UserShootAttack";

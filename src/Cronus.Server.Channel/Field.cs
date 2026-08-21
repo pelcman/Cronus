@@ -433,4 +433,30 @@ public sealed class FieldRegistry
             }
         }
     }
+
+    /// <summary>
+    /// Finds an online player by character name across all active fields (case-insensitive), or
+    /// null if nobody by that name is on this channel. Used for whisper / location lookups; a
+    /// linear scan is fine for an in-group server's handful of players.
+    /// </summary>
+    public FieldPlayer? FindPlayerByName(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return null;
+        }
+
+        foreach (Field field in Fields)
+        {
+            foreach (FieldPlayer player in field.Players)
+            {
+                if (string.Equals(player.Character.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return player;
+                }
+            }
+        }
+
+        return null;
+    }
 }

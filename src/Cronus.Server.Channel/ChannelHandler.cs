@@ -50,6 +50,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
+    private readonly int _opWhisper;
 
     private FieldPlayer? _player;
     private Field? _field;
@@ -90,6 +91,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
+        _opWhisper = clientOpcodes.Get(ClientOpcode.Whisper);
     }
 
     /// <summary>The character bound to this session after a successful migrate-in.</summary>
@@ -108,6 +110,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opUserChat)
         {
             await HandleUserChatAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opWhisper)
+        {
+            await HandleWhisperAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opUserEmotion)
         {
@@ -639,6 +645,57 @@ public sealed class ChannelHandler : PacketHandlerBase
         byte[] chat = _packets.UserChat(
             _player.Character.Id, isGm: false, message, onlyBalloon);
         await _field.BroadcastAsync(chat).ConfigureAwait(false);
+    }
+
+    // CP_Whisper operation bits (ports Ops_Whisper): the client ORs WP_Request(0x04) onto the
+    // location/whisper op; strip it to recover which one was asked for.
+    private const int WpRequest = 0x04;
+    private const int WpLocationOp = 0x01;
+    private const int WpWhisperOp = 0x02;
+
+    /// <summary>
+    /// Handles <c>CP_Whisper</c> — both a private message (WP_Whisper) and a "/find" location
+    /// lookup (WP_Location). Finds the target on this channel by name and routes the message /
+    /// answers the lookup (ports <c>ReqCUser.OnWhisper</c>).
+    /// </summary>
+    private async ValueTask HandleWhisperAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        int operation = packet.ReadByte();
+        int op = operation & ~WpRequest; // drop the WP_Request bit
+
+        if (op == WpLocationOp)
+        {
+            string targetName = packet.ReadString();
+            FieldPlayer? target = _fields.FindPlayerByName(targetName);
+            await session.SendAsync(
+                _packets.WhisperLocationResult(targetName, target?.Character.MapId ?? 0, target is not null))
+                .ConfigureAwait(false);
+            return;
+        }
+
+        if (op == WpWhisperOp)
+        {
+            string targetName = packet.ReadString();
+            string message = packet.ReadString();
+            FieldPlayer? target = _fields.FindPlayerByName(targetName);
+
+            // Ack the sender: was it delivered?
+            await session.SendAsync(_packets.WhisperResult(targetName, target is not null))
+                .ConfigureAwait(false);
+
+            // Deliver to the recipient (skip when they whisper themselves — the ack is enough).
+            if (target is not null && target.Character.Id != _player.Character.Id)
+            {
+                await target.Session.SendAsync(
+                    _packets.WhisperReceive(_player.Character.Name, _channelId, message))
+                    .ConfigureAwait(false);
+            }
+        }
     }
 
     /// <summary>

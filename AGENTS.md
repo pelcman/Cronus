@@ -220,6 +220,13 @@ Each milestone means adding one "working vertical slice".
       `target.TotalDamage`, and `CP_UserHit` clamps the reported hit too. Closes the "trusts
       client-reported damage" soft spot flagged in CLAUDE.md §2. Follow-ups: per-skill/weapon damage
       ceilings from wz, attack-rate limiting, and range checks vs. mob position.
+- [x] **M19: Whisper & /find** — `CP_Whisper` routes a private message (WP_Whisper) or a location
+      lookup (WP_Location) to a target found by name across the channel
+      (`FieldRegistry.FindPlayerByName`, case-insensitive). The sender gets a delivered/not ack
+      (`WhisperResult`), the recipient the message with sender name + channel (`WhisperReceive`),
+      and /find reports the target's map or "not found" (`WhisperLocationResult`, ports
+      `ReqCUser.OnWhisper` + `OpsLocationResult`). End-to-end tested through encrypted sessions.
+      Cross-channel routing is out of scope (single-channel server). First cross-field social feature.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
