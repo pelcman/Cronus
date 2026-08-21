@@ -224,6 +224,13 @@ Each milestone means adding one "working vertical slice".
         `ConsumeSpec` gains moveTo + the buff fields. The client counts the duration down and expires
         the buff visually; a server-side expiry tick is a follow-up (buffs aren't used in server
         combat). End-to-end tests (scroll warp, buff drink) + packet goldens.
+  - [x] **M10i: NPC storage / trunk** — account-scoped storage (`CP_UserTrunkRequest` 0x0036 →
+        `LP_TrunkResult` 0x015A), ports `ReqCTrunkDlg`+`TacosStorage`: open (op 21, full dump with the
+        8-byte DBCHAR mask + per-category items), deposit (flat 100-meso fee), withdraw, meso
+        (>0 withdraw / <0 deposit), close. Item objects move between inventory and storage
+        (`Inventory.Place`) so equip stats survive. `StorageRegistry` keyed by account id (in-memory;
+        DB persistence via a `storages`/trunk-items table is a follow-up). `/storage` opens it;
+        NPC-script `sendStorage` is a follow-up. Deposit→withdraw round-trip test + packet goldens.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
