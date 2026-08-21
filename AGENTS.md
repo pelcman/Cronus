@@ -166,7 +166,12 @@ Each milestone means adding one "working vertical slice".
       (LP_MobMove); control hands off to a remaining player on disconnect/transfer and clears
       on death; server tracks mob position from the path.
 - [ ] **M10: Combat depth & content** — item drops (wz drop tables), magic/ranged attacks,
-      quest/skill DB persistence, wz skill data. **← current**
+      wz skill data. **← current**
+  - [x] **M10a: quest/skill DB persistence** — `Skills`/`StartedQuests`/`CompletedQuests` now
+        persist as JSON columns on the `characters` row (EF value converter + comparer), so
+        progression survives a restart. Verified over SQLite (which, unlike the InMemory
+        provider, applies the converters). *Note:* schema is still `EnsureCreated`, so an
+        existing DB needs a recreate (or a real migration) to gain the new columns.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
