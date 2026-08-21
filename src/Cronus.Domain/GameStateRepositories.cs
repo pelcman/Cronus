@@ -24,3 +24,45 @@ public interface IKeymapRepository
 
     void Save(int characterId, IReadOnlyDictionary<int, KeyBinding> bindings);
 }
+
+/// <summary>One listing in a persisted hired merchant (item template + remaining bundles + price).</summary>
+public sealed record MerchantListing(InventoryItem Item, short Bundles, int Price);
+
+/// <summary>One recorded sale in a persisted hired merchant.</summary>
+public sealed record MerchantSale(int ItemId, short Quantity, int TotalPrice, string Buyer);
+
+/// <summary>A hired merchant's persistent state (one per owner), keyed by the owner character.</summary>
+public sealed class HiredMerchantData
+{
+    public int OwnerId { get; set; }
+
+    public string OwnerName { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+
+    public int ItemId { get; set; }
+
+    public int MapId { get; set; }
+
+    public short X { get; set; }
+
+    public short Y { get; set; }
+
+    public int Foothold { get; set; }
+
+    public int Meso { get; set; }
+
+    public List<MerchantListing> Listings { get; set; } = new();
+
+    public List<MerchantSale> Sales { get; set; } = new();
+}
+
+/// <summary>Persistence port for hired merchants (so open stores survive a server restart).</summary>
+public interface IHiredMerchantRepository
+{
+    IReadOnlyList<HiredMerchantData> LoadAll();
+
+    void Save(HiredMerchantData merchant);
+
+    void Delete(int ownerId);
+}

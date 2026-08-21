@@ -28,7 +28,7 @@ WarnUnresolved("server", serverOps);
 
 // Use MySQL when a connection string is configured (CRONUS_DB env var), else fall back to the
 // in-memory stores so the server runs with zero external dependencies for local testing.
-(IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo, IGuildRepository? guildRepo) = CreateRepositories();
+(IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo, IGuildRepository? guildRepo, IHiredMerchantRepository? merchantRepo) = CreateRepositories();
 var loginService = new LoginService(accounts, autoRegister: true);
 
 // The login server hands clients to the channel via LP_SelectCharacterResult. The IP it
@@ -88,7 +88,7 @@ var buffs = new BuffTracker();
 var guilds = new GuildRegistry(guildRepo);
 var miniGames = new MiniGameRegistry();
 var playerShops = new PlayerShopRegistry();
-var merchants = new HiredMerchantRegistry();
+var merchants = new HiredMerchantRegistry(merchantRepo);
 
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
@@ -314,13 +314,13 @@ static void WarnUnresolved(string which, OpcodeTable table)
     }
 }
 
-static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?) CreateRepositories()
+static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?, IHiredMerchantRepository?) CreateRepositories()
 {
     string? connectionString = Environment.GetEnvironmentVariable("CRONUS_DB");
     if (string.IsNullOrWhiteSpace(connectionString))
     {
         Console.WriteLine("[db] CRONUS_DB not set — using in-memory stores (not persistent).");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null);
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null);
     }
 
     try
@@ -333,11 +333,12 @@ static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRe
             new DbCharacterRepository(factory),
             new DbStorageRepository(factory),
             new DbKeymapRepository(factory),
-            new DbGuildRepository(factory));
+            new DbGuildRepository(factory),
+            new DbHiredMerchantRepository(factory));
     }
     catch (Exception ex)
     {
         Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory stores.");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null);
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null);
     }
 }

@@ -33,6 +33,48 @@ public sealed class HiredMerchant
         StartedAtTick = Environment.TickCount64;
     }
 
+    /// <summary>Restores a merchant from its persisted snapshot (a server restart).</summary>
+    public HiredMerchant(int objectId, HiredMerchantData data)
+    {
+        ObjectId = objectId;
+        OwnerId = data.OwnerId;
+        OwnerName = data.OwnerName;
+        Description = data.Description;
+        ItemId = data.ItemId;
+        MapId = data.MapId;
+        X = data.X;
+        Y = data.Y;
+        Foothold = data.Foothold;
+        Meso = data.Meso;
+        StartedAtTick = Environment.TickCount64;
+        Open = true; // restored stores go straight back to selling
+        foreach (MerchantListing listing in data.Listings)
+        {
+            Items.Add(new PlayerShopItem(listing.Item, listing.Bundles, listing.Price));
+        }
+
+        foreach (MerchantSale sale in data.Sales)
+        {
+            Sold.Add(new SoldRecord(sale.ItemId, sale.Quantity, sale.TotalPrice, sale.Buyer));
+        }
+    }
+
+    /// <summary>The persistable snapshot of this merchant.</summary>
+    public HiredMerchantData Snapshot() => new()
+    {
+        OwnerId = OwnerId,
+        OwnerName = OwnerName,
+        Description = Description,
+        ItemId = ItemId,
+        MapId = MapId,
+        X = X,
+        Y = Y,
+        Foothold = Foothold,
+        Meso = Meso,
+        Listings = Items.Select(i => new MerchantListing(i.Item, i.Bundles, i.Price)).ToList(),
+        Sales = Sold.Select(s => new MerchantSale(s.ItemId, s.Quantity, s.TotalPrice, s.Buyer)).ToList(),
+    };
+
     public int ObjectId { get; }
 
     public int OwnerId { get; }
@@ -130,7 +172,25 @@ public sealed class HiredMerchantRegistry
     private readonly ConcurrentDictionary<int, HiredMerchant> _byObjectId = new();
     private readonly ConcurrentDictionary<int, HiredMerchant> _byOwner = new();
     private readonly ConcurrentDictionary<int, HiredMerchant> _byParticipant = new();
+    private readonly IHiredMerchantRepository? _repo;
     private int _nextObjectId;
+
+    public HiredMerchantRegistry(IHiredMerchantRepository? repo = null)
+    {
+        _repo = repo;
+        if (repo is null)
+        {
+            return;
+        }
+
+        // Stores that were open when the server went down come straight back up.
+        foreach (HiredMerchantData data in repo.LoadAll())
+        {
+            var merchant = new HiredMerchant(ObjectIdBase + Interlocked.Increment(ref _nextObjectId), data);
+            _byObjectId[merchant.ObjectId] = merchant;
+            _byOwner[merchant.OwnerId] = merchant;
+        }
+    }
 
     public HiredMerchant Create(Character owner, string description, int itemId, int mapId, short x, short y, int foothold)
     {
@@ -138,8 +198,12 @@ public sealed class HiredMerchantRegistry
             ObjectIdBase + Interlocked.Increment(ref _nextObjectId), owner, description, itemId, mapId, x, y, foothold);
         _byObjectId[merchant.ObjectId] = merchant;
         _byOwner[owner.Id] = merchant;
+        Persist(merchant);
         return merchant;
     }
+
+    /// <summary>Flushes a merchant's state (stock, banked meso, sales) to the store, if any.</summary>
+    public void Persist(HiredMerchant merchant) => _repo?.Save(merchant.Snapshot());
 
     public HiredMerchant? Get(int objectId)
         => _byObjectId.TryGetValue(objectId, out HiredMerchant? m) ? m : null;
@@ -194,5 +258,7 @@ public sealed class HiredMerchantRegistry
         {
             RemoveVisitor(merchant, seat);
         }
+
+        _repo?.Delete(merchant.OwnerId);
     }
 }

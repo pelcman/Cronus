@@ -31,6 +31,8 @@ public sealed class CronusDbContext : DbContext
 
     public DbSet<GuildData> Guilds => Set<GuildData>();
 
+    public DbSet<HiredMerchantEntity> HiredMerchants => Set<HiredMerchantEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
@@ -80,6 +82,12 @@ public sealed class CronusDbContext : DbContext
         keymap.ToTable("keymaps");
         keymap.HasKey(k => k.CharacterId);
         keymap.Property(k => k.CharacterId).ValueGeneratedNever();
+
+        var merchant = modelBuilder.Entity<HiredMerchantEntity>();
+        merchant.ToTable("hiredmerch");
+        merchant.HasKey(m => m.OwnerId);
+        merchant.Property(m => m.OwnerId).ValueGeneratedNever();
+        merchant.Property(m => m.OwnerName).HasMaxLength(13);
 
         var guild = modelBuilder.Entity<GuildData>();
         guild.ToTable("guilds");

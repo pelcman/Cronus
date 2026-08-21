@@ -87,6 +87,38 @@ public class DbGameStateRepositoryTests
     }
 
     [Fact]
+    public void HiredMerchant_RoundTrips_StockAndSales()
+    {
+        var repo = new DbHiredMerchantRepository(InMemoryFactory());
+
+        var sword = new InventoryItem { ItemId = 1302000, Quantity = 1, Watk = 20, UpgradeSlots = 5 };
+        repo.Save(new HiredMerchantData
+        {
+            OwnerId = 7,
+            OwnerName = "Alice",
+            Description = "restart survivor",
+            ItemId = 5030000,
+            MapId = 910000001,
+            X = 100,
+            Y = -50,
+            Meso = 12_345,
+            Listings = new List<MerchantListing> { new(sword, 1, 999_999) },
+            Sales = new List<MerchantSale> { new(2000000, 10, 5_000, "Bob") },
+        });
+
+        HiredMerchantData loaded = Assert.Single(repo.LoadAll());
+        Assert.Equal("Alice", loaded.OwnerName);
+        Assert.Equal(12_345, loaded.Meso);
+        MerchantListing listing = Assert.Single(loaded.Listings);
+        Assert.Equal(20, listing.Item.Watk); // equip stats survive the JSON round-trip
+        Assert.Equal(999_999, listing.Price);
+        Assert.Equal("Bob", Assert.Single(loaded.Sales).Buyer);
+
+        repo.Delete(7);
+        Assert.Empty(repo.LoadAll());
+    }
+
+    [Fact]
     public void Guild_RoundTrips_TitlesEmblemAndNotice()
     {
         var repo = new DbGuildRepository(InMemoryFactory());

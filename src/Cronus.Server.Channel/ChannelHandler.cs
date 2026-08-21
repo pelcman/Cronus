@@ -3459,9 +3459,16 @@ public sealed class ChannelHandler : PacketHandlerBase
                 new InventoryItem { ItemId = item.ItemId, Quantity = perBundle }, bundles, price));
         }
 
-        refresh = _playerShops.GetForCharacter(c.Id) is { } s2
-            ? _packets.PlayerShopItemUpdate(s2)
-            : _packets.HiredMerchantItemUpdate(_merchants.GetForParticipant(c.Id)!);
+        if (_playerShops.GetForCharacter(c.Id) is { } s2)
+        {
+            refresh = _packets.PlayerShopItemUpdate(s2);
+        }
+        else
+        {
+            HiredMerchant stockedMerchant = _merchants.GetForParticipant(c.Id)!;
+            _merchants.Persist(stockedMerchant);
+            refresh = _packets.HiredMerchantItemUpdate(stockedMerchant);
+        }
 
         _characters.Save(c);
         if (change is { } ch)
@@ -3631,6 +3638,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     {
         _merchants.RemoveManager(merchant);
         merchant.Open = true;
+        _merchants.Persist(merchant);
         Field field = _fields.Get(merchant.MapId);
         await field.BroadcastAsync(_packets.EmployeeEnterField(merchant)).ConfigureAwait(false);
     }
@@ -3697,6 +3705,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
         await BroadcastToMerchantAsync(merchant, _packets.HiredMerchantItemUpdate(merchant)).ConfigureAwait(false);
+        _merchants.Persist(merchant);
     }
 
     /// <summary>ESP_MoveItemToInventory — the managing owner reclaims a listing.</summary>
@@ -3720,6 +3729,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         merchant.Items.RemoveAt(index);
+        _merchants.Persist(merchant);
         await session.SendAsync(_packets.HiredMerchantItemUpdate(merchant)).ConfigureAwait(false);
     }
 
@@ -3748,6 +3758,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             // Stock remains: back to business.
             merchant.Open = true;
+            _merchants.Persist(merchant);
             Field field = _fields.Get(merchant.MapId);
             await field.BroadcastAsync(_packets.EmployeeMiniRoomBalloon(merchant)).ConfigureAwait(false);
             return;
