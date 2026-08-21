@@ -187,6 +187,11 @@ Each milestone means adding one "working vertical slice".
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated
       instead of emptying out. First use of the "timed world logic on a tick" pattern (CLAUDE.md
       §2). Uses the map spawn's `mobTime` (>0 = that many seconds, -1 = never/boss, 0 = default 7 s).
+- [x] **M12: HP/MP regen tick** — idle players recover HP/MP on a `PlayerRegenService` tick;
+      `FieldPlayer.LastActiveTick` gates it (moving/attacking resets the idle timer), the pure
+      `PlayerRegen.Apply` rule tops HP/MP up toward max, and the change is pushed with
+      `LP_StatChanged`. Simplified fixed regen for now; MapleStory's level/job scaling and
+      sit/rest bonus are follow-ups.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

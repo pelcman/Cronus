@@ -1,0 +1,99 @@
+using Cronus.Domain;
+
+namespace Cronus.Server.Channel;
+
+/// <summary>Natural HP/MP recovery rules (pure, so they're easy to test).</summary>
+public static class PlayerRegen
+{
+    /// <summary>How long a player must be idle (no move/attack) before regen starts.</summary>
+    public const long IdleThresholdMs = 4000;
+
+    /// <summary>
+    /// Recovers a modest amount of HP/MP toward the maximum and returns the stats that changed
+    /// (0 when already full). Mutates <paramref name="c"/>. A simplification of MapleStory's
+    /// level/job-scaled idle recovery — enough to keep idle players topping up.
+    /// </summary>
+    public static StatFlag Apply(Character c)
+    {
+        StatFlag changed = 0;
+
+        if (c.Hp < c.MaxHp)
+        {
+            c.Hp = (short)Math.Min(c.MaxHp, c.Hp + Math.Max(3, c.MaxHp / 50));
+            changed |= StatFlag.Hp;
+        }
+
+        if (c.Mp < c.MaxMp)
+        {
+            c.Mp = (short)Math.Min(c.MaxMp, c.Mp + Math.Max(3, c.MaxMp / 50));
+            changed |= StatFlag.Mp;
+        }
+
+        return changed;
+    }
+}
+
+/// <summary>
+/// A server tick that regenerates HP/MP for idle players and pushes the change with
+/// <c>LP_StatChanged</c>. Timed world logic on a tick, decoupled from client packets
+/// (see CLAUDE.md §2).
+/// </summary>
+public sealed class PlayerRegenService
+{
+    private readonly FieldRegistry _fields;
+    private readonly ChannelPackets _packets;
+    private readonly TimeSpan _interval;
+
+    public PlayerRegenService(FieldRegistry fields, ChannelPackets packets, TimeSpan? interval = null)
+    {
+        _fields = fields;
+        _packets = packets;
+        _interval = interval ?? TimeSpan.FromSeconds(5);
+    }
+
+    public async Task RunAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(_interval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await TickAsync(Environment.TickCount64).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // shutting down
+        }
+    }
+
+    /// <summary>Runs one regen pass at <paramref name="nowTick"/> (exposed for tests).</summary>
+    public async Task TickAsync(long nowTick)
+    {
+        foreach (Field field in _fields.Fields)
+        {
+            foreach (FieldPlayer player in field.Players)
+            {
+                if (nowTick - player.LastActiveTick < PlayerRegen.IdleThresholdMs)
+                {
+                    continue; // recently moved or attacked — not resting
+                }
+
+                StatFlag changed = PlayerRegen.Apply(player.Character);
+                if (changed == 0)
+                {
+                    continue; // already at full HP/MP
+                }
+
+                try
+                {
+                    await player.Session.SendAsync(_packets.StatChanged(player.Character, changed)).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // the session is going away; its disconnect path will clean up
+                }
+            }
+        }
+    }
+}

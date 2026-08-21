@@ -287,6 +287,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         byte[] movePath = packet.ReadRemaining();
 
         UpdatePositionFromMovePath(_player, movePath);
+        _player.LastActiveTick = Environment.TickCount64; // moving delays HP/MP regen
 
         await _field.BroadcastAsync(
             _packets.UserMove(_player.Character.Id, movePath),
@@ -346,6 +347,11 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// </summary>
     private async ValueTask ApplyAttackDamageAsync(MapleSession session, AttackInfo attack)
     {
+        if (_player is not null)
+        {
+            _player.LastActiveTick = Environment.TickCount64; // attacking delays HP/MP regen
+        }
+
         foreach (AttackTarget target in attack.Targets)
         {
             FieldMob? mob = _field!.FindMob(target.MobObjectId);
