@@ -221,7 +221,9 @@ parity is on the order of half a year.
 - [ ] Stand up a minimal channel server so `LP_SelectCharacterResult` migrate resolves
 - [ ] Replace plaintext password with a real hash (BCrypt); consider async repository APIs
 - [ ] EF Core migrations (replace EnsureCreated); reconcile with JMSv186 `sql/` schema
-- [ ] Verify against a live MySQL server (tests currently use the InMemory provider)
+- [x] Verify against a live MySQL server — `CRONUS_DB` → MySQL 8.4: `EnsureCreated` builds the
+      `accounts`/`characters`/`items` schema and the host logs "Connected to MySQL; …
+      persistent." (2026-08-21). A full write/read-back integration test is still TODO.
 
 ### Improvements / tech debt (ongoing)
 - [ ] **Add golden vectors**: run the Java build, capture handshake→login real bytes with
