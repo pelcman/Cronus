@@ -67,6 +67,12 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opPortalScroll;
     private readonly int _opPortableChair;
     private readonly int _opMacroModified;
+    private readonly int _opPartyResult;
+    private readonly int _opChangeStatReq;
+    private readonly int _opSkillPrepare;
+    private readonly int _opMobApplyCtrl;
+    private readonly int _opTransferChannel;
+    private readonly int _opMigrateCashShop;
     private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
@@ -177,6 +183,12 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opPortalScroll = clientOpcodes.Get(ClientOpcode.UserPortalScrollUseRequest);
         _opPortableChair = clientOpcodes.Get(ClientOpcode.UserPortableChairSitRequest);
         _opMacroModified = clientOpcodes.Get(ClientOpcode.UserMacroSysDataModified);
+        _opPartyResult = clientOpcodes.Get(ClientOpcode.PartyResult);
+        _opChangeStatReq = clientOpcodes.Get(ClientOpcode.UserChangeStatRequest);
+        _opSkillPrepare = clientOpcodes.Get(ClientOpcode.UserSkillPrepareRequest);
+        _opMobApplyCtrl = clientOpcodes.Get(ClientOpcode.MobApplyCtrl);
+        _opTransferChannel = clientOpcodes.Get(ClientOpcode.UserTransferChannelRequest);
+        _opMigrateCashShop = clientOpcodes.Get(ClientOpcode.UserMigrateToCashShopRequest);
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
@@ -293,6 +305,32 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opMacroModified)
         {
             HandleMacroModified(packet);
+        }
+        else if (opcode == _opPartyResult)
+        {
+            await HandlePartyResultAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opChangeStatReq)
+        {
+            await HandleChangeStatRequestAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opSkillPrepare)
+        {
+            await HandleSkillPrepareAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opMobApplyCtrl)
+        {
+            await HandleMobApplyCtrlAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opTransferChannel)
+        {
+            // Single-channel server: decline so the client's channel menu unblocks.
+            await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 1)).ConfigureAwait(false);
+        }
+        else if (opcode == _opMigrateCashShop)
+        {
+            // No cash shop server: decline (2 = shop server unavailable).
+            await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 2)).ConfigureAwait(false);
         }
         else if (opcode == _opChangeSlot)
         {
@@ -4678,6 +4716,106 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     /// <summary>
+    /// Handles <c>CP_UserChangeStatRequest</c> — the client's own regen tick (ports
+    /// <c>OnUserChangeStatRequest</c>): the claimed HP/MP recovery applies, clamped to max. Kept
+    /// modest — the server's own <c>PlayerRegenService</c> is the main regen path.
+    /// </summary>
+    private async ValueTask HandleChangeStatRequestAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        // JMS v186: [time:4][mask:4][hp:2 if mask&0x400][mp:2 if mask&0x1000][unk:1][time2:4]
+        packet.ReadInt();
+        int mask = packet.ReadInt();
+        short healHp = (mask & 0x400) != 0 ? packet.ReadShort() : (short)0;
+        short healMp = (mask & 0x1000) != 0 ? packet.ReadShort() : (short)0;
+
+        Character c = _player.Character;
+        if (c.Hp <= 0 || (healHp <= 0 && healMp <= 0))
+        {
+            return;
+        }
+
+        StatFlag changed = 0;
+        if (healHp > 0 && c.Hp < c.MaxHp)
+        {
+            c.Hp = (short)Math.Min(c.MaxHp, c.Hp + healHp);
+            changed |= StatFlag.Hp;
+        }
+
+        if (healMp > 0 && c.Mp < c.MaxMp)
+        {
+            c.Mp = (short)Math.Min(c.MaxMp, c.Mp + healMp);
+            changed |= StatFlag.Mp;
+        }
+
+        if (changed != 0)
+        {
+            _characters.Save(c);
+            await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
+            await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserSkillPrepareRequest</c> — a charge skill's windup (ports
+    /// <c>OnUserSkillPrepareRequest</c>): verified against the learned level, then mirrored to
+    /// onlookers with <c>LP_UserSkillPrepare</c> so they see the charging animation.
+    /// </summary>
+    private async ValueTask HandleSkillPrepareAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        int skillId = packet.ReadInt();
+        byte level = packet.ReadByte();
+        short action = packet.ReadShort(); // JMS >= 186: two bytes
+        byte actionSpeed = packet.ReadByte();
+
+        Character c = _player.Character;
+        if (!c.Skills.TryGetValue(skillId, out int learned) || learned != level)
+        {
+            return; // server authority over the claimed level
+        }
+
+        await _field.BroadcastAsync(
+            _packets.UserSkillPrepare(c.Id, skillId, level, action, actionSpeed),
+            exceptCharacterId: c.Id).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_MobApplyCtrl</c> — a hit client asks to steer the mob (ports
+    /// <c>OnMobApplyCtrl</c>): granted only when the mob has no live controller.
+    /// </summary>
+    private async ValueTask HandleMobApplyCtrlAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        int mobOid = packet.ReadInt();
+        FieldMob? mob = _field.FindMob(mobOid);
+        if (mob is null || mob.IsDead)
+        {
+            return;
+        }
+
+        bool controllerAlive = mob.ControllerId != -1
+            && _field.Players.Any(p => p.Character.Id == mob.ControllerId);
+        if (!controllerAlive)
+        {
+            mob.ControllerId = _player.Character.Id;
+            await session.SendAsync(_packets.MobChangeController(mob, aggro: true)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Handles <c>CP_UserPortableChairSitRequest</c> — sitting on a portable chair from the SETUP
     /// tab (ports <c>OnUserPortableChairSitRequest</c>): the map sees the chair; standing (a sit
     /// request with -1) clears it. Fishing chairs' timed rewards aren't modelled.
@@ -4935,6 +5073,59 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// leader (ports <c>ReqCUser.OnPartyRequest</c> + <c>OdinWorld.Party.updateParty</c>). Parties
     /// are in-memory and online-only; exp sharing and party HP bars are follow-ups.
     /// </summary>
+    /// <summary>Joins a party by id (the CP_PartyRequest join op and CP_PartyResult accept).</summary>
+    private async ValueTask JoinPartyAsync(MapleSession session, int partyId)
+    {
+        int myId = _player!.Character.Id;
+        if (_parties.GetForCharacter(myId) is not null)
+        {
+            await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrAlreadyInParty)).ConfigureAwait(false);
+            return;
+        }
+
+        Party? target = _parties.GetById(partyId);
+        if (target is null)
+        {
+            await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrJoinUnknown)).ConfigureAwait(false);
+            return;
+        }
+
+        if (!target.TryAdd(_player))
+        {
+            await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrFull)).ConfigureAwait(false);
+            return;
+        }
+
+        _parties.Register(myId, target);
+        byte[] joinPacket = _packets.PartyJoin(target.Id, _player.Character.Name, target.ViewSlots(PartyChannel), target.LeaderId, PartyChannel);
+        await PartyBroadcastAsync(target, joinPacket).ConfigureAwait(false);
+        await SyncPartyHpAsync(target, _player).ConfigureAwait(false);
+    }
+
+    // CP_PartyResult invite-answer values (OpsParty, JMS >= 147).
+    private const byte PartyResInviteRejected = 23;
+    private const byte PartyResInviteAccepted = 24;
+
+    /// <summary>
+    /// Handles <c>CP_PartyResult</c> — the invitee's answer to a party invite (ports
+    /// <c>ReqCUser.OnPartyResult</c>): accepting joins the party; a decline is consumed.
+    /// </summary>
+    private async ValueTask HandlePartyResultAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        byte type = packet.ReadByte();
+        int partyId = packet.ReadInt();
+        if (type == PartyResInviteAccepted)
+        {
+            await JoinPartyAsync(session, partyId).ConfigureAwait(false);
+        }
+        // A decline (23) is consumed silently, matching the reference.
+    }
+
     private async ValueTask HandlePartyRequestAsync(MapleSession session, PacketReader packet)
     {
         if (_player is null)
@@ -4976,29 +5167,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             case PartyOpJoin:
             {
                 int partyId = packet.ReadInt();
-                if (party is not null)
-                {
-                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrAlreadyInParty)).ConfigureAwait(false);
-                    return;
-                }
-
-                Party? target = _parties.GetById(partyId);
-                if (target is null)
-                {
-                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrJoinUnknown)).ConfigureAwait(false);
-                    return;
-                }
-
-                if (!target.TryAdd(_player))
-                {
-                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrFull)).ConfigureAwait(false);
-                    return;
-                }
-
-                _parties.Register(myId, target);
-                byte[] joinPacket = _packets.PartyJoin(target.Id, _player.Character.Name, target.ViewSlots(PartyChannel), target.LeaderId, PartyChannel);
-                await PartyBroadcastAsync(target, joinPacket).ConfigureAwait(false);
-                await SyncPartyHpAsync(target, _player).ConfigureAwait(false);
+                await JoinPartyAsync(session, partyId).ConfigureAwait(false);
                 return;
             }
 

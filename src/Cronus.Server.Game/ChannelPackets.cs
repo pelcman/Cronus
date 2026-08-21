@@ -492,6 +492,30 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// A charge-skill windup starts (ports <c>ResCUserRemote.UserSkillPrepare</c>, JMS v186):
+    /// broadcast to onlookers so they see the charging animation.
+    /// </summary>
+    public byte[] UserSkillPrepare(int characterId, int skillId, byte level, short action, byte actionSpeed)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserSkillPrepare);
+        w.WriteInt(characterId);
+        w.WriteInt(skillId);
+        w.WriteByte(level);
+        w.WriteShort(action); // JMS >= 186: two bytes
+        w.WriteByte(actionSpeed);
+        return w.ToArray();
+    }
+
+    /// <summary>A channel change / cash shop request was declined (ports
+    /// <c>ResCField.TransferChannelReqIgnored</c>; 1 = game server unavailable).</summary>
+    public byte[] TransferChannelReqIgnored(byte reason = 1)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TransferChannelReqIgnored);
+        w.WriteByte(reason);
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// A player sat on (or left, item 0) a portable chair — shown to the rest of the map (ports
     /// <c>ResCUserRemote.UserSetActivePortableChair</c>, JMS v186).
     /// </summary>

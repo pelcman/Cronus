@@ -65,6 +65,12 @@ public static class ClientOpcode
     public const string UserPortalScrollUseRequest = "CP_UserPortalScrollUseRequest";
     public const string UserPortableChairSitRequest = "CP_UserPortableChairSitRequest";
     public const string UserMacroSysDataModified = "CP_UserMacroSysDataModified";
+    public const string PartyResult = "CP_PartyResult";
+    public const string UserChangeStatRequest = "CP_UserChangeStatRequest";
+    public const string UserSkillPrepareRequest = "CP_UserSkillPrepareRequest";
+    public const string MobApplyCtrl = "CP_MobApplyCtrl";
+    public const string UserTransferChannelRequest = "CP_UserTransferChannelRequest";
+    public const string UserMigrateToCashShopRequest = "CP_UserMigrateToCashShopRequest";
 }
 
 /// <summary>
@@ -148,4 +154,6 @@ public static class ServerOpcode
     public const string EmployeeEnterField = "LP_EmployeeEnterField";
     public const string EmployeeLeaveField = "LP_EmployeeLeaveField";
     public const string EmployeeMiniRoomBalloon = "LP_EmployeeMiniRoomBalloon";
+    public const string UserSkillPrepare = "LP_UserSkillPrepare";
+    public const string TransferChannelReqIgnored = "LP_TransferChannelReqIgnored";
 }
