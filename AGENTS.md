@@ -12,6 +12,25 @@ improvements)**. The two files are complementary — if you find a contradiction
 > Reimplement the core of a JMS v186 private server in C#/.NET, using Riremito/JMSv186
 > (Java) as a side-by-side oracle. Get login working first, then widen in vertical slices.
 
+### Final goal (set 2026-08-21)
+
+> Grow Cronus from a localhost-only test server into one an **in-group** can actually play
+> on: the operator opens a port on a **fixed public IP** and friends connect. Reach a state
+> where **anyone with minimal knowledge can stand the server up by following the docs** —
+> build, configure (host/IP, DB, WZ data), run, open the port, point the client, play.
+
+This reframes the near-term work priorities:
+1. **Deployability** — nothing hardcoded to `localhost`; a small, documented set of config
+   knobs (public host/IP, ports, DB, WZ, start map). *(First step: the channel endpoint the
+   login server hands to the client is configurable via `CRONUS_HOST`, not loopback.)*
+2. **A reproducible setup guide** — `docs/SERVER_SETUP.md`: prerequisites, build, configure,
+   run, firewall/port-forward, connect a client. Written for a non-expert.
+3. **Minimal playability** — the core loop must actually hold up for several players
+   (entry, movement, chat, mobs/drops, maps/portals, a few NPCs, leveling).
+
+Scope note (see CLAUDE.md §8): this stays a **private, in-group** server for research /
+educational / hobby use — not a public or commercial operation.
+
 ---
 
 ## 1. Design Philosophy (summary)
