@@ -191,6 +191,15 @@ Each milestone means adding one "working vertical slice".
         on-ground item drops. Mobs with no table fall back to a placeholder meso pile. Equip drops
         are deferred until the equip item body is client-verified. End-to-end tested (kill→field→
         pickup→inventory) plus packet golden + roll-arithmetic units.
+  - [x] **M10e: item move / equip / unequip** — `CP_UserChangeSlotPositionRequest` lets a player
+        drag items between slots and equip/unequip gear (ports
+        `ReqCUser.OnUserChangeSlotPositionRequest`): `Inventory.Move` swaps slots (positive→negative
+        = equip, negative→positive = unequip, both-positive = rearrange), relayed as an
+        `LP_InventoryOperation` MOVE(2) op with the equipped-slot trailer byte; an equip change also
+        broadcasts `LP_UserAvatarModified` so the field sees the new look. The equip item body was
+        verified byte-identical to the reference (`DataGW_ItemSlotBase`), so equipped gear renders.
+        Equip *stat bonuses* aren't recomputed yet (visual + slot only); dropping an item to the
+        ground (dst==0) is not modelled yet. End-to-end tested (equip) + move-op goldens.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
