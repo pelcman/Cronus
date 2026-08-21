@@ -70,4 +70,53 @@ public class InventoryTests
     [Fact]
     public void RemoveFromSlot_EmptySlot_ReturnsNull()
         => Assert.Null(Inventory.RemoveFromSlot(Hero(), 2, 5, 1));
+
+    [Fact]
+    public void Gather_CompactsGapsPreservingOrder()
+    {
+        Character c = Hero();
+        c.EquippedItems.Add(new InventoryItem { ItemId = 2000000, Position = 3, Quantity = 10 });
+        c.EquippedItems.Add(new InventoryItem { ItemId = 2010000, Position = 7, Quantity = 5 });
+
+        List<InventoryChange> changes = Inventory.Gather(c, 2);
+
+        Assert.Equal(2, changes.Count);
+        Assert.Equal((3, (short)1), (changes[0].Position, changes[0].DestPosition));
+        Assert.Equal((7, (short)2), ((int)changes[1].Position, changes[1].DestPosition));
+        Assert.Equal(1, Inventory.ItemAt(c, 2, 1)!.Position);
+        Assert.Equal(2010000, Inventory.ItemAt(c, 2, 2)!.ItemId);
+    }
+
+    [Fact]
+    public void Sort_OrdersOccupiedPrefixByItemId()
+    {
+        Character c = Hero();
+        c.EquippedItems.Add(new InventoryItem { ItemId = 2050000, Position = 1, Quantity = 1 });
+        c.EquippedItems.Add(new InventoryItem { ItemId = 2000000, Position = 2, Quantity = 1 });
+        c.EquippedItems.Add(new InventoryItem { ItemId = 2010000, Position = 3, Quantity = 1 });
+
+        List<InventoryChange> changes = Inventory.Sort(c, 2);
+
+        Assert.NotEmpty(changes);
+        Assert.Equal(2000000, Inventory.ItemAt(c, 2, 1)!.ItemId);
+        Assert.Equal(2010000, Inventory.ItemAt(c, 2, 2)!.ItemId);
+        Assert.Equal(2050000, Inventory.ItemAt(c, 2, 3)!.ItemId);
+        Assert.All(changes, ch => Assert.Equal(InvMode.Move, ch.Mode)); // swap-moves only
+    }
+
+    [Fact]
+    public void GatherThenSort_LeavesTabOrderedAndDense()
+    {
+        Character c = Hero();
+        c.EquippedItems.Add(new InventoryItem { ItemId = 2050000, Position = 9, Quantity = 1 });
+        c.EquippedItems.Add(new InventoryItem { ItemId = 2000000, Position = 4, Quantity = 1 });
+        c.EquippedItems.Add(new InventoryItem { ItemId = 2010000, Position = 2, Quantity = 1 });
+
+        Inventory.Gather(c, 2);
+        Inventory.Sort(c, 2);
+
+        Assert.Equal(2000000, Inventory.ItemAt(c, 2, 1)!.ItemId);
+        Assert.Equal(2010000, Inventory.ItemAt(c, 2, 2)!.ItemId);
+        Assert.Equal(2050000, Inventory.ItemAt(c, 2, 3)!.ItemId);
+    }
 }

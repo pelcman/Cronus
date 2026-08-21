@@ -811,6 +811,24 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>Acks an inventory gather (ports <c>ResCWvsContext.GatherItemResult</c>).</summary>
+    public byte[] GatherItemResult(byte tab)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GatherItemResult);
+        w.WriteByte(0); // unused
+        w.WriteByte(tab);
+        return w.ToArray();
+    }
+
+    /// <summary>Acks an inventory sort (ports <c>ResCWvsContext.SortItemResult</c>).</summary>
+    public byte[] SortItemResult(byte tab)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SortItemResult);
+        w.WriteByte(0); // unused
+        w.WriteByte(tab);
+        return w.ToArray();
+    }
+
     // LP_GroupMessage chat targets (OpsChatGroup).
     public const byte ChatGroupFriend = 0;
     public const byte ChatGroupParty = 1;

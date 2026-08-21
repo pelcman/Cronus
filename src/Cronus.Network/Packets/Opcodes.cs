@@ -59,6 +59,8 @@ public static class ClientOpcode
     public const string GuildRequest = "CP_GuildRequest";
     public const string GuildResult = "CP_GuildResult";
     public const string GroupMessage = "CP_GroupMessage";
+    public const string UserGatherItemRequest = "CP_UserGatherItemRequest";
+    public const string UserSortItemRequest = "CP_UserSortItemRequest";
 }
 
 /// <summary>
@@ -133,4 +135,6 @@ public static class ServerOpcode
     public const string DropLeaveField = "LP_DropLeaveField";
     public const string GuildResult = "LP_GuildResult";
     public const string GroupMessage = "LP_GroupMessage";
+    public const string GatherItemResult = "LP_GatherItemResult";
+    public const string SortItemResult = "LP_SortItemResult";
 }

@@ -170,6 +170,66 @@ public static class Inventory
         return new InventoryChange(InvMode.Add, tab, slot, item, item.Quantity);
     }
 
+    /// <summary>
+    /// Compacts a tab — every item slides into the lowest free slot, preserving order (ports
+    /// <c>OnUserGatherItemRequest</c>'s move loop). Returns one move change per item that slid;
+    /// destinations are always below sources, so the client can replay them in order.
+    /// </summary>
+    public static List<InventoryChange> Gather(Character c, int tab)
+    {
+        var changes = new List<InventoryChange>();
+        List<InventoryItem> items = c.EquippedItems
+            .Where(i => i.Position > 0 && Tab(i.ItemId) == tab)
+            .OrderBy(i => i.Position)
+            .ToList();
+
+        short slot = 1;
+        foreach (InventoryItem item in items)
+        {
+            if (item.Position != slot)
+            {
+                changes.Add(new InventoryChange(InvMode.Move, tab, item.Position, item, item.Quantity, slot));
+                item.Position = slot;
+            }
+
+            slot++;
+        }
+
+        return changes;
+    }
+
+    /// <summary>
+    /// Sorts a tab's occupied prefix by item id (ports <c>OnUserSortItemRequest</c>'s selection
+    /// sort — run <see cref="Gather"/> first, as the reference's client does). Each emitted change
+    /// is a swap-move, exactly the ops the reference produces, so the client replays in lockstep.
+    /// </summary>
+    public static List<InventoryChange> Sort(Character c, int tab)
+    {
+        var changes = new List<InventoryChange>();
+        int count = c.EquippedItems.Count(i => i.Position > 0 && Tab(i.ItemId) == tab);
+        for (short slotTo = 1; slotTo <= count; slotTo++)
+        {
+            short slotFrom = slotTo;
+            int minItemId = ItemAt(c, tab, slotTo)?.ItemId ?? int.MaxValue;
+            for (short slot = (short)(slotTo + 1); slot <= count; slot++)
+            {
+                InventoryItem? candidate = ItemAt(c, tab, slot);
+                if (candidate is not null && candidate.ItemId < minItemId)
+                {
+                    slotFrom = slot;
+                    minItemId = candidate.ItemId;
+                }
+            }
+
+            if (slotFrom != slotTo && Move(c, tab, slotFrom, slotTo) is { } change)
+            {
+                changes.Add(change);
+            }
+        }
+
+        return changes;
+    }
+
     private static short NextFreeSlot(Character c, int tab)
     {
         var used = c.EquippedItems

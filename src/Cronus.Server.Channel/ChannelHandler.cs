@@ -86,6 +86,8 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opGuildRequest;
     private readonly int _opGuildDeny;
     private readonly int _opGroupMessage;
+    private readonly int _opGatherItem;
+    private readonly int _opSortItem;
 
     private FieldPlayer? _player;
     private Field? _field;
@@ -184,6 +186,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opGuildRequest = clientOpcodes.Get(ClientOpcode.GuildRequest);
         _opGuildDeny = clientOpcodes.Get(ClientOpcode.GuildResult);
         _opGroupMessage = clientOpcodes.Get(ClientOpcode.GroupMessage);
+        _opGatherItem = clientOpcodes.Get(ClientOpcode.UserGatherItemRequest);
+        _opSortItem = clientOpcodes.Get(ClientOpcode.UserSortItemRequest);
     }
 
     /// <summary>The character bound to this session after a successful migrate-in.</summary>
@@ -334,6 +338,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opGroupMessage)
         {
             await HandleGroupMessageAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opGatherItem)
+        {
+            await HandleGatherItemAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opSortItem)
+        {
+            await HandleSortItemAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opPortalScript)
         {
@@ -1797,6 +1809,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     // CP_UserQuestRequest actions (the client's pre-BB OpsQuest values).
+    private const byte QuestReqLostItem = 0;
     private const byte QuestReqAccept = 1;
     private const byte QuestReqComplete = 2;
     private const byte QuestReqResign = 3;
@@ -1825,6 +1838,23 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         switch (action)
         {
+            case QuestReqLostItem:
+            {
+                // [time:4][itemId:4] — re-grant a lost quest item the start act originally gave
+                // (ports MapleQuestAction.RestoreLostItem: only if the player no longer has one).
+                packet.ReadInt();
+                int itemId = packet.ReadInt();
+                QuestData? quest = _quests.GetQuest(questId);
+                if (quest?.StartAct is { } act
+                    && act.Items.Any(i => i.ItemId == itemId)
+                    && CountInventoryItem(c, itemId) < 1)
+                {
+                    await ScriptGainItemAsync(session, itemId, 1).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
             case QuestReqAccept:
             {
                 int npcId = packet.ReadInt();
@@ -3119,6 +3149,52 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
     }
 
+    /// <summary>
+    /// Handles <c>CP_UserGatherItemRequest</c> — the inventory "gather" button (ports
+    /// <c>OnUserGatherItemRequest</c>): compacts the tab and relays the moves + the ack.
+    /// </summary>
+    private async ValueTask HandleGatherItemAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        packet.ReadInt(); // timestamp
+        byte tab = packet.ReadByte();
+        List<InventoryChange> changes = Inventory.Gather(_player.Character, tab);
+        if (changes.Count > 0)
+        {
+            _characters.Save(_player.Character);
+            await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.GatherItemResult(tab)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserSortItemRequest</c> — the inventory "sort" button (ports
+    /// <c>OnUserSortItemRequest</c>): selection-sorts the tab by item id and relays the swap moves.
+    /// </summary>
+    private async ValueTask HandleSortItemAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        packet.ReadInt(); // timestamp
+        byte tab = packet.ReadByte();
+        List<InventoryChange> changes = Inventory.Sort(_player.Character, tab);
+        if (changes.Count > 0)
+        {
+            _characters.Save(_player.Character);
+            await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.SortItemResult(tab)).ConfigureAwait(false);
+    }
+
     /// <summary>The character's guild, or null when guildless / unknown.</summary>
     private GuildData? GuildOf(Character c) => c.GuildId > 0 ? _guilds.Get(c.GuildId) : null;
 
@@ -3308,6 +3384,14 @@ public sealed class ChannelHandler : PacketHandlerBase
                 _packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectLevelUp),
                 exceptCharacterId: c.Id).ConfigureAwait(false);
             await RefreshPartyWindowAsync(recipient).ConfigureAwait(false); // party window shows the new level
+
+            // Guildmates' G windows show the new level too (ports guildMemberLevelJobUpdate).
+            if (c.GuildId > 0)
+            {
+                await BroadcastToGuildAsync(
+                    c.GuildId, _packets.GuildMemberLevelJob(c.GuildId, c.Id, c.Level, c.Job),
+                    exceptCharacterId: c.Id).ConfigureAwait(false);
+            }
         }
     }
 
