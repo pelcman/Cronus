@@ -360,7 +360,24 @@ public sealed class ChannelPackets
     /// <paramref name="onGround"/> the drop is already lying there (NO_ANIMATION, no drop-from
     /// coords) — used to show a newcomer the drops already in the field.
     /// </summary>
-    public byte[] DropEnterFieldMeso(FieldDrop drop, bool onGround = false)
+    public byte[] DropEnterFieldMeso(FieldDrop drop, bool onGround = false) => DropEnterField(drop, onGround);
+
+    /// <summary>
+    /// Builds <c>LP_DropEnterField</c> for an item drop (the item-drop branch of
+    /// <c>ResCDropPool.DropEnterField</c>): meso flag 0, the item id, and — unlike meso — an 8-byte
+    /// <c>-1</c> (NoExpiration) trailer. The stack count is server-side only (not on the wire); it is
+    /// applied to inventory on pickup.
+    /// </summary>
+    public byte[] DropEnterFieldItem(FieldDrop drop, bool onGround = false) => DropEnterField(drop, onGround);
+
+    /// <summary>
+    /// Builds <c>LP_DropEnterField</c> for a meso pile or an item stack (ports
+    /// <c>ResCDropPool.DropEnterField</c>, JMS v186; FFA). Fresh drops use ANIMATION (fall from the
+    /// source mob); when <paramref name="onGround"/> the drop is already lying there (NO_ANIMATION, no
+    /// drop-from coords) — used to show a newcomer the drops already in the field. Item drops carry
+    /// an 8-byte expiration (<c>-1</c>); meso drops omit it (<c>drop.getMeso() == 0</c> branch).
+    /// </summary>
+    public byte[] DropEnterField(FieldDrop drop, bool onGround = false)
     {
         const int animation = 1;   // EnterType.ANIMATION
         const int noAnimation = 2; // EnterType.NO_ANIMATION (already on the ground)
@@ -369,8 +386,8 @@ public sealed class ChannelPackets
         PacketWriter w = NewPacket(ServerOpcode.DropEnterField);
         w.WriteByte(onGround ? noAnimation : animation);
         w.WriteInt(drop.ObjectId);
-        w.WriteByte(1);                  // meso flag
-        w.WriteInt(drop.Meso);           // meso amount (in the item-id field)
+        w.WriteByte(drop.IsMeso ? 1 : 0);              // meso-vs-item flag
+        w.WriteInt(drop.IsMeso ? drop.Meso : drop.ItemId); // meso amount or item id (shared field)
         w.WriteInt(0);                   // owner (0 = free for all)
         w.WriteByte(freeForAll);         // drop type
         w.WriteShort(drop.X);            // landing x
@@ -383,7 +400,11 @@ public sealed class ChannelPackets
             w.WriteShort(0);
         }
 
-        // meso drops omit the 8-byte expiration.
+        if (!drop.IsMeso)
+        {
+            w.WriteLong(-1);             // item expiration (NoExpiration); meso omits this
+        }
+
         w.WriteByte(drop.IsPlayerDrop ? 0 : 1); // 0 = thrown by a player, 1 = mob drop
         w.WriteByte(0);
         return w.ToArray();
@@ -676,6 +697,7 @@ public sealed class ChannelPackets
 
     // LP_Message types for JMS v186 (OpsMessage: no per-region remap applies to 148..193, so the
     // enum defaults hold — MS_IncEXPMessage = 3, MS_IncPOPMessage = 5, MS_IncMoneyMessage = 6).
+    private const byte MsgDropPickUp = 0; // MS_DropPickUpMessage
     private const byte MsgIncExp = 3;
     private const byte MsgIncPop = 5;
     private const byte MsgIncMoney = 6;
@@ -726,6 +748,23 @@ public sealed class ChannelPackets
         PacketWriter w = NewPacket(ServerOpcode.Message);
         w.WriteByte(MsgIncMoney);
         w.WriteInt(meso);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the "obtained &lt;item&gt; x N" floating message (<c>LP_Message</c> /
+    /// MS_DropPickUpMessage / PICKUP_ITEM) shown when an item is picked up (ports
+    /// <c>ResCWvsContext.Message</c> PICKUP_ITEM branch, JMS v186): the item id and the count gained.
+    /// </summary>
+    public byte[] ShowItemGain(int itemId, int quantity)
+    {
+        const byte pickUpItem = 0; // OpsDropPickUpMessage.PICKUP_ITEM
+
+        PacketWriter w = NewPacket(ServerOpcode.Message);
+        w.WriteByte(MsgDropPickUp);
+        w.WriteByte(pickUpItem);
+        w.WriteInt(itemId);
+        w.WriteInt(quantity);
         return w.ToArray();
     }
 

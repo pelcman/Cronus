@@ -4,12 +4,26 @@ using Cronus.Network;
 
 namespace Cronus.Server.Game;
 
-/// <summary>A meso drop lying on the field.</summary>
+/// <summary>
+/// A drop lying on the field — a meso pile (<see cref="ItemId"/> == 0, amount in <see cref="Meso"/>)
+/// or an item stack (<see cref="ItemId"/> &gt; 0, count in <see cref="Quantity"/>). The wire form
+/// branches on which it is (<c>ResCDropPool.DropEnterField</c>).
+/// </summary>
 public sealed class FieldDrop
 {
     public required int ObjectId { get; init; }
 
-    public required int Meso { get; init; }
+    /// <summary>Meso amount for a meso drop; 0 for an item drop.</summary>
+    public int Meso { get; init; }
+
+    /// <summary>Item id for an item drop; 0 for a meso drop.</summary>
+    public int ItemId { get; init; }
+
+    /// <summary>Stack count for an item drop (applied to inventory on pickup); 1 by default.</summary>
+    public short Quantity { get; init; } = 1;
+
+    /// <summary>True when this is a meso pile rather than an item stack.</summary>
+    public bool IsMeso => ItemId == 0;
 
     public short X { get; init; }
 
@@ -350,6 +364,29 @@ public sealed class Field
                 SourceY = sourceY,
                 DropAtTick = Environment.TickCount64,
                 IsPlayerDrop = playerDrop,
+            };
+            _drops[drop.ObjectId] = drop;
+            return drop;
+        }
+    }
+
+    /// <summary>Registers an item drop from a killed mob and returns it (assigns the object id).</summary>
+    public FieldDrop AddItemDrop(int itemId, short quantity, short x, short y, FieldMob source)
+    {
+        lock (_gate)
+        {
+            var drop = new FieldDrop
+            {
+                ObjectId = _nextDropOid++,
+                ItemId = itemId,
+                Quantity = quantity < 1 ? (short)1 : quantity,
+                X = x,
+                Y = y,
+                SourceObjectId = source.ObjectId,
+                SourceX = source.X,
+                SourceY = source.Y,
+                DropAtTick = Environment.TickCount64,
+                IsPlayerDrop = false,
             };
             _drops[drop.ObjectId] = drop;
             return drop;

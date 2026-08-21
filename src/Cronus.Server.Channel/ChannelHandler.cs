@@ -32,6 +32,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly IMapProvider _maps;
     private readonly ISkillProvider _skills;
     private readonly IItemProvider _items;
+    private readonly IDropProvider _dropTable;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -85,7 +86,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         MessengerRegistry? messengers = null,
         PartyRegistry? parties = null,
         PortalScriptEngine? portalScripts = null,
-        IItemProvider? items = null)
+        IItemProvider? items = null,
+        IDropProvider? drops = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -93,6 +95,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _maps = maps ?? new InMemoryMapProvider(Array.Empty<MapData>());
         _skills = skills ?? NullSkillProvider.Instance;
         _items = items ?? new InMemoryItemProvider(Array.Empty<ConsumeSpec>());
+        _dropTable = drops ?? new InMemoryDropProvider(new Dictionary<int, IReadOnlyList<DropEntry>>());
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -377,10 +380,10 @@ public sealed class ChannelHandler : PacketHandlerBase
             }
         }
 
-        // Show the newcomer the meso drops already lying on the ground (no fall animation).
+        // Show the newcomer the drops already lying on the ground (no fall animation).
         foreach (FieldDrop drop in field.Drops)
         {
-            await session.SendAsync(_packets.DropEnterFieldMeso(drop, onGround: true)).ConfigureAwait(false);
+            await session.SendAsync(_packets.DropEnterField(drop, onGround: true)).ConfigureAwait(false);
         }
     }
 
@@ -494,13 +497,71 @@ public sealed class ChannelHandler : PacketHandlerBase
                 mob.RespawnAtTick = MobRespawnService.NextRespawnTick(mob.MobTime); // 0 = never (boss)
                 await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
                 await GrantKillExpAsync(mob.Exp).ConfigureAwait(false);
-                await DropMesoAsync(mob).ConfigureAwait(false);
+                await DropLootAsync(mob).ConfigureAwait(false);
             }
         }
     }
 
-    /// <summary>Drops meso from a killed mob (placeholder amount until wz drop tables load).</summary>
-    private async ValueTask DropMesoAsync(FieldMob mob)
+    /// <summary>
+    /// Rolls a killed mob's drop table and spawns the loot on the field (ports
+    /// <c>TacosReward.dropFromDatabase</c>): each entry drops on a <c>rand(0..999) &lt; chance</c> test
+    /// (bosses drop unconditionally), meso rows become meso piles and item rows become item stacks,
+    /// fanned out horizontally. A mob with no drop table falls back to a small meso pile so a kill
+    /// still rewards. Equip drops are deferred until the equip item body is client-verified.
+    /// </summary>
+    private async ValueTask DropLootAsync(FieldMob mob)
+    {
+        if (_field is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<DropEntry> entries = _dropTable.GetDrops(mob.TemplateId);
+        if (entries.Count == 0)
+        {
+            await DropPlaceholderMesoAsync(mob).ConfigureAwait(false);
+            return;
+        }
+
+        int dropped = 0;
+        foreach (DropEntry entry in entries)
+        {
+            if (!DropRoller.ShouldDrop(entry, Random.Shared.Next(1000), forced: mob.IsBoss))
+            {
+                continue;
+            }
+
+            // Equips need the (not-yet-client-verified) equip item body on pickup; skip for now.
+            if (entry.ItemId != 0 && Inventory.Tab(entry.ItemId) == 1)
+            {
+                continue;
+            }
+
+            short x = (short)(mob.X + DropRoller.ScatterX(dropped));
+            if (entry.ItemId == 0)
+            {
+                int meso = DropRoller.MesoAmount(entry, Random.Shared.Next);
+                if (meso <= 0)
+                {
+                    continue;
+                }
+
+                FieldDrop drop = _field.AddMesoDrop(meso, x, mob.Y, mob);
+                await _field.BroadcastAsync(_packets.DropEnterFieldMeso(drop)).ConfigureAwait(false);
+            }
+            else
+            {
+                int qty = DropRoller.ItemQuantity(entry, Random.Shared.Next);
+                FieldDrop drop = _field.AddItemDrop(entry.ItemId, (short)Math.Clamp(qty, 1, short.MaxValue), x, mob.Y, mob);
+                await _field.BroadcastAsync(_packets.DropEnterFieldItem(drop)).ConfigureAwait(false);
+            }
+
+            dropped++;
+        }
+    }
+
+    /// <summary>Drops a small meso pile for a mob with no drop table (so kills still reward).</summary>
+    private async ValueTask DropPlaceholderMesoAsync(FieldMob mob)
     {
         if (_field is null)
         {
@@ -733,10 +794,25 @@ public sealed class ChannelHandler : PacketHandlerBase
             .ConfigureAwait(false);
 
         Character c = _player.Character;
-        c.Meso = (int)Math.Clamp((long)c.Meso + drop.Meso, 0, int.MaxValue);
+        if (drop.IsMeso)
+        {
+            c.Meso = (int)Math.Clamp((long)c.Meso + drop.Meso, 0, int.MaxValue);
+            _characters.Save(c);
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+            await session.SendAsync(_packets.IncMoneyMessage(drop.Meso)).ConfigureAwait(false); // "+N mesos"
+            return;
+        }
+
+        // Item drop: stack it into the inventory and update the client's slot + show the gain message.
+        int slotMax = _items.GetConsume(drop.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+        List<InventoryChange> changes = Inventory.Add(c, drop.ItemId, drop.Quantity, slotMax);
         _characters.Save(c);
-        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
-        await session.SendAsync(_packets.IncMoneyMessage(drop.Meso)).ConfigureAwait(false); // "+N mesos"
+        if (changes.Count > 0)
+        {
+            await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.ShowItemGain(drop.ItemId, drop.Quantity)).ConfigureAwait(false);
     }
 
     /// <summary>Meso-drop bounds (ports <c>OnUserDropMoneyRequest</c>): a throw is 10..50000 mesos.</summary>

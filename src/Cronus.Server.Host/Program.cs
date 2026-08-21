@@ -69,6 +69,7 @@ IMobProvider mobs = CreateMobProvider();
 var fields = new FieldRegistry(maps, mobs);
 ISkillProvider skills = CreateSkillProvider();
 IItemProvider items = CreateItemProvider();
+IDropProvider drops = CreateDropProvider();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
@@ -82,7 +83,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops),
         "channel"),
     keepAlive);
 
@@ -201,6 +202,23 @@ static IItemProvider CreateItemProvider()
     }
 
     return new WzItemProvider(wzRoot);
+}
+
+// Mob drop tables from the reference drop_data.sql dump if CRONUS_DROPS points at one, else no
+// tables (mobs fall back to a small placeholder meso pile). The dump is the same asset the Java
+// build loads into its drop_data table.
+static IDropProvider CreateDropProvider()
+{
+    string? dropFile = Environment.GetEnvironmentVariable("CRONUS_DROPS");
+    if (string.IsNullOrWhiteSpace(dropFile) || !File.Exists(dropFile))
+    {
+        Console.WriteLine("[drops] CRONUS_DROPS not set — mobs drop placeholder meso only.");
+        return new InMemoryDropProvider(new Dictionary<int, IReadOnlyList<DropEntry>>());
+    }
+
+    SqlDropProvider provider = SqlDropProvider.LoadFile(dropFile);
+    Console.WriteLine($"[drops] loaded drop tables from {dropFile}");
+    return provider;
 }
 
 static NpcScriptEngine? CreateNpcScriptEngine()
