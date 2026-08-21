@@ -38,6 +38,7 @@ public static class ClientOpcode
     public const string UserScriptMessageAnswer = "CP_UserScriptMessageAnswer";
     public const string Whisper = "CP_Whisper";
     public const string Messenger = "CP_Messenger";
+    public const string PartyRequest = "CP_PartyRequest";
 }
 
 /// <summary>
@@ -70,6 +71,7 @@ public static class ServerOpcode
     public const string UserEffectLocal = "LP_UserEffectLocal";
     public const string UserEffectRemote = "LP_UserEffectRemote";
     public const string Messenger = "LP_Messenger";
+    public const string PartyResult = "LP_PartyResult";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string UserShootAttack = "LP_UserShootAttack";

@@ -240,6 +240,17 @@ Each milestone means adding one "working vertical slice".
       member avatar reuses the client-verified `WriteAvatarLook`, so the window renders real looks.
       End-to-end tested (invite → join → chat → leave through encrypted sessions). Out of scope:
       block-list (MSMP_Blocked), avatar refresh (MSMP_Avatar), and cross-channel migration.
+- [x] **M22: Party** — the full party lifecycle (`CP_PartyRequest` / `LP_PartyResult`, ports
+      `OnPartyRequest` + `OdinWorld.Party.updateParty`): create, invite, join, leave, disband (leader
+      leaves), expel, and change-leader. `Party` holds up to 6 members with a leader and fans packets
+      across fields; `PartyRegistry` (shared, injected) creates and looks them up; disconnect
+      auto-leaves (leader → disband). The byte-critical 6-slot member-status block
+      (`addPartyStatus`: ids, 13-byte names, jobs, levels, wire channels, leader, map ids, door
+      blocks) is reproduced exactly and pinned with a golden-byte test (322-byte block, channel is
+      1-based like the reference). End-to-end tested (create → invite → join → leave). Parties are
+      in-memory / online-only. Follow-ups (M23): exp sharing among same-map members, party HP bars
+      (`LP_UserHP` / `receivePartyMemberHP`), and leader reassignment on disconnect instead of
+      disband.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

@@ -821,6 +821,216 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_PartyResult sub-operations (ports OpsParty). The first byte selects the shape.
+    private const byte PartyInviteToInvitee = 4;   // PartyReq_InviteParty (the invite popup)
+    private const byte PartyLoadDoneOp = 7;         // PartyRes_LoadParty_Done / silent update
+    private const byte PartyCreateDoneOp = 8;       // PartyRes_CreateNewParty_Done
+    private const byte PartyDepartOp = 12;          // leave / expel / disband
+    private const byte PartyJoinOp = 15;            // PartyRes_JoinParty (someone joined)
+    private const byte PartyInviteSentOp = 22;      // PartyRes_InviteParty_Sent
+    private const byte PartyChangeLeaderOp = 31;    // PartyRes_ChangePartyBoss_Done
+
+    /// <summary>
+    /// Builds a bare <c>LP_PartyResult</c> that carries only its op byte — the many acknowledgement
+    /// and error codes (already-joined, full, unknown-user, …) that have no payload.
+    /// </summary>
+    public byte[] PartyResultSimple(int op)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte((byte)op);
+        return w.ToArray();
+    }
+
+    /// <summary>Op byte of <c>PartyRes_CreateNewParty_AlreayJoined</c> (already in a party).</summary>
+    public const int PartyErrAlreadyJoined = 9;
+
+    /// <summary>Op byte of <c>PartyRes_WithdrawParty_Unknown</c> (not in a party).</summary>
+    public const int PartyErrWithdrawUnknown = 14;
+
+    /// <summary>Op byte of <c>PartyRes_JoinParty_AlreadyFull</c> (party is full / invite failed).</summary>
+    public const int PartyErrFull = 18;
+
+    /// <summary>Op byte of <c>PartyRes_JoinParty_UnknownUser</c> (invited name not online).</summary>
+    public const int PartyErrUnknownUser = 20;
+
+    /// <summary>Op byte of <c>PartyRes_JoinParty_Unknown</c> (bad party id on join).</summary>
+    public const int PartyErrJoinUnknown = 21;
+
+    /// <summary>Op byte of <c>PartyRes_JoinParty_AlreadyJoined</c> (target/self already partied).</summary>
+    public const int PartyErrAlreadyInParty = 17;
+
+    /// <summary>Op byte of <c>PartyRes_KickParty_Unknown</c> (not leader / can't kick).</summary>
+    public const int PartyErrKickUnknown = 30;
+
+    /// <summary>Op byte of <c>PartyRes_ChangePartyBoss_Unknown</c> (not leader / bad target).</summary>
+    public const int PartyErrChangeBossUnknown = 35;
+
+    /// <summary>
+    /// Builds <c>PartyRes_CreateNewParty_Done</c> handed to the party's creator: the new party id
+    /// then the "no town door" placeholder block (ports <c>ResCWvsContext.PartyResult</c>).
+    /// </summary>
+    public byte[] PartyCreateDone(int partyId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte(PartyCreateDoneOp);
+        w.WriteInt(partyId);
+        w.WriteInt(PartyMemberView.NoDoor);
+        w.WriteInt(PartyMemberView.NoDoor);
+        w.WriteLong(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the invite popup (<c>PartyReq_InviteParty</c>) delivered to the invited player: the
+    /// party id and the inviter's name / level / job (JMS &gt;= 186 sends the job).
+    /// </summary>
+    public byte[] PartyInvite(int partyId, string inviterName, int inviterLevel, int inviterJob)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte(PartyInviteToInvitee);
+        w.WriteInt(partyId);
+        w.WriteString(inviterName);
+        w.WriteInt(inviterLevel);
+        w.WriteInt(inviterJob);          // JMS >= 186
+        w.WriteByte(0);                  // auto-join
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>PartyRes_InviteParty_Sent</c> echoed to the inviter (the invited name).</summary>
+    public byte[] PartyInviteSent(string invitedName)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte(PartyInviteSentOp);
+        w.WriteString(invitedName);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds a party-window refresh: <c>PartyRes_LoadParty_Done</c> when <paramref name="loading"/>,
+    /// else the silent update. Both are op 7: the party id then the member-status block.
+    /// </summary>
+    public byte[] PartyRefresh(int partyId, IReadOnlyList<PartyMemberView> slots, int leaderId, int forChannel, bool loading)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte(PartyLoadDoneOp);
+        w.WriteInt(partyId);
+        WritePartyStatus(w, slots, leaderId, forChannel, leaving: loading); // LoadParty uses leaving=true
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>PartyRes_JoinParty</c> (op 15) sent to every member when someone joins: the party
+    /// id, the joiner's name, and the refreshed member-status block.
+    /// </summary>
+    public byte[] PartyJoin(int partyId, string joinerName, IReadOnlyList<PartyMemberView> slots, int leaderId, int forChannel)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte(PartyJoinOp);
+        w.WriteInt(partyId);
+        w.WriteString(joinerName);
+        WritePartyStatus(w, slots, leaderId, forChannel, leaving: false);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the departure packet (op 12) for a leave, expel, or disband (ports the
+    /// <c>DISBAND/EXPEL/LEAVE</c> branch of <c>ResCWvsContext.PartyResult</c>). Disband carries just
+    /// the leader id twice; leave/expel carry the expel flag, the departing name, and the refreshed
+    /// member block (with the door "leaving" shape only for a voluntary leave).
+    /// </summary>
+    public byte[] PartyDepart(int partyId, int targetId, string targetName, PartyDepart kind, IReadOnlyList<PartyMemberView> slots, int leaderId, int forChannel)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte(PartyDepartOp);
+        w.WriteInt(partyId);
+        w.WriteInt(targetId);
+        w.WriteBool(kind != Channel.PartyDepart.Disband); // 0 = disband, 1 = a member left
+
+        if (kind == Channel.PartyDepart.Disband)
+        {
+            w.WriteInt(targetId);
+        }
+        else
+        {
+            w.WriteBool(kind == Channel.PartyDepart.Expel); // 1 = expelled, 0 = voluntary
+            w.WriteString(targetName);
+            WritePartyStatus(w, slots, leaderId, forChannel, leaving: kind == Channel.PartyDepart.Leave);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>PartyRes_ChangePartyBoss_Done</c> (op 31): the new leader's id and whether the
+    /// change was caused by a disconnect.
+    /// </summary>
+    public byte[] PartyChangeLeader(int newLeaderId, bool byDisconnect)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte(PartyChangeLeaderOp);
+        w.WriteInt(newLeaderId);
+        w.WriteBool(byDisconnect);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Writes the 6-slot party member block (ports <c>ResCWvsContext.addPartyStatus</c>): ids,
+    /// 13-byte names, jobs, levels, wire channels, the leader id, per-member map ids, then the
+    /// per-member town-door block. <paramref name="slots"/> must already be padded to 6.
+    /// </summary>
+    private static void WritePartyStatus(PacketWriter w, IReadOnlyList<PartyMemberView> slots, int leaderId, int forChannel, bool leaving)
+    {
+        foreach (PartyMemberView m in slots)
+        {
+            w.WriteInt(m.Id);
+        }
+
+        foreach (PartyMemberView m in slots)
+        {
+            w.WriteFixedString(m.Name ?? string.Empty, 13);
+        }
+
+        foreach (PartyMemberView m in slots)
+        {
+            w.WriteInt(m.Job);
+        }
+
+        foreach (PartyMemberView m in slots)
+        {
+            w.WriteInt(m.Level);
+        }
+
+        foreach (PartyMemberView m in slots)
+        {
+            w.WriteInt(m.Online ? m.Channel - 1 : -2); // wire channel is 0-based; -2 = offline
+        }
+
+        w.WriteInt(leaderId);
+
+        foreach (PartyMemberView m in slots)
+        {
+            w.WriteInt(m.Channel == forChannel ? m.MapId : 0);
+        }
+
+        foreach (PartyMemberView m in slots)
+        {
+            if (m.Channel == forChannel && !leaving)
+            {
+                w.WriteInt(PartyMemberView.NoDoor);  // door town
+                w.WriteInt(PartyMemberView.NoDoor);  // door target
+                w.WriteInt(0);                       // door skill
+                w.WriteInt(0);                       // door x
+                w.WriteInt(0);                       // door y
+            }
+            else
+            {
+                w.WriteInt(leaving ? PartyMemberView.NoDoor : 0);
+                w.WriteLong(leaving ? PartyMemberView.NoDoor : 0);
+                w.WriteLong(leaving ? -1 : 0);
+            }
+        }
+    }
+
     /// <summary>
     /// Builds <c>LP_UserMove</c> relaying a raw CMovePath buffer (ports
     /// <c>ResCUserRemote.UserMove</c>: character id + the path bytes as received).

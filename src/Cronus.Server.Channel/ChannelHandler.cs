@@ -33,6 +33,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly ISkillProvider _skills;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly MessengerRegistry _messengers;
+    private readonly PartyRegistry _parties;
     private readonly int _channelId;
 
     private readonly int _opMigrateIn;
@@ -53,6 +54,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opScriptAnswer;
     private readonly int _opWhisper;
     private readonly int _opMessenger;
+    private readonly int _opPartyRequest;
 
     private FieldPlayer? _player;
     private Field? _field;
@@ -68,7 +70,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         NpcScriptEngine? npcScripts = null,
         ISkillProvider? skills = null,
         int channelId = 0,
-        MessengerRegistry? messengers = null)
+        MessengerRegistry? messengers = null,
+        PartyRegistry? parties = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -78,6 +81,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _npcScripts = npcScripts;
         _channelId = channelId;
         _messengers = messengers ?? new MessengerRegistry(_packets);
+        _parties = parties ?? new PartyRegistry();
 
         _opMigrateIn = clientOpcodes.Get(ClientOpcode.MigrateIn);
         _opAliveAck = clientOpcodes.Get(ClientOpcode.AliveAck);
@@ -97,6 +101,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
         _opWhisper = clientOpcodes.Get(ClientOpcode.Whisper);
         _opMessenger = clientOpcodes.Get(ClientOpcode.Messenger);
+        _opPartyRequest = clientOpcodes.Get(ClientOpcode.PartyRequest);
     }
 
     /// <summary>The character bound to this session after a successful migrate-in.</summary>
@@ -123,6 +128,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opMessenger)
         {
             await HandleMessengerAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opPartyRequest)
+        {
+            await HandlePartyRequestAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opUserEmotion)
         {
@@ -193,6 +202,13 @@ public sealed class ChannelHandler : PacketHandlerBase
             {
                 await messenger.LeaveAsync(_player.Character.Id).ConfigureAwait(false);
                 _messengers.Unregister(_player.Character.Id, messenger);
+            }
+
+            // Leave any party (the leader dropping disbands it — a documented simplification).
+            Party? party = _parties.GetForCharacter(_player.Character.Id);
+            if (party is not null)
+            {
+                await LeavePartyAsync(party, _player, byDisconnect: true).ConfigureAwait(false);
             }
 
             _field.Leave(_player.Character.Id);
@@ -816,6 +832,204 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await current.ChatAsync(myId, message).ConfigureAwait(false);
                 return;
             }
+        }
+    }
+
+    // CP_PartyRequest sub-operations the client sends (ports OpsParty).
+    private const int PartyOpCreate = 1;
+    private const int PartyOpWithdraw = 2;
+    private const int PartyOpJoin = 3;
+    private const int PartyOpInvite = 4;
+    private const int PartyOpKick = 5;
+    private const int PartyOpChangeLeader = 6;
+
+    /// <summary>The 1-based party channel (the reference numbers channels from 1; Cronus from 0).</summary>
+    private int PartyChannel => _channelId + 1;
+
+    /// <summary>
+    /// Handles <c>CP_PartyRequest</c> — create, invite, join, leave/disband, expel, and change
+    /// leader (ports <c>ReqCUser.OnPartyRequest</c> + <c>OdinWorld.Party.updateParty</c>). Parties
+    /// are in-memory and online-only; exp sharing and party HP bars are follow-ups.
+    /// </summary>
+    private async ValueTask HandlePartyRequestAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        int type = packet.ReadByte();
+        int myId = _player.Character.Id;
+        Party? party = _parties.GetForCharacter(myId);
+
+        switch (type)
+        {
+            case PartyOpCreate:
+            {
+                if (party is not null)
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrAlreadyJoined)).ConfigureAwait(false);
+                    return;
+                }
+
+                Party created = _parties.Create(_player);
+                await session.SendAsync(_packets.PartyCreateDone(created.Id)).ConfigureAwait(false);
+                return;
+            }
+
+            case PartyOpWithdraw:
+            {
+                if (party is null)
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrWithdrawUnknown)).ConfigureAwait(false);
+                    return;
+                }
+
+                await LeavePartyAsync(party, _player, byDisconnect: false).ConfigureAwait(false);
+                return;
+            }
+
+            case PartyOpJoin:
+            {
+                int partyId = packet.ReadInt();
+                if (party is not null)
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrAlreadyInParty)).ConfigureAwait(false);
+                    return;
+                }
+
+                Party? target = _parties.GetById(partyId);
+                if (target is null)
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrJoinUnknown)).ConfigureAwait(false);
+                    return;
+                }
+
+                if (!target.TryAdd(_player))
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrFull)).ConfigureAwait(false);
+                    return;
+                }
+
+                _parties.Register(myId, target);
+                byte[] joinPacket = _packets.PartyJoin(target.Id, _player.Character.Name, target.ViewSlots(PartyChannel), target.LeaderId, PartyChannel);
+                await PartyBroadcastAsync(target, joinPacket).ConfigureAwait(false);
+                return;
+            }
+
+            case PartyOpInvite:
+            {
+                string inviteeName = packet.ReadString();
+                if (party is null || party.IsFull)
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrFull)).ConfigureAwait(false);
+                    return;
+                }
+
+                FieldPlayer? invitee = _fields.FindPlayerByName(inviteeName);
+                if (invitee is null)
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrUnknownUser)).ConfigureAwait(false);
+                    return;
+                }
+
+                if (_parties.GetForCharacter(invitee.Character.Id) is not null)
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrAlreadyInParty)).ConfigureAwait(false);
+                    return;
+                }
+
+                await session.SendAsync(_packets.PartyInviteSent(inviteeName)).ConfigureAwait(false);
+                await invitee.Session.SendAsync(
+                    _packets.PartyInvite(party.Id, _player.Character.Name, _player.Character.Level, _player.Character.Job)).ConfigureAwait(false);
+                return;
+            }
+
+            case PartyOpKick:
+            {
+                int kickId = packet.ReadInt();
+                if (party is null || !party.IsLeader(myId))
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrKickUnknown)).ConfigureAwait(false);
+                    return;
+                }
+
+                FieldPlayer? kicked = party.MemberById(kickId);
+                if (kicked is null || kickId == myId)
+                {
+                    return; // can't kick a non-member or yourself
+                }
+
+                party.Remove(kickId);
+                _parties.Unregister(kickId);
+                byte[] expel = _packets.PartyDepart(party.Id, kickId, kicked.Character.Name, PartyDepart.Expel, party.ViewSlots(PartyChannel), party.LeaderId, PartyChannel);
+                await PartyBroadcastAsync(party, expel).ConfigureAwait(false);
+                await TrySendAsync(kicked, expel).ConfigureAwait(false);
+                return;
+            }
+
+            case PartyOpChangeLeader:
+            {
+                int newLeaderId = packet.ReadInt();
+                if (party is null || !party.IsLeader(myId) || !party.Contains(newLeaderId))
+                {
+                    await session.SendAsync(_packets.PartyResultSimple(ChannelPackets.PartyErrChangeBossUnknown)).ConfigureAwait(false);
+                    return;
+                }
+
+                party.SetLeader(newLeaderId);
+                byte[] change = _packets.PartyChangeLeader(newLeaderId, byDisconnect: false);
+                await PartyBroadcastAsync(party, change).ConfigureAwait(false);
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes a member from their party: the leader leaving disbands it (everyone is notified),
+    /// a member leaving notifies the rest and the leaver. Shared by the withdraw op and disconnect.
+    /// </summary>
+    private async ValueTask LeavePartyAsync(Party party, FieldPlayer leaver, bool byDisconnect)
+    {
+        int leaverId = leaver.Character.Id;
+        string leaverName = leaver.Character.Name;
+
+        if (party.IsLeader(leaverId))
+        {
+            // Disband: notify all members while they're still listed, then drop the party.
+            byte[] disband = _packets.PartyDepart(party.Id, leaverId, leaverName, PartyDepart.Disband, party.ViewSlots(PartyChannel), party.LeaderId, PartyChannel);
+            await PartyBroadcastAsync(party, disband).ConfigureAwait(false);
+            _parties.Disband(party);
+            return;
+        }
+
+        party.Remove(leaverId);
+        _parties.Unregister(leaverId);
+        byte[] leave = _packets.PartyDepart(party.Id, leaverId, leaverName, PartyDepart.Leave, party.ViewSlots(PartyChannel), party.LeaderId, PartyChannel);
+        await PartyBroadcastAsync(party, leave).ConfigureAwait(false); // remaining members
+        if (!byDisconnect)
+        {
+            await TrySendAsync(leaver, leave).ConfigureAwait(false);   // and the leaver's own window
+        }
+    }
+
+    private static async ValueTask PartyBroadcastAsync(Party party, byte[] packet)
+    {
+        foreach (FieldPlayer member in party.Members)
+        {
+            await TrySendAsync(member, packet).ConfigureAwait(false);
+        }
+    }
+
+    private static async ValueTask TrySendAsync(FieldPlayer player, byte[] packet)
+    {
+        try
+        {
+            await player.Session.SendAsync(packet).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // A dead session drops out on its own disconnect path; keep fanning out.
         }
     }
 
