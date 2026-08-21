@@ -4726,7 +4726,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        await session.SendAsync(_packets.CharacterInfo(target.Character)).ConfigureAwait(false);
+        await session.SendAsync(_packets.CharacterInfo(target.Character, GuildOf(target.Character))).ConfigureAwait(false);
     }
 
     private async ValueTask GrantKillExpAsync(int exp)

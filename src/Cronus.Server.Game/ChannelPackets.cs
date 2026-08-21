@@ -1393,7 +1393,7 @@ public sealed class ChannelPackets
     /// yet, so they encode as their empty forms; the guild "community" is <c>"-"</c> (the reference
     /// never actually fills it in). The layout is fixed and golden-tested.
     /// </summary>
-    public byte[] CharacterInfo(Character c)
+    public byte[] CharacterInfo(Character c, GuildData? guild = null)
     {
         PacketWriter w = NewPacket(ServerOpcode.CharacterInfo);
         w.WriteInt(c.Id);
@@ -1401,7 +1401,7 @@ public sealed class ChannelPackets
         w.WriteShort(c.Job);
         w.WriteShort(c.Fame);
         w.WriteByte(0);              // bIsMarried (JMS >= 147)
-        w.WriteString("-");          // sCommunity (guild name; the reference always leaves it "-")
+        w.WriteString(guild?.Name ?? "-"); // sCommunity ("-" when guildless, per the reference)
         w.WriteString(string.Empty); // sAlliance (JMS >= 147)
         w.WriteInt(0);               // JMS 180-186 pair
         w.WriteInt(0);
