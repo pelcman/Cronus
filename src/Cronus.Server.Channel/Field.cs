@@ -51,6 +51,12 @@ public sealed class FieldMob
     /// </summary>
     public int ControllerId { get; set; } = -1;
 
+    /// <summary>
+    /// <see cref="Environment.TickCount64"/> at which a dead mob should respawn, or 0 when it is
+    /// alive / not scheduled. Set on death; cleared by <see cref="Respawn"/>.
+    /// </summary>
+    public long RespawnAtTick { get; set; }
+
     public bool IsDead => Hp <= 0;
 
     /// <summary>Applies damage, returns the new HP (clamped at 0).</summary>
@@ -58,6 +64,14 @@ public sealed class FieldMob
     {
         Hp = Math.Max(0, Hp - Math.Max(0, amount));
         return Hp;
+    }
+
+    /// <summary>Brings a dead mob back to full HP at its spawn point (uncontrolled, unscheduled).</summary>
+    public void Respawn()
+    {
+        Hp = MaxHp;
+        ControllerId = -1;
+        RespawnAtTick = 0;
     }
 }
 
@@ -160,6 +174,25 @@ public sealed class Field
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Respawns any dead mobs whose scheduled respawn time has arrived and returns them for the
+    /// caller (the server tick) to announce with <c>LP_MobEnterField</c>.
+    /// </summary>
+    public IReadOnlyList<FieldMob> TakeRespawnDueMobs(long nowTick)
+    {
+        List<FieldMob>? due = null;
+        foreach (FieldMob mob in Mobs)
+        {
+            if (mob.IsDead && mob.RespawnAtTick != 0 && mob.RespawnAtTick <= nowTick)
+            {
+                mob.Respawn();
+                (due ??= new List<FieldMob>()).Add(mob);
+            }
+        }
+
+        return due ?? (IReadOnlyList<FieldMob>)Array.Empty<FieldMob>();
     }
 
     private static IReadOnlyList<FieldMob> BuildMobs(MapData? mapData, IMobProvider? mobProvider)
@@ -338,6 +371,18 @@ public sealed class FieldRegistry
             }
 
             return field;
+        }
+    }
+
+    /// <summary>A snapshot of the currently active fields (for the server tick).</summary>
+    public IReadOnlyList<Field> Fields
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _fields.Values.ToList();
+            }
         }
     }
 }
