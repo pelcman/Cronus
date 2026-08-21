@@ -24,6 +24,7 @@ public static class ClientOpcode
     public const string JmsGetMapLogin = "CP_JMS_GetMapLogin";
     public const string UserMove = "CP_UserMove";
     public const string UserChat = "CP_UserChat";
+    public const string UserEmotion = "CP_UserEmotion";
     public const string UserMeleeAttack = "CP_UserMeleeAttack";
     public const string UserShootAttack = "CP_UserShootAttack";
     public const string UserMagicAttack = "CP_UserMagicAttack";
@@ -60,6 +61,7 @@ public static class ServerOpcode
     public const string UserLeaveField = "LP_UserLeaveField";
     public const string TransferFieldReqIgnored = "LP_TransferFieldReqIgnored";
     public const string UserChat = "LP_UserChat";
+    public const string UserEmotion = "LP_UserEmotion";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string UserShootAttack = "LP_UserShootAttack";

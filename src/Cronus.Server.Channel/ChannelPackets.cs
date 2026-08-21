@@ -634,6 +634,21 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_UserEmotion</c> mirroring a player's face emote to onlookers (ports
+    /// <c>ResCUserRemote.UserEmotion</c> + <c>DataCUser.Emotion</c>): character id, the expression,
+    /// then the duration (-1) and a trailing byte.
+    /// </summary>
+    public byte[] UserEmotion(int characterId, int expression)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserEmotion);
+        w.WriteInt(characterId);
+        w.WriteInt(expression);
+        w.WriteInt(-1);                  // duration (unused for the basic emotes)
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_UserMove</c> relaying a raw CMovePath buffer (ports
     /// <c>ResCUserRemote.UserMove</c>: character id + the path bytes as received).
     /// </summary>

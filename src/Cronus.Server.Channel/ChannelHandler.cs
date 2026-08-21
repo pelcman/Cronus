@@ -38,6 +38,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opAliveAck;
     private readonly int _opUserMove;
     private readonly int _opUserChat;
+    private readonly int _opUserEmotion;
     private readonly int _opMeleeAttack;
     private readonly int _opMagicAttack;
     private readonly int _opShootAttack;
@@ -76,6 +77,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opAliveAck = clientOpcodes.Get(ClientOpcode.AliveAck);
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
         _opUserChat = clientOpcodes.Get(ClientOpcode.UserChat);
+        _opUserEmotion = clientOpcodes.Get(ClientOpcode.UserEmotion);
         _opMeleeAttack = clientOpcodes.Get(ClientOpcode.UserMeleeAttack);
         _opMagicAttack = clientOpcodes.Get(ClientOpcode.UserMagicAttack);
         _opShootAttack = clientOpcodes.Get(ClientOpcode.UserShootAttack);
@@ -104,6 +106,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opUserChat)
         {
             await HandleUserChatAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opUserEmotion)
+        {
+            await HandleUserEmotionAsync(packet).ConfigureAwait(false);
         }
         else if (opcode == _opMeleeAttack)
         {
@@ -562,6 +568,26 @@ public sealed class ChannelHandler : PacketHandlerBase
         StatFlag changed = CharacterProgression.GainExp(c, exp); // processes level-ups
         _characters.Save(c);
         await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleUserEmotionAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_UserEmotion: [emotionId:4]. Basic emotes are 1..7; item-based face
+        // expressions (>7) need the item (not modelled here), but relaying one is harmless.
+        int emotion = packet.ReadInt();
+        if (emotion <= 0)
+        {
+            return;
+        }
+
+        await _field.BroadcastAsync(
+            _packets.UserEmotion(_player.Character.Id, emotion),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
     }
 
     private async ValueTask HandleUserChatAsync(MapleSession session, PacketReader packet)

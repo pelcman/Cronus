@@ -205,6 +205,9 @@ Each milestone means adding one "working vertical slice".
 - [x] **M15: Drop despawn** — the field world tick (`MobRespawnService`, now respawn + drop
       upkeep) fades drops left on the ground past their TTL (60 s) with `LP_DropLeaveField`
       (timeout). Keeps maps tidy and completes the drop lifecycle for when item drops land.
+- [x] **M16: Emotes** — `CP_UserEmotion` relays a player's face emote to the rest of the field
+      (`LP_UserEmotion`, grounded in `DataCUser.Emotion`) — a small social touch for an in-group
+      server. Item-based expressions (id > 7) aren't inventory-checked yet.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
