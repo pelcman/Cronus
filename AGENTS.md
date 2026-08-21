@@ -205,8 +205,16 @@ Each milestone means adding one "working vertical slice".
         `Cronus.Data` `SqlShopProvider` parses the reference `shops`+`shopitems` dump (`CRONUS_SHOPS`),
         scoped per INSERT block; `IItemProvider.GetPrice` reads the wz `info/price` for sell pricing.
         Buy debits meso + adds the item; sell removes the slot + credits the wz price; each replies a
-        one-byte `LP_ShopResult`. `/shop <id>` opens a shop for testing. Equip buys / token shops /
-        rechargeables deferred (equips need wz base stats). End-to-end buy test + packet goldens.
+        one-byte `LP_ShopResult`. `/shop <id>` opens a shop for testing. Token shops / rechargeables
+        deferred. End-to-end buy test + packet goldens.
+  - [x] **M10g: equip base stats + equip drops/buys + drop-to-ground** — `IItemProvider.GetEquipStats`
+        loads an equip's wz base stats (`Character.wz/{folder}/{id:08}/info`, folder by search;
+        sword 1302000 → 17 atk / 7 slots); `ChannelHandler.PopulateEquipStats` fills them onto each new
+        equip before it's serialized, so **equip mob-drops and equip shop-buys are now live** with real
+        stats (the earlier skips removed). Also item **drop-to-ground** (`CP_UserChangeSlotPositionRequest`
+        dst==0): a player throws a bundle item onto the field (`Field.AddPlayerItemDrop`) for others to
+        pick up. Deferred: equip stat bonuses on the wearer, token shops, equip drop-to-ground (a
+        `FieldDrop` carries only the item id). Needs a `Character` junction in the wz root.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
