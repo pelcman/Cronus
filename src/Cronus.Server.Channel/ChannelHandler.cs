@@ -2224,8 +2224,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     /// <summary>
-    /// Minimal GM/debug command set for local testing (chat lines starting with '!'). Replies
-    /// are echoed back to the caller as their own chat line.
+    /// Minimal GM/debug command set for local testing (chat lines starting with '/'). Replies
+    /// are echoed back to the caller as their own chat line. Documented in docs/COMMANDS.md
+    /// (Japanese: docs/COMMANDS.ja.md) — keep those in sync when commands change.
     /// </summary>
     private async ValueTask HandleCommandAsync(MapleSession session, string command)
     {

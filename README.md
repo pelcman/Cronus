@@ -84,7 +84,9 @@ Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
 
 To connect a real client, point a JMS v186 client at the host via EmuClient's localhost
 redirect. Accounts auto-register on first login. See
-**[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** for the full step-by-step runbook.
+**[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** for the full step-by-step runbook, and
+**[docs/COMMANDS.md](docs/COMMANDS.md)** (日本語: [docs/COMMANDS.ja.md](docs/COMMANDS.ja.md)) for
+the in-game `/` command reference.
 
 ### Try the bundled sample content
 

@@ -70,10 +70,12 @@ The client must be redirected to `127.0.0.1` and have its version/CRC checks byp
    stored and rendered).
 4. **Enter game** — the character spawns in map `100000000`. With `CRONUS_WZ` set, the sample
    NPC and any mobs appear; click the NPC to run its script.
-5. **Play** — move, chat, use portals/`!map <id>`, and (with a mob present) attack it: it takes
-   damage, dies, grants exp (levels you up), and drops meso you can pick up. Spend SP on skills.
+5. **Play** — move, chat, use portals/`/map <id>`, and (with a mob present) attack it: it takes
+   damage, dies, grants exp (levels you up), and drops items and meso you can pick up. Spend SP
+   on skills, buy potions at a shop, equip gear.
 
-GM/debug chat commands: `!map <id>`, `!meso <n>`, `!notice <msg>`, `!pos`, `!help`.
+GM/debug chat commands start with `/` (`/map <id>`, `/item <id>`, `/help`, …) — the full list with
+examples is in **[COMMANDS.md](COMMANDS.md)** (日本語: [COMMANDS.ja.md](COMMANDS.ja.md)).
 
 ## 4. If something doesn't work
 
