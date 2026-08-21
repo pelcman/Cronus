@@ -22,6 +22,12 @@ public sealed class ConsumeSpec
     /// <summary>Percent of max MP restored.</summary>
     public int MpRate { get; init; }
 
+    /// <summary>
+    /// Target map for a return/teleport scroll (wz <c>spec/moveTo</c>); 0 = none,
+    /// 999999999 = the current map's return field.
+    /// </summary>
+    public int MoveTo { get; init; }
+
     /// <summary>Maximum stack size for this item (default 100).</summary>
     public int SlotMax { get; init; } = 100;
 }
@@ -152,6 +158,7 @@ public sealed class WzItemProvider : IItemProvider
             Mp = spec?.GetInt("mp") ?? 0,
             HpRate = spec?.GetInt("hpR") ?? 0,
             MpRate = spec?.GetInt("mpR") ?? 0,
+            MoveTo = spec?.GetInt("moveTo") ?? 0,
             SlotMax = info?.GetInt("slotMax", 100) ?? 100,
         };
     }

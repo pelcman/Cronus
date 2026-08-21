@@ -904,6 +904,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// <summary>The USE inventory tab number.</summary>
     private const int UseTab = 2;
 
+    /// <summary>A return scroll's <c>moveTo</c> sentinel for "warp to this map's return field".</summary>
+    private const int ReturnToOwnField = 999999999;
+
     /// <summary>
     /// Handles <c>CP_UserStatChangeItemUseRequest</c> — using a recovery consumable (ports
     /// <c>ReqCUser.OnUserStatChangeItemUseRequest</c> + <c>MapleCharacter.useItem</c>). Validates the
@@ -928,8 +931,31 @@ public sealed class ChannelHandler : PacketHandlerBase
             return; // desync / already gone
         }
 
-        // Apply the recovery effect from wz (flat + percent of max), clamped to the max.
         ConsumeSpec? spec = _items.GetConsume(itemId);
+
+        // Return / teleport scroll (spec/moveTo): consume it and warp to the target map. 999999999
+        // means "this map's return field".
+        if (spec is not null && spec.MoveTo != 0)
+        {
+            int target = spec.MoveTo == ReturnToOwnField
+                ? (_maps.GetMap(c.MapId)?.ReturnMap ?? 0)
+                : spec.MoveTo;
+            if (target > 0 && target != ReturnToOwnField)
+            {
+                InventoryChange? used = Inventory.RemoveFromSlot(c, UseTab, slot, 1);
+                _characters.Save(c);
+                if (used is { } uch)
+                {
+                    await session.SendAsync(_packets.InventoryOperation(new[] { uch })).ConfigureAwait(false);
+                }
+
+                await MovePlayerToMapAsync(session, target, spawnPortal: 0).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        // Apply the recovery effect from wz (flat + percent of max), clamped to the max.
         StatFlag statChange = 0;
         if (spec is not null)
         {
