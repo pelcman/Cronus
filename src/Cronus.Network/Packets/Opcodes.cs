@@ -61,6 +61,7 @@ public static class ClientOpcode
     public const string GroupMessage = "CP_GroupMessage";
     public const string UserGatherItemRequest = "CP_UserGatherItemRequest";
     public const string UserSortItemRequest = "CP_UserSortItemRequest";
+    public const string UserUpgradeItemUseRequest = "CP_UserUpgradeItemUseRequest";
 }
 
 /// <summary>
@@ -138,4 +139,5 @@ public static class ServerOpcode
     public const string GatherItemResult = "LP_GatherItemResult";
     public const string SortItemResult = "LP_SortItemResult";
     public const string UserMiniRoomBalloon = "LP_UserMiniRoomBalloon";
+    public const string UserItemUpgradeEffect = "LP_UserItemUpgradeEffect";
 }

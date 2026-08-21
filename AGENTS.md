@@ -334,6 +334,15 @@ Each milestone means adding one "working vertical slice".
         name (PSP_Ban), and close-with-stock-return on owner leave/disconnect. Shop object ids are
         offset from mini-game ids (MRP_Enter carries only the id). Two-client stock→open→buy e2e.
         Deferred: hired merchants (type 5, the offline `EmployeePool` shop), blacklists.
+  - [x] **M10u: equip scrolling** — `CP_UserUpgradeItemUseRequest` (ports the pre-BB scope of
+        `scrollEquipWithId`): normal stat scrolls (wz `info/success`/`cursed`/`inc*` via the new
+        `ScrollSpec`; scroll↔equip family gate ports `canScroll`), 10/60/100% behavior, clean
+        slates 2049000-8 (slot restore below the wz `tuc`), chaos 20491xx (nonzero stats drift
+        ±5/±10), white-scroll (2340000) protection, curse destruction. Result = scroll consume +
+        equip re-add/remove in one `LP_InventoryOperation`, the field-wide
+        `LP_UserItemUpgradeEffect` flash, and an avatar repaint when a worn equip changed. Rules
+        unit tests + a scroll-the-worn-sword e2e. Deferred: Vega/tablets/potential (post-BB),
+        the Legendary Spirit skill gate for scrolling unequipped items.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

@@ -62,6 +62,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opDropPickUp;
     private readonly int _opDropMoney;
     private readonly int _opUseItem;
+    private readonly int _opUpgradeItem;
     private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
@@ -166,6 +167,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opUseItem = clientOpcodes.Get(ClientOpcode.UserStatChangeItemUseRequest);
+        _opUpgradeItem = clientOpcodes.Get(ClientOpcode.UserUpgradeItemUseRequest);
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
@@ -264,6 +266,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opCancelBuff)
         {
             await HandleCancelBuffAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opUpgradeItem)
+        {
+            await HandleUpgradeItemAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opChangeSlot)
         {
@@ -1361,6 +1367,88 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             _buffs.Remove(_player.Character.Id, buffId);
             await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserUpgradeItemUseRequest</c> — using an upgrade scroll on an equip (ports
+    /// <c>ReqCUser.OnUserUpgradeItemUseRequest</c> + <c>scrollEquipWithId</c>, the pre-BB scope):
+    /// success applies the scroll's stats (slot−1, level+1), failure burns a slot unless a white
+    /// scroll protects it, and a curse destroys the equip. The field sees the flash; a scrolled
+    /// worn equip repaints the avatar.
+    /// </summary>
+    private async ValueTask HandleUpgradeItemAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186: [updateTime:4][useSlot:2][equipSlot:2][bWhiteScroll:2 optional]
+        packet.ReadInt();
+        short useSlot = packet.ReadShort();
+        short equipSlot = packet.ReadShort();
+        bool wantWhiteScroll = packet.Remaining >= 2 && (packet.ReadShort() & 2) != 0;
+
+        Character c = _player.Character;
+        InventoryItem? scroll = Inventory.ItemAt(c, 2, useSlot);
+        InventoryItem? equip = c.EquippedItems.FirstOrDefault(i => i.Position == equipSlot && i.IsEquip);
+        if (scroll is null || equip is null || scroll.ItemId / 10000 != 204
+            || _items.GetScroll(scroll.ItemId) is not { } spec)
+        {
+            return;
+        }
+
+        bool cleanSlate = Scrolling.IsCleanSlate(scroll.ItemId);
+        bool chaos = Scrolling.IsChaosScroll(scroll.ItemId);
+        if (!cleanSlate && equip.UpgradeSlots < 1)
+        {
+            return; // nothing left to scroll
+        }
+
+        if (!cleanSlate && !chaos && !Scrolling.CanScroll(scroll.ItemId, equip.ItemId))
+        {
+            return; // scroll targets a different equip family
+        }
+
+        // White-scroll protection consumes one 2340000 alongside the scroll.
+        InventoryItem? whiteScroll = wantWhiteScroll
+            ? c.EquippedItems.FirstOrDefault(i => i.ItemId == Scrolling.WhiteScrollItemId && i.Position > 0)
+            : null;
+
+        int tuc = _items.GetEquipStats(equip.ItemId)?.UpgradeSlots ?? equip.UpgradeSlots;
+        ScrollResult result = Scrolling.Apply(equip, scroll.ItemId, spec, tuc, whiteScroll is not null, Random.Shared);
+
+        var changes = new List<InventoryChange>();
+        if (Inventory.RemoveFromSlot(c, 2, useSlot, 1) is { } scrollUse)
+        {
+            changes.Add(scrollUse);
+        }
+
+        if (whiteScroll is not null && Inventory.RemoveFromSlot(c, 2, whiteScroll.Position, 1) is { } wsUse)
+        {
+            changes.Add(wsUse);
+        }
+
+        if (result == ScrollResult.Curse)
+        {
+            c.EquippedItems.Remove(equip);
+            changes.Add(new InventoryChange(InvMode.Remove, 1, equipSlot, null, 0));
+        }
+        else
+        {
+            // Re-add the (mutated) equip in place so the client repaints its stats.
+            changes.Add(new InventoryChange(InvMode.Add, 1, equipSlot, equip, 1));
+        }
+
+        _characters.Save(c);
+        await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        await _field.BroadcastAsync(_packets.UserItemUpgradeEffect(c.Id, result, legendarySpirit: equipSlot > 0)).ConfigureAwait(false);
+
+        // A worn equip changing (or vanishing) repaints the character for onlookers.
+        if (equipSlot < 0 && result != ScrollResult.Fail)
+        {
+            await _field.BroadcastAsync(_packets.UserAvatarModified(c), exceptCharacterId: c.Id).ConfigureAwait(false);
         }
     }
 

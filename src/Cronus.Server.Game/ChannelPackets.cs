@@ -1741,6 +1741,23 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// The scroll flash over a character (ports <c>ResCUser.getScrollEffect</c>, JMS v186 branch):
+    /// success / curse flags, the Legendary Spirit marker, and the fixed tail.
+    /// </summary>
+    public byte[] UserItemUpgradeEffect(int characterId, ScrollResult result, bool legendarySpirit)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserItemUpgradeEffect);
+        w.WriteInt(characterId);
+        w.WriteBool(result == ScrollResult.Success);
+        w.WriteBool(result == ScrollResult.Curse);
+        w.WriteBool(legendarySpirit);
+        w.WriteByte(0); // white scroll marker (reference sends 0)
+        w.WriteByte(0); // JMS >= 186 tail
+        w.WriteInt(0);
+        return w.ToArray();
+    }
+
     // Personal-shop protocol ops (OpsMiniRoomProtocol.init, JMS v186 values).
     public const byte PsPutItem = 19;
     public const byte PsBuyItem = 20;

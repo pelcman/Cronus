@@ -119,6 +119,23 @@ public sealed record EquipStats
     public short Jump { get; init; }
 }
 
+/// <summary>
+/// An upgrade scroll's data from its Consume <c>info</c> node: the success / curse percentages
+/// and the stat bonuses it grants (the same <c>inc*</c> keys equips use, reusing
+/// <see cref="EquipStats"/> as the carrier).
+/// </summary>
+public sealed record ScrollSpec
+{
+    /// <summary>Success chance in percent — wz <c>info/success</c>.</summary>
+    public int Success { get; init; }
+
+    /// <summary>Chance a failure destroys the equip, in percent — wz <c>info/cursed</c>.</summary>
+    public int Cursed { get; init; }
+
+    /// <summary>The stat bonuses a success applies.</summary>
+    public EquipStats Stats { get; init; } = new();
+}
+
 /// <summary>Provides item metadata (consumable specs, prices, equip base stats) by item id.</summary>
 public interface IItemProvider
 {
@@ -135,6 +152,9 @@ public interface IItemProvider
 
     /// <summary>The per-unit price of a rechargeable stack (wz <c>info/unitPrice</c>), or null.</summary>
     double? GetUnitPrice(int itemId);
+
+    /// <summary>An upgrade scroll's success/curse/bonuses (only for <c>204xxxx</c> ids), or null.</summary>
+    ScrollSpec? GetScroll(int itemId);
 }
 
 /// <summary>
@@ -233,6 +253,58 @@ public sealed class WzItemProvider : IItemProvider
         return info?.Child("unitPrice")?.AsDouble();
     }
 
+    private readonly ConcurrentDictionary<int, ScrollSpec?> _scrollCache = new();
+
+    public ScrollSpec? GetScroll(int itemId) => _scrollCache.GetOrAdd(itemId, LoadScroll);
+
+    private ScrollSpec? LoadScroll(int itemId)
+    {
+        if (itemId / 10000 != 204)
+        {
+            return null;
+        }
+
+        string path = ConsumeImagePath(_wzRoot, itemId);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        WzData? info = WzData.ParseFile(path).Child($"{itemId:00000000}")?.Child("info");
+        if (info is null)
+        {
+            return null;
+        }
+
+        return new ScrollSpec
+        {
+            Success = info.GetInt("success"),
+            Cursed = info.GetInt("cursed"),
+            Stats = ReadIncStats(info),
+        };
+    }
+
+    /// <summary>The shared <c>inc*</c> stat keys (equip info nodes and scroll info nodes alike).</summary>
+    private static EquipStats ReadIncStats(WzData info) => new()
+    {
+        UpgradeSlots = (byte)info.GetInt("tuc"),
+        Str = (short)info.GetInt("incSTR"),
+        Dex = (short)info.GetInt("incDEX"),
+        Int = (short)info.GetInt("incINT"),
+        Luk = (short)info.GetInt("incLUK"),
+        Hp = (short)info.GetInt("incMHP"),
+        Mp = (short)info.GetInt("incMMP"),
+        Watk = (short)info.GetInt("incPAD"),
+        Matk = (short)info.GetInt("incMAD"),
+        Wdef = (short)info.GetInt("incPDD"),
+        Mdef = (short)info.GetInt("incMDD"),
+        Acc = (short)info.GetInt("incACC"),
+        Avoid = (short)info.GetInt("incEVA"),
+        Hands = (short)info.GetInt("incHANDS"),
+        Speed = (short)info.GetInt("incSPEED"),
+        Jump = (short)info.GetInt("incJUMP"),
+    };
+
     private EquipStats? LoadEquip(int itemId)
     {
         if (itemId / 1000000 != 1)
@@ -249,30 +321,7 @@ public sealed class WzItemProvider : IItemProvider
         // Each equip file's root imgdir contains the info node directly (unlike grouped Consume
         // files, which nest each item under an {id:00000000} node).
         WzData? info = WzData.ParseFile(path).Child("info");
-        if (info is null)
-        {
-            return null;
-        }
-
-        return new EquipStats
-        {
-            UpgradeSlots = (byte)info.GetInt("tuc"),
-            Str = (short)info.GetInt("incSTR"),
-            Dex = (short)info.GetInt("incDEX"),
-            Int = (short)info.GetInt("incINT"),
-            Luk = (short)info.GetInt("incLUK"),
-            Hp = (short)info.GetInt("incMHP"),
-            Mp = (short)info.GetInt("incMMP"),
-            Watk = (short)info.GetInt("incPAD"),
-            Matk = (short)info.GetInt("incMAD"),
-            Wdef = (short)info.GetInt("incPDD"),
-            Mdef = (short)info.GetInt("incMDD"),
-            Acc = (short)info.GetInt("incACC"),
-            Avoid = (short)info.GetInt("incEVA"),
-            Hands = (short)info.GetInt("incHANDS"),
-            Speed = (short)info.GetInt("incSPEED"),
-            Jump = (short)info.GetInt("incJUMP"),
-        };
+        return info is null ? null : ReadIncStats(info);
     }
 
     /// <summary>
@@ -326,16 +375,20 @@ public sealed class InMemoryItemProvider : IItemProvider
     private readonly Dictionary<int, EquipStats> _equips;
     private readonly Dictionary<int, double> _unitPrices;
 
+    private readonly Dictionary<int, ScrollSpec> _scrolls;
+
     public InMemoryItemProvider(
         IEnumerable<ConsumeSpec> items,
         IReadOnlyDictionary<int, int>? prices = null,
         IReadOnlyDictionary<int, EquipStats>? equips = null,
-        IReadOnlyDictionary<int, double>? unitPrices = null)
+        IReadOnlyDictionary<int, double>? unitPrices = null,
+        IReadOnlyDictionary<int, ScrollSpec>? scrolls = null)
     {
         _items = items.ToDictionary(i => i.ItemId);
         _prices = prices is null ? new Dictionary<int, int>() : new Dictionary<int, int>(prices);
         _equips = equips is null ? new Dictionary<int, EquipStats>() : new Dictionary<int, EquipStats>(equips);
         _unitPrices = unitPrices is null ? new Dictionary<int, double>() : new Dictionary<int, double>(unitPrices);
+        _scrolls = scrolls is null ? new Dictionary<int, ScrollSpec>() : new Dictionary<int, ScrollSpec>(scrolls);
     }
 
     public ConsumeSpec? GetConsume(int itemId) => _items.TryGetValue(itemId, out ConsumeSpec? s) ? s : null;
@@ -345,4 +398,6 @@ public sealed class InMemoryItemProvider : IItemProvider
     public EquipStats? GetEquipStats(int itemId) => _equips.TryGetValue(itemId, out EquipStats? e) ? e : null;
 
     public double? GetUnitPrice(int itemId) => _unitPrices.TryGetValue(itemId, out double u) ? u : null;
+
+    public ScrollSpec? GetScroll(int itemId) => _scrolls.TryGetValue(itemId, out ScrollSpec? s) ? s : null;
 }
