@@ -252,7 +252,16 @@ No commercial or public operation.
 
 Detailed progress and the task board live in [AGENTS.md](AGENTS.md) ("Roadmap", "Backlog").
 
-- **First milestone**: implement crypto + framing + Hello in `Cronus.Network` and get the
-  JMS v186 client through the **login screen → ID/PW authentication**.
-- Current work target: the network core (crypto, PacketReader/Writer, opcode loader) and
-  its unit tests.
+- **Done**: the full thin path works with the real JMS v186 client — login → character select →
+  game entry — plus a single-process channel serving movement, chat, combat (melee/magic/ranged with
+  server-side damage bounding), mob respawn/control, drops (meso, incl. player-thrown), HP/MP regen,
+  death & revive, and a complete social layer: whisper/`/find`, emotes, sitting, messenger, and the
+  full party system (invite/join/leave/expel/change-leader, exp sharing, live HP bars and window
+  updates). Persistence is MySQL (Pomelo/EF Core); deploy is env-driven (`CRONUS_HOST`/`CRONUS_DB`/
+  `CRONUS_WZ`).
+- **Deferred until the client can be re-tested**: a general inventory system. It encodes into the
+  entry `CharacterData` blob, where a byte error crashes game entry entirely — unverifiable without
+  the client. It blocks item drops, NPC shops, trade, and full quests. Build it first, with the
+  client on hand. See AGENTS.md §4 and the memory note on the entry-blob risk boundary.
+- **Verification**: unit round-trips + golden vectors + end-to-end tests through encrypted sessions
+  (~180 tests). Add RirePE golden captures once the Java build is run side by side.
