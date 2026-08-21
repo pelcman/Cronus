@@ -38,6 +38,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly KeymapRegistry _keymaps;
     private readonly IQuestProvider _quests;
     private readonly Rates _rates;
+    private readonly TradeRegistry _trades;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -63,6 +64,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opTrunkRequest;
     private readonly int _opFuncKeyMapped;
     private readonly int _opQuestRequest;
+    private readonly int _opMiniRoom;
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
@@ -111,7 +113,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         StorageRegistry? storages = null,
         KeymapRegistry? keymaps = null,
         IQuestProvider? quests = null,
-        Rates? rates = null)
+        Rates? rates = null,
+        TradeRegistry? trades = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -125,6 +128,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _keymaps = keymaps ?? new KeymapRegistry();
         _quests = quests ?? new InMemoryQuestProvider(Array.Empty<QuestData>());
         _rates = rates ?? Rates.Default;
+        _trades = trades ?? new TradeRegistry();
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -150,6 +154,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opTrunkRequest = clientOpcodes.Get(ClientOpcode.UserTrunkRequest);
         _opFuncKeyMapped = clientOpcodes.Get(ClientOpcode.FuncKeyMappedModified);
         _opQuestRequest = clientOpcodes.Get(ClientOpcode.UserQuestRequest);
+        _opMiniRoom = clientOpcodes.Get(ClientOpcode.MiniRoom);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
@@ -296,6 +301,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleQuestRequestAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opMiniRoom)
+        {
+            await HandleMiniRoomAsync(session, packet).ConfigureAwait(false);
+        }
         else if (opcode == _opPortalScript)
         {
             await HandlePortalScriptAsync(session, packet).ConfigureAwait(false);
@@ -318,6 +327,12 @@ public sealed class ChannelHandler : PacketHandlerBase
         if (_player is not null && _field is not null)
         {
             _characters.Save(_player.Character); // persist last known map/stats on logout
+
+            // Cancel any open trade so staged items/meso return to their owners.
+            if (_trades.Get(_player.Character.Id) is { } trade)
+            {
+                await CancelTradeAsync(trade).ConfigureAwait(false);
+            }
 
             // Leave any messenger so the other members' windows drop this player.
             Messenger? messenger = _messengers.GetFor(_player.Character.Id);
@@ -2020,6 +2035,302 @@ public sealed class ChannelHandler : PacketHandlerBase
         foreach ((int questId, string progress) in updates)
         {
             await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted, progress)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_MiniRoom</c> for the trade room (ports <c>ReqCMiniRoomBaseDlg</c> +
+    /// <c>MapleTrade</c>): create (type 3) → invite → enter, staging items/meso (removed from the
+    /// owner immediately, returned on cancel), and the exchange once both sides press Trade. Other
+    /// mini-room types (minigames, personal/hired shops) aren't modelled.
+    /// </summary>
+    private async ValueTask HandleMiniRoomAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        byte protocol = packet.ReadByte();
+        switch (protocol)
+        {
+            case ChannelPackets.MiniRoomCreate:
+            {
+                byte roomType = packet.ReadByte();
+                if (roomType != 3 || _trades.Get(c.Id) is not null)
+                {
+                    return; // only trade rooms; one trade at a time
+                }
+
+                var trade = new Trade(_player);
+                _trades.TryAdd(c.Id, trade);
+                await session.SendAsync(_packets.TradeStart(c, 0, null)).ConfigureAwait(false);
+                break;
+            }
+
+            case ChannelPackets.MiniRoomInvite:
+            {
+                int targetId = packet.ReadInt();
+                Trade? trade = _trades.Get(c.Id);
+                if (trade is null || trade.Starter.Player.Character.Id != c.Id || trade.Visitor is not null)
+                {
+                    return;
+                }
+
+                FieldPlayer? target = _field?.Players.FirstOrDefault(p => p.Character.Id == targetId);
+                if (target is null || _trades.Get(targetId) is not null)
+                {
+                    await ReplyAsync(session, "the other player can't trade right now").ConfigureAwait(false);
+                    await CancelTradeAsync(trade).ConfigureAwait(false);
+                    return;
+                }
+
+                trade.InvitedCharacterId = targetId;
+                _trades.TryAdd(targetId, trade);
+                await TrySendAsync(target, _packets.TradeInvite(c.Name)).ConfigureAwait(false);
+                break;
+            }
+
+            case ChannelPackets.MiniRoomInviteResult: // the invitee declined
+            {
+                if (_trades.Get(c.Id) is { } trade)
+                {
+                    await CancelTradeAsync(trade).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case ChannelPackets.MiniRoomEnter:
+            {
+                Trade? trade = _trades.Get(c.Id);
+                if (trade is null || trade.VisitorEntered || trade.InvitedCharacterId != c.Id)
+                {
+                    return;
+                }
+
+                trade.Join(_player);
+                trade.VisitorEntered = true;
+                await session.SendAsync(_packets.TradeStart(c, 1, trade.Starter.Player.Character)).ConfigureAwait(false);
+                await TrySendAsync(trade.Starter.Player, _packets.TradePartnerAdd(c)).ConfigureAwait(false);
+                break;
+            }
+
+            case ChannelPackets.MiniRoomChat:
+            {
+                packet.ReadInt(); // update time
+                string message = packet.ReadString();
+                if (_trades.Get(c.Id) is { } trade && trade.SideOf(c.Id) is { } side)
+                {
+                    byte[] chat = _packets.TradeChat(side.Slot, $"{c.Name} : {message}");
+                    await session.SendAsync(chat).ConfigureAwait(false);
+                    if (trade.PartnerOf(side) is { } partner)
+                    {
+                        await TrySendAsync(partner.Player, chat).ConfigureAwait(false);
+                    }
+                }
+
+                break;
+            }
+
+            case ChannelPackets.MiniRoomLeave:
+            {
+                if (_trades.Get(c.Id) is { } trade)
+                {
+                    await CancelTradeAsync(trade).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case ChannelPackets.TradePutItem:
+                await HandleTradePutItemAsync(session, c, packet).ConfigureAwait(false);
+                break;
+
+            case ChannelPackets.TradePutMoney:
+                await HandleTradePutMoneyAsync(session, c, packet).ConfigureAwait(false);
+                break;
+
+            case ChannelPackets.TradeConfirm:
+                await HandleTradeConfirmAsync(session, c).ConfigureAwait(false);
+                break;
+        }
+    }
+
+    private async ValueTask HandleTradePutItemAsync(MapleSession session, Character c, PacketReader packet)
+    {
+        // TRP_PutItem: [invType:1][slot:2][qty:2][targetSlot:1]
+        int tab = packet.ReadByte();
+        short slot = packet.ReadShort();
+        int qty = packet.ReadShort();
+        byte targetSlot = packet.ReadByte();
+
+        Trade? trade = _trades.Get(c.Id);
+        TradeSide? side = trade?.SideOf(c.Id);
+        if (trade is null || side is null || side.Locked || !trade.VisitorEntered)
+        {
+            return;
+        }
+
+        InventoryItem? item = Inventory.ItemAt(c, tab, slot);
+        if (item is null || qty < 0)
+        {
+            return;
+        }
+
+        InventoryItem staged;
+        InventoryChange invChange;
+        if (tab == 1 || qty == 0 || qty >= item.Quantity)
+        {
+            // Move the whole item object (equips keep their stats through the trade).
+            c.EquippedItems.Remove(item);
+            staged = item;
+            invChange = new InventoryChange(InvMode.Remove, tab, slot, null, 0);
+        }
+        else
+        {
+            item.Quantity -= (short)qty;
+            staged = new InventoryItem { ItemId = item.ItemId, Quantity = (short)qty };
+            invChange = new InventoryChange(InvMode.Update, tab, slot, item, item.Quantity);
+        }
+
+        staged.Position = targetSlot; // the trade-window slot
+        side.Items.Add(staged);
+        _characters.Save(c);
+
+        await session.SendAsync(_packets.InventoryOperation(new[] { invChange })).ConfigureAwait(false);
+        await session.SendAsync(_packets.TradeItemAdd(0, staged)).ConfigureAwait(false);
+        if (trade.PartnerOf(side) is { } partner)
+        {
+            await TrySendAsync(partner.Player, _packets.TradeItemAdd(1, staged)).ConfigureAwait(false);
+        }
+    }
+
+    private async ValueTask HandleTradePutMoneyAsync(MapleSession session, Character c, PacketReader packet)
+    {
+        int meso = packet.ReadInt();
+        Trade? trade = _trades.Get(c.Id);
+        TradeSide? side = trade?.SideOf(c.Id);
+        if (trade is null || side is null || side.Locked || !trade.VisitorEntered || meso <= 0 || c.Meso < meso)
+        {
+            return;
+        }
+
+        c.Meso -= meso;
+        side.Meso += meso;
+        _characters.Save(c);
+
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        await session.SendAsync(_packets.TradeMesoSet(0, side.Meso)).ConfigureAwait(false);
+        if (trade.PartnerOf(side) is { } partner)
+        {
+            await TrySendAsync(partner.Player, _packets.TradeMesoSet(1, side.Meso)).ConfigureAwait(false);
+        }
+    }
+
+    private async ValueTask HandleTradeConfirmAsync(MapleSession session, Character c)
+    {
+        Trade? trade = _trades.Get(c.Id);
+        TradeSide? side = trade?.SideOf(c.Id);
+        if (trade is null || side is null || side.Locked || !trade.VisitorEntered)
+        {
+            return;
+        }
+
+        side.Locked = true;
+        if (trade.PartnerOf(side) is { } partner)
+        {
+            await TrySendAsync(partner.Player, _packets.TradeConfirmation()).ConfigureAwait(false);
+        }
+
+        if (trade.BothLocked)
+        {
+            await CompleteTradeAsync(trade).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Executes a locked trade: each side receives the other's staged items and meso.</summary>
+    private async ValueTask CompleteTradeAsync(Trade trade)
+    {
+        if (!trade.TryClose())
+        {
+            return; // the other session's confirm/cancel got here first
+        }
+
+        _trades.Remove(trade);
+        TradeSide[] sides = { trade.Starter, trade.Visitor! };
+        foreach (TradeSide side in sides)
+        {
+            TradeSide giver = side == trade.Starter ? trade.Visitor! : trade.Starter;
+            Character receiver = side.Player.Character;
+
+            var changes = new List<InventoryChange>();
+            foreach (InventoryItem item in giver.Items)
+            {
+                changes.Add(Inventory.Place(receiver, item));
+            }
+
+            if (giver.Meso > 0)
+            {
+                receiver.Meso = (int)Math.Clamp((long)receiver.Meso + giver.Meso, 0, int.MaxValue);
+            }
+
+            _characters.Save(receiver);
+            if (changes.Count > 0)
+            {
+                await TrySendAsync(side.Player, _packets.InventoryOperation(changes)).ConfigureAwait(false);
+            }
+
+            if (giver.Meso > 0)
+            {
+                await TrySendAsync(side.Player, _packets.StatChanged(receiver, StatFlag.Meso)).ConfigureAwait(false);
+            }
+
+            await TrySendAsync(side.Player, _packets.TradeLeave(side.Slot, ChannelPackets.TradeMsgSuccess)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Cancels a trade: staged items and meso return to their owners; both sides close.</summary>
+    private async ValueTask CancelTradeAsync(Trade trade)
+    {
+        if (!trade.TryClose())
+        {
+            return; // already completed/cancelled by the other session
+        }
+
+        _trades.Remove(trade);
+        foreach (TradeSide? side in new[] { trade.Starter, trade.Visitor })
+        {
+            if (side is null)
+            {
+                continue;
+            }
+
+            Character owner = side.Player.Character;
+            var changes = new List<InventoryChange>();
+            foreach (InventoryItem item in side.Items)
+            {
+                changes.Add(Inventory.Place(owner, item));
+            }
+
+            if (side.Meso > 0)
+            {
+                owner.Meso = (int)Math.Clamp((long)owner.Meso + side.Meso, 0, int.MaxValue);
+            }
+
+            _characters.Save(owner);
+            if (changes.Count > 0)
+            {
+                await TrySendAsync(side.Player, _packets.InventoryOperation(changes)).ConfigureAwait(false);
+            }
+
+            if (side.Meso > 0)
+            {
+                await TrySendAsync(side.Player, _packets.StatChanged(owner, StatFlag.Meso)).ConfigureAwait(false);
+            }
+
+            await TrySendAsync(side.Player, _packets.TradeLeave(side.Slot, ChannelPackets.TradeMsgCancelled)).ConfigureAwait(false);
         }
     }
 

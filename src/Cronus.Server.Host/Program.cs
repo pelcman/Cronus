@@ -83,12 +83,13 @@ var messengers = new MessengerRegistry(new ChannelPackets(serverOps, config));
 var parties = new PartyRegistry();
 var storages = new StorageRegistry(storageRepo);
 var keymaps = new KeymapRegistry(keymapRepo);
+var trades = new TradeRegistry();
 
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades),
         "channel"),
     keepAlive);
 

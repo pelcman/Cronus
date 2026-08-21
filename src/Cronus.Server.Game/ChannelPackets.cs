@@ -1025,6 +1025,128 @@ public sealed class ChannelPackets
         }
     }
 
+    // LP_MiniRoom / CP_MiniRoom protocol ops for JMS v186 (OpsMiniRoomProtocol.init, >=186 branch).
+    public const byte MiniRoomCreate = 0;
+    public const byte MiniRoomInvite = 2;
+    public const byte MiniRoomInviteResult = 3;
+    public const byte MiniRoomEnter = 4;
+    public const byte MiniRoomEnterResult = 5;
+    public const byte MiniRoomChat = 6;
+    public const byte MiniRoomUserChat = 8;
+    public const byte MiniRoomLeave = 10;
+    public const byte TradePutItem = 13;
+    public const byte TradePutMoney = 14;
+    public const byte TradeConfirm = 15;
+
+    // TradeLeave message codes (ResCMiniRoomBaseDlg.TradeMessage).
+    public const byte TradeMsgCancelled = 2;
+    public const byte TradeMsgSuccess = 7;
+
+    private const byte MiniRoomTypeTrade = 3;
+
+    /// <summary>
+    /// Builds the trade-room open packet (<c>LP_MiniRoom</c> / MRP_EnterResult, ports
+    /// <c>ResCMiniRoomBaseDlg.getTradeStart</c>): room type 3, capacity 2, then — for the joining
+    /// visitor — the starter's block (slot 0) before the recipient's own block, terminated by 0xFF.
+    /// </summary>
+    public byte[] TradeStart(Character self, byte myNumber, Character? partner)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomEnterResult);
+        w.WriteByte(MiniRoomTypeTrade);
+        w.WriteByte(2);          // max users
+        w.WriteByte(myNumber);
+        if (myNumber == 1 && partner is not null)
+        {
+            w.WriteByte(0);      // the starter occupies slot 0
+            Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, partner);
+            w.WriteString(partner.Name);
+            w.WriteShort(partner.Job); // JMS >= 186
+        }
+
+        w.WriteByte(myNumber);
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, self);
+        w.WriteString(self.Name);
+        w.WriteShort(self.Job);
+        w.WriteByte(0xFF);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds the trade invitation shown to the invitee (ports <c>getTradeInvite</c>).</summary>
+    public byte[] TradeInvite(string inviterName)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomInvite);
+        w.WriteByte(MiniRoomTypeTrade);
+        w.WriteString(inviterName);
+        w.WriteInt(0);           // trade id
+        return w.ToArray();
+    }
+
+    /// <summary>Tells the starter their partner entered the room (ports <c>getTradePartnerAdd</c>).</summary>
+    public byte[] TradePartnerAdd(Character joiner)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomEnter);
+        w.WriteByte(1);          // the visitor occupies slot 1
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, joiner);
+        w.WriteString(joiner.Name);
+        w.WriteShort(joiner.Job);
+        return w.ToArray();
+    }
+
+    /// <summary>An item staged on a trade side (ports <c>getTradeItemAdd</c>; side is relative — 0 =
+    /// the recipient's own side, 1 = the partner's). The item's Position is its trade slot.</summary>
+    public byte[] TradeItemAdd(byte side, InventoryItem item)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(TradePutItem);
+        w.WriteByte(side);
+        w.WriteByte((byte)item.Position);
+        Cronus.Server.Login.ItemEncoder.WriteItem(w, item);
+        return w.ToArray();
+    }
+
+    /// <summary>The total meso staged on a trade side (ports <c>getTradeMesoSet</c>; relative side).</summary>
+    public byte[] TradeMesoSet(byte side, int totalMeso)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(TradePutMoney);
+        w.WriteByte(side);
+        w.WriteInt(totalMeso);
+        return w.ToArray();
+    }
+
+    /// <summary>The partner pressed Trade (ports <c>getTradeConfirmation</c>).</summary>
+    public byte[] TradeConfirmation()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(TradeConfirm);
+        return w.ToArray();
+    }
+
+    /// <summary>Closes the trade room with a message code (ports <c>TradeMessage</c>: 2 = cancelled,
+    /// 7 = success). <paramref name="slot"/> is the recipient's absolute room slot.</summary>
+    public byte[] TradeLeave(byte slot, byte message)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomLeave);
+        w.WriteByte(slot);
+        w.WriteByte(message);
+        return w.ToArray();
+    }
+
+    /// <summary>A chat line inside the room (ports <c>shopChat</c>): the speaker's slot + text.</summary>
+    public byte[] TradeChat(byte speakerSlot, string text)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomChat);
+        w.WriteByte(MiniRoomUserChat);
+        w.WriteByte(speakerSlot);
+        w.WriteString(text);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_UserAvatarModified</c> (ports <c>ResCUserRemote.UserAvatarModified</c>, JMS v186):
     /// the character id, the avatar-change flag, then the full avatar-look block so an equip change

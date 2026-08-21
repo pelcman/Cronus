@@ -54,6 +54,7 @@ public static class ClientOpcode
     public const string FuncKeyMappedModified = "CP_FuncKeyMappedModified";
     public const string Messenger = "CP_Messenger";
     public const string PartyRequest = "CP_PartyRequest";
+    public const string MiniRoom = "CP_MiniRoom";
 }
 
 /// <summary>
@@ -106,6 +107,7 @@ public static class ServerOpcode
     public const string OpenShopDlg = "LP_OpenShopDlg";
     public const string ShopResult = "LP_ShopResult";
     public const string TrunkResult = "LP_TrunkResult";
+    public const string MiniRoom = "LP_MiniRoom";
     public const string ForcedStatReset = "LP_ForcedStatReset";
     public const string FuncKeyMappedInit = "LP_FuncKeyMappedInit";
     public const string MacroSysDataInit = "LP_MacroSysDataInit";
