@@ -21,6 +21,9 @@ public sealed class FieldDrop
     public short SourceX { get; init; }
 
     public short SourceY { get; init; }
+
+    /// <summary><see cref="Environment.TickCount64"/> when the drop hit the ground (for expiry).</summary>
+    public long DropAtTick { get; init; }
 }
 
 /// <summary>A spawned monster in a field: a runtime object id bound to a wz template + placement.</summary>
@@ -306,6 +309,7 @@ public sealed class Field
                 SourceObjectId = source.ObjectId,
                 SourceX = source.X,
                 SourceY = source.Y,
+                DropAtTick = Environment.TickCount64,
             };
             _drops[drop.ObjectId] = drop;
             return drop;
@@ -318,6 +322,37 @@ public sealed class Field
         lock (_gate)
         {
             return _drops.Remove(objectId, out FieldDrop? drop) ? drop : null;
+        }
+    }
+
+    /// <summary>
+    /// Removes drops that have been on the ground at least <paramref name="ttlMs"/> and returns
+    /// their object ids, for the caller (the world tick) to fade with <c>LP_DropLeaveField</c>.
+    /// </summary>
+    public IReadOnlyList<int> RemoveExpiredDrops(long nowTick, long ttlMs)
+    {
+        lock (_gate)
+        {
+            List<int>? expired = null;
+            foreach (FieldDrop drop in _drops.Values)
+            {
+                if (nowTick - drop.DropAtTick >= ttlMs)
+                {
+                    (expired ??= new List<int>()).Add(drop.ObjectId);
+                }
+            }
+
+            if (expired is null)
+            {
+                return Array.Empty<int>();
+            }
+
+            foreach (int oid in expired)
+            {
+                _drops.Remove(oid);
+            }
+
+            return expired;
         }
     }
 

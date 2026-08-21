@@ -1,11 +1,11 @@
 namespace Cronus.Server.Channel;
 
 /// <summary>
-/// A server tick that brings dead mobs back after a delay: each tick it respawns every mob whose
-/// scheduled time has arrived, announces <c>LP_MobEnterField</c> to the field, and hands control
-/// to a player present (<c>LP_MobChangeController</c>). This keeps hunting maps populated instead
-/// of emptying out as mobs are killed. Timed world logic like this belongs on a tick, decoupled
-/// from client packets (see CLAUDE.md §2 networking notes).
+/// The field world tick: each pass it fades stale drops (<c>LP_DropLeaveField</c> timeout) and
+/// respawns every mob whose scheduled time has arrived — announcing <c>LP_MobEnterField</c> and
+/// handing control to a player present (<c>LP_MobChangeController</c>). This keeps hunting maps
+/// populated and the ground tidy. Timed world logic like this belongs on a tick, decoupled from
+/// client packets (see CLAUDE.md §2 networking notes).
 /// </summary>
 public sealed class MobRespawnService
 {
@@ -14,6 +14,9 @@ public sealed class MobRespawnService
     /// a fixed delay for now; wz-driven per-mob timers are a follow-up.
     /// </summary>
     public const long DelayMs = 7000;
+
+    /// <summary>How long a dropped item/meso lingers on the ground before it fades.</summary>
+    public const long DropTtlMs = 60_000;
 
     /// <summary>
     /// The <see cref="Environment.TickCount64"/> at which a killed mob should respawn, given its
@@ -64,6 +67,12 @@ public sealed class MobRespawnService
     {
         foreach (Field field in _fields.Fields)
         {
+            // Fade stale drops nobody picked up.
+            foreach (int dropOid in field.RemoveExpiredDrops(nowTick, DropTtlMs))
+            {
+                await field.BroadcastAsync(_packets.DropLeaveFieldExpire(dropOid)).ConfigureAwait(false);
+            }
+
             IReadOnlyList<FieldMob> respawned = field.TakeRespawnDueMobs(nowTick);
             if (respawned.Count == 0)
             {

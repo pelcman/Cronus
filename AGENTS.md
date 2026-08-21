@@ -202,6 +202,9 @@ Each milestone means adding one "working vertical slice".
       map has none) with full HP/MP. Closes the survival loop. Dying also costs exp
       (`CharacterProgression.ApplyDeathPenalty`: −10% of accumulated exp, no level-down; sent in
       the death `LP_StatChanged`). Follow-ups: level/map-scaled loss + town exemption.
+- [x] **M15: Drop despawn** — the field world tick (`MobRespawnService`, now respawn + drop
+      upkeep) fades drops left on the ground past their TTL (60 s) with `LP_DropLeaveField`
+      (timeout). Keeps maps tidy and completes the drop lifecycle for when item drops land.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

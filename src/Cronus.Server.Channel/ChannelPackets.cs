@@ -397,6 +397,20 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_DropLeaveField</c> for an expired drop that fades on its own (LeaveType.TIMEOUT
+    /// = 0 — no owner, so no trailing character id).
+    /// </summary>
+    public byte[] DropLeaveFieldExpire(int dropObjectId)
+    {
+        const int timeOut = 0; // LeaveType.TIMEOUT
+
+        PacketWriter w = NewPacket(ServerOpcode.DropLeaveField);
+        w.WriteByte(timeOut);
+        w.WriteInt(dropObjectId);
+        return w.ToArray();
+    }
+
     /// <summary>Windows FILETIME for "2027-07-07" — the magical (effectively permanent) expiration.</summary>
     private const long MagicalExpiration = 134594172000000000L;
 

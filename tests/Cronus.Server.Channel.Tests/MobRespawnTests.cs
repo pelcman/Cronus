@@ -97,6 +97,24 @@ public class MobRespawnTests
     }
 
     [Fact]
+    public void RemoveExpiredDrops_FadesOldDrops_AndKeepsFreshOnes()
+    {
+        var field = new Field(100000000);
+        var mob = new FieldMob { ObjectId = 1, TemplateId = 100100 };
+        FieldDrop drop = field.AddMesoDrop(100, x: 0, y: 0, source: mob);
+
+        // At its drop time it's still fresh.
+        Assert.Empty(field.RemoveExpiredDrops(drop.DropAtTick, ttlMs: 1000));
+
+        // Past the TTL it's collected and reported.
+        IReadOnlyList<int> expired = field.RemoveExpiredDrops(drop.DropAtTick + 2000, ttlMs: 1000);
+        Assert.Equal(new[] { drop.ObjectId }, expired);
+
+        // And it's gone — a pickup now finds nothing.
+        Assert.Null(field.RemoveDrop(drop.ObjectId));
+    }
+
+    [Fact]
     public async Task DoesNotRespawn_ABossWithMobTimeMinusOne()
     {
         (FieldRegistry fields, MobRespawnService service) = BuildFieldWithMob();
