@@ -129,4 +129,41 @@ public class SkillTests
         Assert.False(hero.Skills.ContainsKey(skillId));
         Assert.Equal(0, hero.Sp);
     }
+
+    private sealed class StubSkillProvider(int max) : Cronus.Data.ISkillProvider
+    {
+        public int GetMaxLevel(int skillId) => max;
+    }
+
+    [Fact]
+    public async Task SkillUp_AtMaxLevel_DoesNothing()
+    {
+        const int skillId = 1000001;
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Maxed", MapId = 100000000, Job = 100, Sp = 3,
+        });
+        hero.Skills[skillId] = 1; // already at the (stubbed) max level of 1
+
+        var client = new SkillClient(hero.Id, skillId);
+        var handler = new ChannelHandler(
+            ClientOps, ServerOps, repo, ServerConfig.Jms186, skills: new StubSkillProvider(1));
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(800));
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => client.SkillLearned.Task.WaitAsync(cts.Token));
+        Assert.Equal(1, hero.Skills[skillId]); // unchanged
+        Assert.Equal(3, hero.Sp);              // no SP spent
+    }
 }

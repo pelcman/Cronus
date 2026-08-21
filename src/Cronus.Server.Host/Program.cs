@@ -67,6 +67,7 @@ var loginListener = new MapleListener(
 IMapProvider maps = CreateMapProvider();
 IMobProvider mobs = CreateMobProvider();
 var fields = new FieldRegistry(maps, mobs);
+ISkillProvider skills = CreateSkillProvider();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js, if configured.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
@@ -75,7 +76,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, channelId: 0),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0),
         "channel"),
     keepAlive);
 
@@ -163,6 +164,17 @@ static IMobProvider CreateMobProvider()
     }
 
     return new WzMobProvider(wzRoot);
+}
+
+static ISkillProvider CreateSkillProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
+    {
+        return NullSkillProvider.Instance; // no wz data → skills uncapped
+    }
+
+    return new WzSkillProvider(wzRoot);
 }
 
 static NpcScriptEngine? CreateNpcScriptEngine()

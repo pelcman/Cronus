@@ -165,7 +165,7 @@ Each milestone means adding one "working vertical slice".
       (LP_MobChangeController on entry); CP_MobMove is acked (LP_MobCtrlAck) and relayed
       (LP_MobMove); control hands off to a remaining player on disconnect/transfer and clears
       on death; server tracks mob position from the path.
-- [ ] **M10: Combat depth & content** — item drops (wz drop tables), wz skill data. **← current**
+- [ ] **M10: Combat depth & content** — item drops (wz drop tables). **← current**
   - [x] **M10a: quest/skill DB persistence** — `Skills`/`StartedQuests`/`CompletedQuests` now
         persist as JSON columns on the `characters` row (EF value converter + comparer), so
         progression survives a restart. Verified over SQLite (which, unlike the InMemory
@@ -177,6 +177,10 @@ Each milestone means adding one "working vertical slice".
         emits `LP_UserMeleeAttack`/`Magic`/`Shoot`; the three handlers share damage application.
         Follow-ups: resolve+consume the bullet item (no USE-inventory model yet, sent as 0) and
         render skill effects (skill level sent as 0).
+  - [x] **M10c: wz skill data (max level)** — `Cronus.Data` `WzSkillProvider`
+        (`Skill/{skillId/10000:000}.img.xml` → `skill/{id}/level` count, name-padding tolerant,
+        cached); `CP_UserSkillUpRequest` caps at the wz max level so SP can't over-level a skill.
+        Wired via `CRONUS_WZ`; `NullSkillProvider` (no data → uncapped) when unset.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

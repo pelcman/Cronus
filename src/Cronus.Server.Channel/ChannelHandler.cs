@@ -30,6 +30,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly ICharacterRepository _characters;
     private readonly FieldRegistry _fields;
     private readonly IMapProvider _maps;
+    private readonly ISkillProvider _skills;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly int _channelId;
 
@@ -59,12 +60,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         FieldRegistry? fields = null,
         IMapProvider? maps = null,
         NpcScriptEngine? npcScripts = null,
+        ISkillProvider? skills = null,
         int channelId = 0)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
         _fields = fields ?? new FieldRegistry();
         _maps = maps ?? new InMemoryMapProvider(Array.Empty<MapData>());
+        _skills = skills ?? NullSkillProvider.Instance;
         _npcScripts = npcScripts;
         _channelId = channelId;
 
@@ -453,7 +456,16 @@ public sealed class ChannelHandler : PacketHandlerBase
             return; // no SP to spend
         }
 
-        int level = c.Skills.TryGetValue(skillId, out int current) ? current + 1 : 1;
+        c.Skills.TryGetValue(skillId, out int current);
+
+        // Cap at the skill's wz max level (when known) so SP can't over-level a skill.
+        int maxLevel = _skills.GetMaxLevel(skillId);
+        if (maxLevel > 0 && current >= maxLevel)
+        {
+            return; // already maxed
+        }
+
+        int level = current + 1;
         c.Skills[skillId] = level;
         c.Sp = (short)Math.Max(0, c.Sp - 1);
         _characters.Save(c);
