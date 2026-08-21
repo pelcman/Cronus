@@ -834,14 +834,46 @@ public sealed class ChannelPackets
                     w.WriteShort(ch.Position);
                     w.WriteShort(ch.Quantity);
                     break;
+                case InvMode.Move:
+                    w.WriteShort(ch.Position);      // source (old) slot
+                    w.WriteShort(ch.DestPosition);  // destination (new) slot
+                    break;
                 case InvMode.Remove:
                     w.WriteShort(ch.Position);
                     break;
             }
         }
 
-        // The equip-changed trailing byte only applies to equipped-slot moves/removes, which the
-        // add/consume paths here never produce.
+        // An equipped-slot change (a move to/from a negative slot, or a remove of an equipped item)
+        // needs one trailing byte for CUserLocal::SetSecondaryStatChangedPoint (ports the JMS v186
+        // ResCWvsContext.InventoryOperation trailer).
+        bool equipChange = changes.Any(ch =>
+            (ch.Mode == InvMode.Move && (ch.Position < 0 || ch.DestPosition < 0)) ||
+            (ch.Mode == InvMode.Remove && ch.Position < 0));
+        if (equipChange)
+        {
+            w.WriteByte(0);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_UserAvatarModified</c> (ports <c>ResCUserRemote.UserAvatarModified</c>, JMS v186):
+    /// the character id, the avatar-change flag, then the full avatar-look block so an equip change
+    /// repaints on other players' screens. Broadcast to the field (not the acting player, who already
+    /// saw the change via <c>LP_InventoryOperation</c>).
+    /// </summary>
+    public byte[] UserAvatarModified(Character c)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserAvatarModified);
+        w.WriteInt(c.Id);
+        w.WriteByte(1);              // flag: 0x01 = avatar look changed
+        Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, c);
+        w.WriteByte(0);             // couple ring
+        w.WriteByte(0);             // friendship ring
+        w.WriteByte(0);             // marriage ring
+        w.WriteInt(0);              // m_nCompletedSetItemID
         return w.ToArray();
     }
 

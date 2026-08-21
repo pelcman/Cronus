@@ -52,6 +52,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opDropPickUp;
     private readonly int _opDropMoney;
     private readonly int _opUseItem;
+    private readonly int _opChangeSlot;
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
@@ -115,6 +116,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opUseItem = clientOpcodes.Get(ClientOpcode.UserStatChangeItemUseRequest);
+        _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
@@ -194,6 +196,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opUseItem)
         {
             await HandleUseItemAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opChangeSlot)
+        {
+            await HandleChangeSlotPositionAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opGivePopularity)
         {
@@ -909,6 +915,53 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await session.SendAsync(_packets.StatChanged(c, statChange)).ConfigureAwait(false);
             await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserChangeSlotPositionRequest</c> — dragging an item between slots: rearrange
+    /// within a tab, equip (inventory → equipped, dst &lt; 0), or unequip (equipped → inventory, src
+    /// &lt; 0). Ports <c>ReqCUser.OnUserChangeSlotPositionRequest</c>: it moves/swaps the slot and
+    /// relays a single <c>LP_InventoryOperation</c> move; an equip change also broadcasts
+    /// <c>LP_UserAvatarModified</c> so the field sees the new look. Dropping an item onto the ground
+    /// (dst == 0) isn't modelled yet and is ignored. Negative positions are equipped slots.
+    /// </summary>
+    private async ValueTask HandleChangeSlotPositionAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        const int equipTab = 1;
+
+        packet.ReadInt();               // timestamp
+        int tab = packet.ReadByte();
+        short src = packet.ReadShort(); // signed; negative = equipped slot
+        short dst = packet.ReadShort(); // signed; negative = equip slot
+        packet.ReadShort();             // split quantity (unused for whole-slot moves)
+
+        // Dropping to the field (dst == 0) and equipped→equipped moves aren't handled; ignore both
+        // rather than desync the client.
+        if (dst == 0 || (tab == equipTab && src < 0 && dst < 0))
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        if (Inventory.Move(c, tab, src, dst) is not { } change)
+        {
+            return; // empty source slot / no-op
+        }
+
+        _characters.Save(c);
+        await session.SendAsync(_packets.InventoryOperation(new[] { change })).ConfigureAwait(false);
+
+        // An equip change (a slot went to/from a negative equipped position) repaints the avatar for
+        // everyone else in the field.
+        if (_field is not null && tab == equipTab && (src < 0 || dst < 0))
+        {
+            await _field.BroadcastAsync(_packets.UserAvatarModified(c), exceptCharacterId: c.Id).ConfigureAwait(false);
         }
     }
 

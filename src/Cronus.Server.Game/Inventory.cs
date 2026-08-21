@@ -12,12 +12,19 @@ public enum InvMode : byte
     /// <summary>An existing slot's quantity changed.</summary>
     Update = 1,
 
+    /// <summary>An item moved from one slot to another (equip/unequip/rearrange).</summary>
+    Move = 2,
+
     /// <summary>A slot was emptied.</summary>
     Remove = 3,
 }
 
-/// <summary>One inventory change to relay to the client via <c>LP_InventoryOperation</c>.</summary>
-public readonly record struct InventoryChange(InvMode Mode, int Tab, short Position, InventoryItem? Item, short Quantity);
+/// <summary>
+/// One inventory change to relay to the client via <c>LP_InventoryOperation</c>. For
+/// <see cref="InvMode.Move"/>, <see cref="Position"/> is the source slot and
+/// <see cref="DestPosition"/> the destination (either may be negative = an equipped slot).
+/// </summary>
+public readonly record struct InventoryChange(InvMode Mode, int Tab, short Position, InventoryItem? Item, short Quantity, short DestPosition = 0);
 
 /// <summary>
 /// Inventory manipulation on a <see cref="Character"/>'s item list (ports the essentials of
@@ -119,6 +126,32 @@ public static class Inventory
 
         item.Quantity -= (short)quantity;
         return new InventoryChange(InvMode.Update, tab, position, item, item.Quantity);
+    }
+
+    /// <summary>
+    /// Moves the item at <paramref name="src"/> to <paramref name="dst"/> within a tab (ports
+    /// <c>MapleInventoryManipulator.move</c>/<c>equip</c>/<c>unequip</c>): equipping is a positive→
+    /// negative move, unequipping negative→positive, and a plain rearrange is positive→positive. If
+    /// the destination holds an item they swap slots (a single move op; the client swaps visually).
+    /// Returns the change to relay, or null if the source slot is empty. Negative positions are
+    /// equipped slots.
+    /// </summary>
+    public static InventoryChange? Move(Character c, int tab, short src, short dst)
+    {
+        InventoryItem? item = ItemAt(c, tab, src);
+        if (item is null || dst == 0 || src == dst)
+        {
+            return null;
+        }
+
+        InventoryItem? occupant = ItemAt(c, tab, dst);
+        item.Position = dst;
+        if (occupant is not null)
+        {
+            occupant.Position = src; // swap the displaced item back into the source slot
+        }
+
+        return new InventoryChange(InvMode.Move, tab, src, null, 0, dst);
     }
 
     private static short NextFreeSlot(Character c, int tab)
