@@ -253,6 +253,46 @@ Cronus/
   changes.
 - Preserve credits and the license (AGPL-3.0).
 
+## 7.5 Client testing & Riremito tooling
+
+Real-client testing lives **outside** the Cronus repo, under the workspace root
+(`c:\Users\chro\Desktop\MS1PrivSvr\`):
+
+- `Client/MapleStory_v186/` — the real JMS **v186.1** client (`JMS_v186.1_L.exe`,
+  EmuClient/localhost-patched). Complete WZ (2010-09), 4GB flag set. Runs on an NVIDIA
+  GTX 1660 Ti. It has **active anti-cheat** — AhnLab HackShield (`aossdk.dll` +
+  `tricod6_0_maple_md.dll` are **statically imported** by the exe; `v3hunt`/`bz32ex`/
+  `suipre` alongside). The anti-cheat **rejects DLL-injection fixes** (dgVoodoo2's
+  `d3d8.dll` triggered "不正なプログラムが検出されました") and **protects the game process
+  from termination** (Stop-Process/taskkill fail). For this in-group private server the
+  owner authorised removing the anti-cheat. NOTE: the anti-cheat DLLs are statically
+  imported, so removal = stub DLLs or IAT patch, not deletion.
+- `DevTools/` — all working tools + client custom libs (see `DevTools/README.md`):
+  `procmon/`, `iGPUplz/` (built), `dgvoodoo/` (kept but unusable here — anti-cheat),
+  `riremito/` (cloned Riremito repos), and `apply_*/revert_*/capture_*.bat`.
+
+**Riremito's GitHub has a large toolbox for running/verifying these clients — reference it
+whenever stuck; cloning into `DevTools/riremito/` is fine.** Key repos:
+- `iGPUplz` — NameSpace.dll proxy that patches WZ archive open mode. For **JMS186 set
+  `PATCH_MODE=1` (PM_DISABLE_MM = "gfx fix (pre-bb)")**: it patches
+  `CWzFileSystem::OpenDelayedArchive`/`OnGetSubItemProp` (`6A 01`→`6A 02`). This is the
+  fix for the **game-entry crash** (client opens the field's delayed WZ archive on entry;
+  the default mode fails on this GPU → `STG_E_FILENOTFOUND 0x80030002` → crash). Built here
+  with `DevTools/riremito/iGPUplz/build.bat` (VS `cl`, 32-bit, `/DSIMPLE_LIB /DUNICODE`);
+  apply via `DevTools/apply_igpuplz.bat` (client must be closed first — anti-cheat blocks
+  killing it). It depends on the `tools` repo (`Simple` lib; Zydis-free for this path).
+- `EmuClient` / `LocalHost` / `RunEmu` / `Taco112` / `Teresa232` — localhost redirectors.
+- `RirePE` — packet editor/logger (differential packet verification vs Cronus).
+- `TeresaBeta` — "Remove BlackCipher/BlackCall" (anti-cheat removal, newer clients).
+- `wz_xml` / `jms_wz` — WZ data as HaRepacker XML (v186 map data was pulled from here).
+- `HaRepackerJ`, `WzMonitor`, `Injector`, `tools` (build deps).
+
+**Key result:** the game-entry crash is **client-side** (DX8/WZ on a modern GPU), not a
+Cronus bug — proven because the reference server with full real WZ crashes the same client
+identically. Server correctness is verified independently (SetField byte-matches the
+reference; entry sequence ported). Details: `Cronus/docs/GAME_ENTRY_DIAGNOSIS.md`,
+root `CLIENT_RENDERING_FIX.md`.
+
 ## 8. Agent Operating Rules
 
 - **Commit frequently and push** (per meaningful unit). Feel free to use a working branch.

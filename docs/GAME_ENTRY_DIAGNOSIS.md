@@ -80,28 +80,39 @@ pet×3 → keymap → macros → FriendResult → FamilyPrivilegeList → Family
 entry, identically**. A known-good server + correct data + real WZ ⇒ the crash
 is on the client side.
 
-**Root cause: DirectX 8 field rendering on a modern GPU.**
-- Process Monitor capture of the client (`JMS_v186.1_L.exe`) at the crash shows
-  **no missing files and no WZ file access** (WZ is memory-mapped at startup);
-  the crash tail is **Direct3D device initialisation** — repeated probes of
-  `HKLM\SOFTWARE\WOW6432Node\Microsoft\Direct3D\{DisableNVPS, UseVSConverter,
-  UsePSConverter, DisableStripFVF, DisableGB, DisablePSGP, EmulatePointSprites}`
-  — interleaved with loading `WzFlashRenderer.dll`. `DisableNVPS` is an
-  NVIDIA-specific D3D key.
-- The machine's only active GPU is an **NVIDIA GeForce GTX 1660 Ti** (not an
-  iGPU). The client is a 2010 **DirectX 8** title (`Gr2D_DX8.dll`). Login and
-  character-select (simple 2-D screens) render fine; the **field renderer**
-  (full scrolling world) crashes — the classic "old DX8 game on a modern GPU"
-  failure. The client's own error dialog reports a generic HRESULT
-  (`0x80030002` / `0x80004003`).
+**Root cause: the client fails to open the field's WZ archive on entry.**
+- The client's own error dialog reports `0x80030002` (**STG_E_FILENOTFOUND**) —
+  a *structured-storage* error, i.e. a WZ archive/element open failure — and
+  `0x80004003` (E_POINTER) on other maps. Process Monitor shows **no missing
+  file and no WZ file access** at the crash (WZ files are memory-mapped at
+  startup), so the failure is an **internal WZ archive-open**, not a disk file.
+- The mechanism matches Riremito's **iGPUplz**, whose JMS186 path patches
+  `CWzFileSystem::OpenDelayedArchive` and `CWzFileSystem::OnGetSubItemProp`
+  (`6A 01`→`6A 02`) — described in its own enum as **"gfx fix (pre-bb)"**. On
+  field entry the client opens the map's *delayed* WZ sub-archive; the default
+  open mode fails on this machine → `STG_E_FILENOTFOUND` → crash. Login /
+  char-select don't hit that path, which is why they work.
+- (The Direct3D-init + `WzFlashRenderer.dll` activity seen in the Procmon tail is
+  around the same time but is not itself failing; the storage HRESULT is the
+  real signal.)
 
-**Fix applied (client-side, reversible): dgVoodoo2** — a DirectX 8/DDraw →
-modern D3D11/12 wrapper. Its x86 `D3D8.dll`/`D3D9.dll`/`DDraw.dll`/`D3DImm.dll`
-+ `dgVoodoo.conf` are copied into the client folder (see repo-root
-`apply_dgvoodoo.bat` / `revert_dgvoodoo.bat` and `CLIENT_RENDERING_FIX.md`).
-`dgVoodooWatermark = true` shows a corner watermark to confirm it is active.
-Fallbacks if it doesn't help: Windows compatibility mode (WinXP SP3 / 16-bit
-colour), disabling `WzFlashRenderer.dll`, or a different machine / GPU.
+**Constraint discovered — active anti-cheat.** The client statically imports
+AhnLab HackShield (`aossdk.dll`, `tricod6_0_maple_md.dll`). It **rejects
+DLL-injection fixes** (a dgVoodoo2 `d3d8.dll` triggered "不正なプログラムが検出
+されました") and **protects its process from termination**. So DirectX wrappers
+(dgVoodoo2/DXVK) are unusable here. dgVoodoo2 was reverted.
+
+**Fix: Riremito iGPUplz (anti-cheat-safe, owner-verified).** It replaces
+`NameSpace.dll` with a proxy that forwards to `NameSpace.old` and applies the
+JMS186 WZ patch at load. Built from source here
+(`DevTools/riremito/iGPUplz/build.bat`, 32-bit `cl`, `/DSIMPLE_LIB /DUNICODE`)
+into a 129 KB `NameSpace.dll` exporting `DllCanUnloadNow`/`DllGetClassObject`.
+Apply with `DevTools/apply_igpuplz.bat` (needs `NameSpace.ini` →
+`[NameSpace] PATCH_MODE=1`, i.e. PM_DISABLE_MM). The client must be closed first
+(anti-cheat blocks killing it). For this in-group private server the owner also
+authorised **removing the anti-cheat** (`aossdk`/`tricod` are static imports →
+stub DLLs or IAT patch) as a follow-up if needed. See root
+`CLIENT_RENDERING_FIX.md` and `AGENTS.md` §7.5.
 
 ---
 
