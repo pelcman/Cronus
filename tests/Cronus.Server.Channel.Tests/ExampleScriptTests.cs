@@ -23,6 +23,27 @@ public class ExampleScriptTests
     private static string ScriptDir => Path.Combine(AppContext.BaseDirectory, "scripts", "npc");
 
     [Fact]
+    public void AllShippedScripts_ParseAndDefineStart()
+    {
+        string[] files = Directory.GetFiles(ScriptDir, "*.js");
+        Assert.NotEmpty(files);
+        foreach (string file in files)
+        {
+            var engine = new Jint.Engine();
+            try
+            {
+                engine.Execute(File.ReadAllText(file));
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail($"{Path.GetFileName(file)} failed to parse: {ex.Message}");
+            }
+
+            Assert.NotEqual(Jint.Native.JsValue.Undefined, engine.GetValue("start"));
+        }
+    }
+
+    [Fact]
     public void ShippedScripts_ArePresent()
     {
         Assert.True(File.Exists(Path.Combine(ScriptDir, "1012100.js")));
@@ -101,6 +122,6 @@ public class ExampleScriptTests
         _ = clientSession.RunAsync(cts.Token);
 
         string line = await client.FirstLine.Task.WaitAsync(cts.Token);
-        Assert.Contains("level 10", line); // the beginner is only level 5
+        Assert.Contains("レベル10", line); // the beginner is only level 5
     }
 }
