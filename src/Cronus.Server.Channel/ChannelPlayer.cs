@@ -47,6 +47,24 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public int getExp() => _character.Exp;
 
+    public int getGender() => _character.Gender;
+
+    public int getJob() => _character.Job;
+
+    public int getStr() => _character.Str;
+
+    public int getDex() => _character.Dex;
+
+    public int getInt() => _character.Int;
+
+    public int getLuk() => _character.Luk;
+
+    public int getFame() => _character.Fame;
+
+    public int getAp() => _character.Ap;
+
+    public int getSp() => _character.Sp;
+
     public void gainMeso(int amount)
     {
         long updated = (long)_character.Meso + amount;
@@ -86,6 +104,34 @@ public sealed class ChannelPlayer : INpcPlayer
         }
 
         _warp(mapId, portal).AsTask().GetAwaiter().GetResult();
+    }
+
+    public void gainAp(int amount)
+    {
+        _character.Ap = (short)Math.Clamp(_character.Ap + amount, 0, short.MaxValue);
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Ap));
+    }
+
+    public void gainSp(int amount)
+    {
+        _character.Sp = (short)Math.Clamp(_character.Sp + amount, 0, short.MaxValue);
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Sp));
+    }
+
+    public void gainFame(int amount)
+    {
+        _character.Fame = (short)Math.Clamp(_character.Fame + amount, -30000, 30000);
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Fame));
+    }
+
+    public void setJob(int job)
+    {
+        _character.Job = (short)job;
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Job));
     }
 
     public bool hasQuest(int questId) => _character.StartedQuests.ContainsKey(questId);

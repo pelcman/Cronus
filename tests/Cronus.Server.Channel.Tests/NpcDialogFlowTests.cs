@@ -262,6 +262,95 @@ public class NpcDialogFlowTests
         Assert.Equal(targetMap, hero.MapId); // the script's player.warp moved the character
     }
 
+    /// <summary>Enters, talks to an NPC, and signals once a fame StatChanged (the script's last op) lands.</summary>
+    private sealed class StatWatchingClient : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _npcId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opStat = ServerOps.Get(ServerOpcode.StatChanged);
+
+        public StatWatchingClient(int characterId, int npcId)
+        {
+            _characterId = characterId;
+            _npcId = npcId;
+        }
+
+        public TaskCompletionSource FameChanged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField)
+            {
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserSelectNpc), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(_npcId);
+                w.WriteShort(0);
+                w.WriteShort(0);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opStat)
+            {
+                p.ReadByte();          // unlock
+                int mask = p.ReadInt();
+                if ((mask & 0x20000) != 0) // Fame — the script's last mutation
+                {
+                    FameChanged.TrySetResult();
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task NpcScript_MutatesJobApSpFame()
+    {
+        const int npcId = 9010001;
+        const string script = """
+            function start() {
+                player.setJob(200);
+                player.gainAp(3);
+                player.gainSp(2);
+                player.gainFame(5);
+            }
+            """;
+
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Novice", MapId = 100000000, Job = 0, Ap = 0, Sp = 0, Fame = 0 });
+
+        var scripts = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+
+        var client = new StatWatchingClient(hero.Id, npcId);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, npcScripts: scripts);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.FameChanged.Task.WaitAsync(cts.Token);
+        Assert.Equal(200, hero.Job);
+        Assert.Equal(3, hero.Ap);
+        Assert.Equal(2, hero.Sp);
+        Assert.Equal(5, hero.Fame);
+    }
+
     [Fact]
     public async Task NpcSpawnsFromMapData_AndSelectByObjectIdRunsScript()
     {

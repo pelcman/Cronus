@@ -350,6 +350,12 @@ Each milestone means adding one "working vertical slice".
       calls) — safe because the client is modal during a dialog, so no field-mutating packet is handled
       concurrently, and the transfer's operations are individually thread-safe. Unblocks town/dungeon
       NPCs. End-to-end tested: a `player.warp(...)` script moves the character across the wire.
+- [x] **M39: NPC scripting API — stats & job** — widened the `player` surface for NPC scripts:
+      getters (`getGender/getJob/getStr/getDex/getInt/getLuk/getFame/getAp/getSp`) and safe mutations
+      (`gainAp`/`gainSp`/`gainFame` — additive, clamped; `setJob` — job advancement). Each mutation
+      persists and pushes `LP_StatChanged`, the same verified pattern as `gainMeso`/`gainExp`/`heal`.
+      This is what job-instructor, stat-reset, and fame NPCs are built from. End-to-end tested (a script
+      setting job 200 + AP/SP/fame lands on the character).
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

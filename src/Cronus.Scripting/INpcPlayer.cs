@@ -22,6 +22,24 @@ public interface INpcPlayer
 
     int getExp();
 
+    int getGender();
+
+    int getJob();
+
+    int getStr();
+
+    int getDex();
+
+    int getInt();
+
+    int getLuk();
+
+    int getFame();
+
+    int getAp();
+
+    int getSp();
+
     /// <summary>Adds (or, if negative, removes) mesos, clamped at zero, and persists.</summary>
     void gainMeso(int amount);
 
@@ -36,6 +54,18 @@ public interface INpcPlayer
 
     /// <summary>Warps the player to a specific spawn portal of another map.</summary>
     void warp(int mapId, int portal);
+
+    /// <summary>Adds (or removes) ability points, floored at zero, and notifies the client.</summary>
+    void gainAp(int amount);
+
+    /// <summary>Adds (or removes) skill points, floored at zero, and notifies the client.</summary>
+    void gainSp(int amount);
+
+    /// <summary>Adds (or removes) fame, clamped to ±30000, and notifies the client.</summary>
+    void gainFame(int amount);
+
+    /// <summary>Sets the player's job (e.g. a job-advancement NPC) and notifies the client.</summary>
+    void setJob(int job);
 
     /// <summary>True if the quest is currently started (in progress).</summary>
     bool hasQuest(int questId);
