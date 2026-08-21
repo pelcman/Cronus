@@ -129,6 +129,11 @@ public class CombatTests
             {
                 p.ReadByte();          // unlock
                 int mask = p.ReadInt();
+                if (mask == 0)
+                {
+                    return; // entry updateStat (no stat fields) - skip
+                }
+
                 int value = p.ReadInt();
                 if ((mask & 0x10000) != 0)       // Exp
                 {

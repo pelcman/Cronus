@@ -428,6 +428,78 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_PetConsumeItemInit</c> (pet auto-HP-potion item id, 0 = none). Part of the
+    /// JMS v186 OnMigrateIn sequence; the client expects the three pet-consume-init packets.
+    /// </summary>
+    public byte[] PetConsumeItemInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetConsumeItemInit);
+        w.WriteInt(0); // no auto-consume item
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_PetConsumeMPItemInit</c> (pet auto-MP-potion item id, 0 = none).</summary>
+    public byte[] PetConsumeMpItemInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetConsumeMpItemInit);
+        w.WriteInt(0);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_JMS_PetConsumeCureItemInit</c> (pet auto-cure item id, 0 = none).</summary>
+    public byte[] PetConsumeCureItemInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetConsumeCureItemInit);
+        w.WriteInt(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_FriendResult</c> initialising an empty buddy list on entry (ports
+    /// <c>ResCWvsContext.FriendResult</c>, JMS v186: FriendRes_LoadFriend = 7, count 0).
+    /// </summary>
+    public byte[] FriendListInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FriendResult);
+        w.WriteByte(7); // FriendRes_LoadFriend / LoadFriendDone
+        w.WriteByte(0); // friend count
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_FamilyInfoResult</c> for a character with no family (the fixed default the
+    /// reference emits on entry: all zero except the pedigree-generation default byte). The large
+    /// static <c>LP_FamilyPrivilegeList</c> (0x006C, a version-constant reunion-privilege table)
+    /// is not yet ported — the family UI is non-core and this does not affect field entry.
+    /// </summary>
+    public byte[] FamilyInfoResult()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FamilyInfoResult);
+        w.WriteInt(0);      // dwFamilyID
+        w.WriteInt(0);      // reputation etc.
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteByte(2);     // pedigree-generation default (matches reference)
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the empty <c>LP_BroadcastMsg</c> slide the client expects at the end of the
+    /// OnMigrateIn sequence (BM_SLIDE = 4, disabled → no marquee text).
+    /// </summary>
+    public byte[] BroadcastSlideClear()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.BroadcastMsg);
+        w.WriteByte(4); // BM_SLIDE
+        w.WriteByte(0); // disabled (no text follows)
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// The classic MapleStory default key bindings (type 4 = skill/action for most). Keys not
     /// listed are unbound (type 0). Returns exactly <paramref name="size"/> slots.
     /// </summary>

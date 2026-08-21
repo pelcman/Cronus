@@ -64,6 +64,11 @@ public static class ServerOpcode
     public const string ForcedStatReset = "LP_ForcedStatReset";
     public const string FuncKeyMappedInit = "LP_FuncKeyMappedInit";
     public const string MacroSysDataInit = "LP_MacroSysDataInit";
+    public const string PetConsumeItemInit = "LP_PetConsumeItemInit";
+    public const string PetConsumeMpItemInit = "LP_PetConsumeMPItemInit";
+    public const string PetConsumeCureItemInit = "LP_JMS_PetConsumeCureItemInit";
+    public const string FriendResult = "LP_FriendResult";
+    public const string FamilyInfoResult = "LP_FamilyInfoResult";
     public const string ChangeSkillRecordResult = "LP_ChangeSkillRecordResult";
     public const string BroadcastMsg = "LP_BroadcastMsg";
     public const string NpcEnterField = "LP_NpcEnterField";

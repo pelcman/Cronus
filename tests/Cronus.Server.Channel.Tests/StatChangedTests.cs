@@ -109,7 +109,12 @@ public class StatChangedTests
             else if (opcode == _opStat)
             {
                 p.ReadByte();               // unlock
-                p.ReadInt();                // mask
+                int mask = p.ReadInt();     // mask
+                if (mask == 0)
+                {
+                    return; // entry updateStat (no stat fields) - not the meso response
+                }
+
                 MesoUpdate.TrySetResult(p.ReadInt());
             }
         }
