@@ -50,6 +50,12 @@ public sealed class InventoryItem
     public int Durability { get; set; } = -1;
     public int ViciousHammer { get; set; }
 
+    // Pet data (items 500xxxx encode as pets, not bundles).
+    public string PetName { get; set; } = string.Empty;
+    public byte PetLevel { get; set; } = 1;
+    public short PetCloseness { get; set; }
+    public byte PetFullness { get; set; } = 100;
+
     /// <summary>True if this item occupies an equipped (negative-position) slot.</summary>
     public bool IsEquipped => Position < 0;
 

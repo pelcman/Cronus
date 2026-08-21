@@ -42,15 +42,26 @@ public static class ItemEncoder
         }
     }
 
-    /// <summary>Writes the item body (<c>GW_ItemSlotBase::Encode</c>): type byte, RawEncode, then equip/bundle.</summary>
+    /// <summary>FILETIME for "2027-07-07 07:00:00" — the pet "magical" expiration sentinel.</summary>
+    public const long MagicalExpiration = 134594172000000000L;
+
+    /// <summary>True for pet items (500xxxx), which encode as type 3 with a pet body.</summary>
+    public static bool IsPet(int itemId) => itemId / 10_000 == 500;
+
+    /// <summary>Writes the item body (<c>GW_ItemSlotBase::Encode</c>): type byte, RawEncode, then
+    /// the equip / pet / bundle body.</summary>
     public static void WriteItem(PacketWriter w, InventoryItem item)
     {
         int type = ItemType(item.ItemId);
-        w.WriteByte((byte)type);
+        w.WriteByte((byte)(IsPet(item.ItemId) ? 3 : type));
 
         WriteRaw(w, item);
 
-        if (type == 1)
+        if (IsPet(item.ItemId))
+        {
+            WritePetBody(w, item);
+        }
+        else if (type == 1)
         {
             WriteEquipBody(w, item);
         }
@@ -58,6 +69,22 @@ public static class ItemEncoder
         {
             WriteBundleBody(w, item);
         }
+    }
+
+    /// <summary>The pet body (<c>GW_ItemSlotPet::RawDecode</c>, JMS v186 path).</summary>
+    private static void WritePetBody(PacketWriter w, InventoryItem pet)
+    {
+        w.WriteFixedString(pet.PetName, 13);
+        w.WriteByte(pet.PetLevel);
+        w.WriteShort(pet.PetCloseness);
+        w.WriteByte(pet.PetFullness);
+        w.WriteLong(MagicalExpiration);  // dateDead
+        w.WriteShort(0);                 // nPetAttribute
+        w.WriteShort(0);                 // usPetSkill
+        w.WriteInt(pet.ItemId == 5000054 ? 3600 : 0); // nRemainLife (デンデン only)
+        w.WriteShort(0);                 // nAttribute (JMS >= 180)
+        w.WriteByte(0);                  // summoned (JMS >= 186)
+        w.WriteInt(0);
     }
 
     private static void WriteRaw(PacketWriter w, InventoryItem item)

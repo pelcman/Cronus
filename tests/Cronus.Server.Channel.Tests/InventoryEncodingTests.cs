@@ -26,6 +26,39 @@ public class InventoryEncodingTests
     // + quantity(2) + owner-str(2 for "") + flag(2) = 21 bytes.
     private const int BundleItemBytes = 21;
 
+    // A pet item = slot(1) + type(1, =3) + itemId(4) + hasUniqueId(1) + noExpiration(8)
+    // + name(13) + level(1) + closeness(2) + fullness(1) + dateDead(8) + petAttr(2) + petSkill(2)
+    // + remainLife(4) + attribute(2) + summoned(1) + tail(4) = 55 bytes.
+    private const int PetItemBytes = 55;
+
+    [Fact]
+    public void PetItem_EncodesAsType3WithPetBody()
+    {
+        Character empty = Base();
+        Character withPet = Base();
+        withPet.EquippedItems.Add(new InventoryItem { ItemId = 5000000, Position = 1, Quantity = 1, PetName = "ペット" });
+
+        byte[] blob = Blob(withPet);
+        Assert.Equal(Blob(empty).Length + PetItemBytes, blob.Length);
+
+        // The type byte right after the slot byte must be 3 (pet), not 5 (cash bundle).
+        byte[] id = BitConverter.GetBytes(5000000);
+        int at = IndexOf(blob, id);
+        Assert.True(at >= 2);
+        Assert.Equal(3, blob[at - 1]);
+    }
+
+    [Fact]
+    public void PetItems_NeverStack()
+    {
+        var c = new Character { Id = 1, Name = "Hero" };
+        Cronus.Server.Game.Inventory.Add(c, 5000000, 2, slotMax: 100);
+
+        Assert.Equal(2, c.EquippedItems.Count);
+        Assert.All(c.EquippedItems, i => Assert.Equal(1, i.Quantity));
+        Assert.All(c.EquippedItems, i => Assert.Equal("ペット", i.PetName));
+    }
+
     [Fact]
     public void AddingUseItem_ExtendsBlobByOneItem()
     {

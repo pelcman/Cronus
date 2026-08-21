@@ -60,12 +60,20 @@ public static class Inventory
         int tab = Tab(itemId);
         int max = Math.Max(1, slotMax);
 
-        if (tab == 1) // equips don't stack — one slot per item
+        bool isPet = itemId / 10_000 == 500;
+        if (tab == 1 || isPet) // equips and pets don't stack — one slot per item
         {
             for (int i = 0; i < quantity; i++)
             {
                 short slot = NextFreeSlot(c, tab);
-                var item = new InventoryItem { ItemId = itemId, Position = slot, Quantity = 1, CharacterId = c.Id };
+                var item = new InventoryItem
+                {
+                    ItemId = itemId,
+                    Position = slot,
+                    Quantity = 1,
+                    CharacterId = c.Id,
+                    PetName = isPet ? "ペット" : string.Empty,
+                };
                 c.EquippedItems.Add(item);
                 changes.Add(new InventoryChange(InvMode.Add, tab, slot, item, 1));
             }
