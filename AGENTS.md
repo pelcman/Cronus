@@ -165,7 +165,7 @@ Each milestone means adding one "working vertical slice".
       (LP_MobChangeController on entry); CP_MobMove is acked (LP_MobCtrlAck) and relayed
       (LP_MobMove); control hands off to a remaining player on disconnect/transfer and clears
       on death; server tracks mob position from the path.
-- [ ] **M10: Combat depth & content** — item drops (wz drop tables). **← current**
+- [x] **M10: Combat depth & content** — item drops from drop tables (done in M10d).
   - [x] **M10a: quest/skill DB persistence** — `Skills`/`StartedQuests`/`CompletedQuests` now
         persist as JSON columns on the `characters` row (EF value converter + comparer), so
         progression survives a restart. Verified over SQLite (which, unlike the InMemory
@@ -181,6 +181,16 @@ Each milestone means adding one "working vertical slice".
         (`Skill/{skillId/10000:000}.img.xml` → `skill/{id}/level` count, name-padding tolerant,
         cached); `CP_UserSkillUpRequest` caps at the wz max level so SP can't over-level a skill.
         Wired via `CRONUS_WZ`; `NullSkillProvider` (no data → uncapped) when unset.
+  - [x] **M10d: mob item drops (loot loop)** — killed mobs now roll their drop table
+        (`Cronus.Data` `SqlDropProvider` parses the reference `drop_data.sql`; `CRONUS_DROPS`),
+        ports `TacosReward.dropFromDatabase`: per-entry `rand(0..999) < chance` (bosses forced,
+        EQUIP ×10), meso rows → meso piles, item rows → item stacks, fanned out (`DropRoller`,
+        unit-tested). `FieldDrop` carries `ItemId`/`Quantity`; `ChannelPackets.DropEnterField`
+        unifies meso/item (item adds the 8-byte `-1` expiration). Pickup adds the stack to the
+        inventory (`Inventory.Add` + `LP_InventoryOperation` + `ShowItemGain`); newcomers see
+        on-ground item drops. Mobs with no table fall back to a placeholder meso pile. Equip drops
+        are deferred until the equip item body is client-verified. End-to-end tested (kill→field→
+        pickup→inventory) plus packet golden + roll-arithmetic units.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
@@ -378,11 +388,16 @@ Each milestone means adding one "working vertical slice".
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
 
-**Blocked / needs a prerequisite:** *item drops* (the remaining M10 item) needs a general
-inventory system (USE/ETC/SETUP/CASH tabs + CharacterData encoding of them + pickup→inventory);
-today only equipped items are modelled. The drop table itself is available
-(`Reference/JMSv186/sql/drop_data.sql`: dropperid/itemid/min/max/questid/chance, roll is
-`rand(0..999) < chance*rate`). Build the inventory system first, then drops land cleanly.
+**Done since:** the general inventory system (USE/ETC/SETUP/CASH tabs, CharacterData encoding,
+live `LP_InventoryOperation`) and mob item drops both landed (M43/M44/M10d). The loot loop is
+client-verifiable now.
+
+**Blocked / needs a prerequisite:** *equip drops & equip shop-buys* are deferred until the equip
+item body is client-verified — a byte error in the equip body would corrupt an
+`LP_InventoryOperation`. Non-equip (bundle) drops use the client-verified encoding and are live.
+Next core-loop features: **item move/equip** (`CP_UserChangeSlotPositionRequest`) and **NPC shops**
+(buy/sell). MySQL persistence (`CRONUS_DB`) is the deployment prerequisite (in-memory wipes on
+restart).
 
 ---
 

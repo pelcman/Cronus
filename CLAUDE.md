@@ -254,14 +254,17 @@ Detailed progress and the task board live in [AGENTS.md](AGENTS.md) ("Roadmap", 
 
 - **Done**: the full thin path works with the real JMS v186 client — login → character select →
   game entry — plus a single-process channel serving movement, chat, combat (melee/magic/ranged with
-  server-side damage bounding), mob respawn/control, drops (meso, incl. player-thrown), HP/MP regen,
-  death & revive, and a complete social layer: whisper/`/find`, emotes, sitting, messenger, and the
-  full party system (invite/join/leave/expel/change-leader, exp sharing, live HP bars and window
-  updates). Persistence is MySQL (Pomelo/EF Core); deploy is env-driven (`CRONUS_HOST`/`CRONUS_DB`/
-  `CRONUS_WZ`).
-- **Deferred until the client can be re-tested**: a general inventory system. It encodes into the
-  entry `CharacterData` blob, where a byte error crashes game entry entirely — unverifiable without
-  the client. It blocks item drops, NPC shops, trade, and full quests. Build it first, with the
-  client on hand. See AGENTS.md §4 and the memory note on the entry-blob risk boundary.
+  server-side damage bounding), mob respawn/control, HP/MP regen, death & revive, a general
+  **inventory** system (USE/ETC/SETUP/CASH tabs in the entry blob + live `LP_InventoryOperation`;
+  add/stack/use consumables), **mob item drops** (drop tables from `drop_data.sql` → items/meso on
+  the field → pickup → inventory; `CRONUS_DROPS`), meso drops (incl. player-thrown), and a complete
+  social layer: whisper/`/find`, emotes, sitting, messenger, and the full party system (invite/join/
+  leave/expel/change-leader, exp sharing, live HP bars and window updates). In-game commands use the
+  `/` prefix. Persistence is MySQL (Pomelo/EF Core); deploy is env-driven (`CRONUS_HOST`/`CRONUS_DB`/
+  `CRONUS_WZ`/`CRONUS_SCRIPTS`/`CRONUS_DROPS`).
+- **Deferred until client-verified**: *equip* item drops and equip shop-buys — the equip item body
+  in a live `LP_InventoryOperation` isn't client-verified yet (a byte error would corrupt the
+  packet), so only bundle (non-equip) items drop for now. Next: item move/equip
+  (`CP_UserChangeSlotPositionRequest`) and NPC shops. See AGENTS.md §4 and the entry-blob memory note.
 - **Verification**: unit round-trips + golden vectors + end-to-end tests through encrypted sessions
   (~180 tests). Add RirePE golden captures once the Java build is run side by side.

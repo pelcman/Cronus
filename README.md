@@ -79,6 +79,7 @@ Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
 | `CRONUS_DB` | MySQL connection string; else in-memory accounts/characters |
 | `CRONUS_WZ` | wz_xml data root; enables portal-by-name transfers |
 | `CRONUS_SCRIPTS` | script root (`{root}/npc/{id}.js`); enables NPC dialogs |
+| `CRONUS_DROPS` | `drop_data.sql` dump; enables mob item/meso drop tables |
 
 To connect a real client, point a JMS v186 client at the host via EmuClient's localhost
 redirect. Accounts auto-register on first login. See
