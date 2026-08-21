@@ -83,15 +83,17 @@ public class QuestTests
         private readonly int _characterId;
         private readonly byte _action;
         private readonly int _questId;
+        private readonly int _selection;
         private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
         private readonly int _opMessage = ServerOps.Get(ServerOpcode.Message);
         private bool _sent;
 
-        public QuestClient(int characterId, byte action, int questId)
+        public QuestClient(int characterId, byte action, int questId, int selection = -1)
         {
             _characterId = characterId;
             _action = action;
             _questId = questId;
+            _selection = selection;
         }
 
         public TaskCompletionSource<(byte State, string Progress)> Record { get; } =
@@ -119,7 +121,7 @@ public class QuestTests
                 w.WriteInt(9000021);   // npc id
                 if (_action == 2)
                 {
-                    w.WriteInt(-1);    // selection (none)
+                    w.WriteInt(_selection);
                 }
 
                 await session.SendAsync(w.ToArray());
@@ -216,6 +218,54 @@ public class QuestTests
         Assert.True(hero.CompletedQuests.ContainsKey(1000));
         Assert.Equal(500, hero.Meso);                          // money reward
         Assert.Equal(300, hero.Exp);                           // exp reward (no level-up at 30)
+    }
+
+    [Fact]
+    public async Task CompleteQuest_GivesOnlyTheSelectedReward()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Chooser", MapId = 100000000, Level = 30,
+        });
+        hero.StartedQuests[1001] = string.Empty;
+        repo.Save(hero);
+
+        var quest = new QuestData
+        {
+            QuestId = 1001,
+            EndCheck = new QuestCheck { Npc = 9000021 },
+            EndAct = new QuestAct
+            {
+                Items = new[]
+                {
+                    new QuestItemEntry(2000000, 5),            // plain reward: always given
+                    new QuestItemEntry(1302000, 1, Prop: -1),  // selectable 0
+                    new QuestItemEntry(1302001, 1, Prop: -1),  // selectable 1  <- picked
+                },
+            },
+        };
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var quests = new InMemoryQuestProvider(new[] { quest });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new QuestClient(hero.Id, action: 2, questId: 1001, selection: 1);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, quests: quests);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        (byte state, _) = await client.Record.Task.WaitAsync(cts.Token);
+
+        Assert.Equal(2, state);
+        Assert.Single(hero.EquippedItems, i => i.ItemId == 2000000);       // plain reward given
+        Assert.Single(hero.EquippedItems, i => i.ItemId == 1302001);       // the chosen sword
+        Assert.DoesNotContain(hero.EquippedItems, i => i.ItemId == 1302000); // the other option not given
     }
 
     /// <summary>Kills the mob once and captures the resulting quest progress update.</summary>

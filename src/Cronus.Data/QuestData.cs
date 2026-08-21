@@ -24,6 +24,9 @@ public sealed class QuestCheck
 
     /// <summary>Items required (complete side).</summary>
     public IReadOnlyList<QuestItemEntry> Items { get; init; } = Array.Empty<QuestItemEntry>();
+
+    /// <summary>Script name (wz <c>startscript</c>/<c>endscript</c>) when this side is script-driven.</summary>
+    public string Script { get; init; } = string.Empty;
 }
 
 /// <summary>One side of a quest's <c>Act.img</c> node (0 = on start, 1 = on completion).</summary>
@@ -116,6 +119,7 @@ public sealed class WzQuestProvider : IQuestProvider
             LevelMin = node.GetInt("lvmin"),
             Mobs = ParseList(node.Child("mob"), row => new QuestMobEntry(row.GetInt("id"), row.GetInt("count"))),
             Items = ParseItems(node.Child("item")),
+            Script = node.GetString("startscript", node.GetString("endscript", string.Empty)),
         };
     }
 

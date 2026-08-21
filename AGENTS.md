@@ -247,10 +247,12 @@ Each milestone means adding one "working vertical slice".
         exp/money/pop/item rewards, negative count = taken). Mob kills advance the per-mob 3-digit
         progress string live (`UpdateQuestKillsAsync`, ports `updateQuestMobKills`); completion
         verifies kills+items, applies rewards, and plays the quest-complete effect (op 10 local +
-        remote). Script `startQuest`/`completeQuest` now push the journal live too. Deferred:
-        lost-item & script-quest actions (4/5), selectable/lottery (`prop`) rewards, prerequisite-
-        quest/job checks. Accept/kill-progress/complete e2e tests + wz parse test. Needs a `Quest`
-        junction in the wz root.
+        remote). Script `startQuest`/`completeQuest` now push the journal live too. Selectable
+        (`prop`=-1) rewards use the complete request's `selection` index; script-quest actions (4/5)
+        fall back to plain accept/complete until quest scripts land (`QuestCheck.Script` carries the
+        wz start/endscript name for that). Deferred: lost-item action, running actual quest scripts,
+        lottery (`prop`>0) rewards, prerequisite-quest/job checks. Accept/kill-progress/complete/
+        selection e2e tests + wz parse test. Needs a `Quest` junction in the wz root.
   - [x] **M10k: buff skills** — casting a self-buff skill applies its temporary stat buff
         (`CP_UserSkillUseRequest` 0x0058 → `LP_SkillUseResult` 0x0023 + `LP_TemporaryStatSet` with
         reason = +skillId, `time`×1000 from wz), ports `ReqCUser.OnUserSkillUseRequest`+`TacosBuff`.

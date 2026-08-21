@@ -1606,6 +1606,8 @@ public sealed class ChannelHandler : PacketHandlerBase
     private const byte QuestReqAccept = 1;
     private const byte QuestReqComplete = 2;
     private const byte QuestReqResign = 3;
+    private const byte QuestReqOpeningScript = 4;
+    private const byte QuestReqCompleteScript = 5;
 
     /// <summary>
     /// Handles <c>CP_UserQuestRequest</c> — accepting / completing / forfeiting a quest through the
@@ -1629,6 +1631,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         switch (action)
         {
             case QuestReqAccept:
+            case QuestReqOpeningScript: // script-driven starts fall back to a plain accept until quest scripts land
             {
                 int npcId = packet.ReadInt();
                 await AcceptQuestAsync(session, c, questId, npcId).ConfigureAwait(false);
@@ -1636,9 +1639,11 @@ public sealed class ChannelHandler : PacketHandlerBase
             }
 
             case QuestReqComplete:
+            case QuestReqCompleteScript: // script-driven ends fall back to a plain complete
             {
                 int npcId = packet.ReadInt();
-                await CompleteQuestAsync(session, c, questId, npcId).ConfigureAwait(false);
+                int selection = action == QuestReqComplete && packet.Remaining >= 4 ? packet.ReadInt() : -1;
+                await CompleteQuestAsync(session, c, questId, npcId, selection).ConfigureAwait(false);
                 break;
             }
 
@@ -1679,7 +1684,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted, progress)).ConfigureAwait(false);
     }
 
-    private async ValueTask CompleteQuestAsync(MapleSession session, Character c, int questId, int npcId)
+    private async ValueTask CompleteQuestAsync(MapleSession session, Character c, int questId, int npcId, int selection = -1)
     {
         if (!c.StartedQuests.ContainsKey(questId))
         {
@@ -1694,7 +1699,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         if (quest.EndAct is { } act)
         {
-            await ApplyQuestActAsync(session, c, act).ConfigureAwait(false);
+            await ApplyQuestActAsync(session, c, act, selection).ConfigureAwait(false);
         }
 
         c.StartedQuests.Remove(questId);
@@ -1749,16 +1754,27 @@ public sealed class ChannelHandler : PacketHandlerBase
         return true;
     }
 
-    /// <summary>Applies a quest act: give/take items, meso, fame, and exp (prop-marked
-    /// selectable/lottery reward rows aren't modelled yet and are skipped).</summary>
-    private async ValueTask ApplyQuestActAsync(MapleSession session, Character c, QuestAct act)
+    /// <summary>
+    /// Applies a quest act: give/take items, meso, fame, and exp. Selectable rewards (prop == -1)
+    /// give only the row the player picked (<paramref name="selection"/> indexes the selectable
+    /// rows in wz order); weighted-lottery rows (prop &gt; 0) aren't modelled yet and are skipped.
+    /// </summary>
+    private async ValueTask ApplyQuestActAsync(MapleSession session, Character c, QuestAct act, int selection = -1)
     {
         var changes = new List<InventoryChange>();
+        int selectableIndex = 0;
         foreach (QuestItemEntry item in act.Items)
         {
-            if (item.Prop is not null)
+            if (item.Prop is -1)
             {
-                continue; // choose-one / lottery rewards: deferred
+                if (selectableIndex++ != selection)
+                {
+                    continue; // not the row the player chose
+                }
+            }
+            else if (item.Prop is not null)
+            {
+                continue; // weighted-lottery rewards: deferred
             }
 
             if (item.Count > 0)
