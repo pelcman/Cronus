@@ -1047,6 +1047,70 @@ public sealed class ChannelPackets
     /// <summary>User effect type: the level-up show (ports <c>OpsUserEffect.UserEffect_LevelUp</c>).</summary>
     public const byte UserEffectLevelUp = 0x00;
 
+    /// <summary>User effect type: the quest-complete jingle (JMS v186 <c>OpsUserEffect</c> = 10).</summary>
+    public const byte UserEffectQuestComplete = 10;
+
+    /// <summary>Builds <c>LP_UserEffectLocal</c> — plays an effect for the player themself (ports
+    /// <c>ResCUserLocal.EffectData</c>; simple effects carry only the type byte).</summary>
+    public byte[] UserEffectLocal(byte effectType)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserEffectLocal);
+        w.WriteByte(effectType);
+        return w.ToArray();
+    }
+
+    // OpsQuestRecordMessage states (JMS v186): the quest-record entry's status byte.
+    public const byte QuestRecordNone = 0;      // removed / forfeited
+    public const byte QuestRecordStarted = 1;   // in progress (carries the progress string)
+    public const byte QuestRecordCompleted = 2; // done (carries the completion FILETIME)
+
+    /// <summary>
+    /// Builds the quest-journal update (<c>LP_Message</c> / MS_QuestRecordMessage, ports
+    /// <c>ResCWvsContext.Message</c> + <c>ResWrapper.updateQuest</c>): quest id, the record state,
+    /// then per state — started carries the progress string (e.g. per-mob 3-digit kill counts),
+    /// completed the completion FILETIME, and none a single 0 byte.
+    /// </summary>
+    public byte[] QuestRecordMessage(int questId, byte state, string progress = "")
+    {
+        const byte msgQuestRecord = 1; // MS_QuestRecordMessage
+
+        PacketWriter w = NewPacket(ServerOpcode.Message);
+        w.WriteByte(msgQuestRecord);
+        w.WriteShort((short)questId);
+        w.WriteByte(state);
+        switch (state)
+        {
+            case QuestRecordStarted:
+                w.WriteString(progress);
+                break;
+            case QuestRecordCompleted:
+                w.WriteLong(CharacterDataEncoder.FileTimeNow());
+                break;
+            default:
+                w.WriteByte(0);
+                break;
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_UserQuestResult</c> confirming a quest act succeeded (ports
+    /// <c>ResCUserLocal.UserQuestResult</c>; JMS v186 <c>QuestRes_Act_Success</c> = 8): the quest,
+    /// the NPC, and the auto-started follow-up quest (0 = none).
+    /// </summary>
+    public byte[] UserQuestResult(int questId, int npcId, short nextQuest = 0)
+    {
+        const byte actSuccess = 8;
+
+        PacketWriter w = NewPacket(ServerOpcode.UserQuestResult);
+        w.WriteByte(actSuccess);
+        w.WriteShort((short)questId);
+        w.WriteInt(npcId);
+        w.WriteShort(nextQuest);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_UserEffectRemote</c> so onlookers see another player's effect — used for the
     /// level-up animation (ports <c>ResCUserRemote.UserEffectRemote</c> + <c>EffectData</c>):

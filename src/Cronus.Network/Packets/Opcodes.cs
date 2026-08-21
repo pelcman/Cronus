@@ -40,6 +40,7 @@ public static class ClientOpcode
     public const string UserSkillUpRequest = "CP_UserSkillUpRequest";
     public const string UserSkillUseRequest = "CP_UserSkillUseRequest";
     public const string UserSkillCancelRequest = "CP_UserSkillCancelRequest";
+    public const string UserQuestRequest = "CP_UserQuestRequest";
     public const string UserAbilityUpRequest = "CP_UserAbilityUpRequest";
     public const string UserAbilityMassUpRequest = "CP_UserAbilityMassUpRequest";
     public const string MobMove = "CP_MobMove";
@@ -85,6 +86,7 @@ public static class ServerOpcode
     public const string Whisper = "LP_Whisper";
     public const string UserEffectLocal = "LP_UserEffectLocal";
     public const string UserEffectRemote = "LP_UserEffectRemote";
+    public const string UserQuestResult = "LP_UserQuestResult";
     public const string Messenger = "LP_Messenger";
     public const string PartyResult = "LP_PartyResult";
     public const string UserHP = "LP_UserHP";

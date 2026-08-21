@@ -71,6 +71,7 @@ ISkillProvider skills = CreateSkillProvider();
 IItemProvider items = CreateItemProvider();
 IDropProvider drops = CreateDropProvider();
 IShopProvider shops = CreateShopProvider();
+IQuestProvider quests = CreateQuestProvider();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
@@ -86,7 +87,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests),
         "channel"),
     keepAlive);
 
@@ -222,6 +223,19 @@ static IDropProvider CreateDropProvider()
     SqlDropProvider provider = SqlDropProvider.LoadFile(dropFile);
     Console.WriteLine($"[drops] loaded drop tables from {dropFile}");
     return provider;
+}
+
+// Quest definitions from the wz tree's Quest/Check.img.xml + Act.img.xml (CRONUS_WZ), else no
+// quest data (quest accept/complete degrade to script-driven only).
+static IQuestProvider CreateQuestProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
+    {
+        return new InMemoryQuestProvider(Array.Empty<QuestData>());
+    }
+
+    return new WzQuestProvider(wzRoot);
 }
 
 // NPC shops from a shops+shopitems SQL dump if CRONUS_SHOPS points at one, else no shops (vendor

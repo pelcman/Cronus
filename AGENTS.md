@@ -239,6 +239,18 @@ Each milestone means adding one "working vertical slice".
         `IKeymapRepository` → the `keymaps` table (bindings as JSON) when `CRONUS_DB` is set.
         Rebind-persists test + 94-slot golden + repo round-trips. *(Schema note: `EnsureCreated`
         doesn't migrate — an existing DB needs a recreate to gain the `storages`/`keymaps` tables.)*
+  - [x] **M10l: quests** — the quest loop works through the client's quest UI
+        (`CP_UserQuestRequest` 0x0069, actions accept=1/complete=2/resign=3 → `LP_UserQuestResult`
+        0x00E3 op 8 + the MS_QuestRecordMessage journal update [1][questId:2][state:1]{started:
+        progress str / completed: FILETIME / none: 0}). `Cronus.Data` `WzQuestProvider` parses
+        `Quest/Check.img.xml`+`Act.img.xml` (start npc/lvmin; end mob/item requirements; act
+        exp/money/pop/item rewards, negative count = taken). Mob kills advance the per-mob 3-digit
+        progress string live (`UpdateQuestKillsAsync`, ports `updateQuestMobKills`); completion
+        verifies kills+items, applies rewards, and plays the quest-complete effect (op 10 local +
+        remote). Script `startQuest`/`completeQuest` now push the journal live too. Deferred:
+        lost-item & script-quest actions (4/5), selectable/lottery (`prop`) rewards, prerequisite-
+        quest/job checks. Accept/kill-progress/complete e2e tests + wz parse test. Needs a `Quest`
+        junction in the wz root.
   - [x] **M10k: buff skills** — casting a self-buff skill applies its temporary stat buff
         (`CP_UserSkillUseRequest` 0x0058 → `LP_SkillUseResult` 0x0023 + `LP_TemporaryStatSet` with
         reason = +skillId, `time`×1000 from wz), ports `ReqCUser.OnUserSkillUseRequest`+`TacosBuff`.

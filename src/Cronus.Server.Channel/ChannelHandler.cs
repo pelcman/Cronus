@@ -36,6 +36,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly IShopProvider _shops;
     private readonly StorageRegistry _storages;
     private readonly KeymapRegistry _keymaps;
+    private readonly IQuestProvider _quests;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -60,6 +61,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opShopRequest;
     private readonly int _opTrunkRequest;
     private readonly int _opFuncKeyMapped;
+    private readonly int _opQuestRequest;
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
@@ -106,7 +108,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         IDropProvider? drops = null,
         IShopProvider? shops = null,
         StorageRegistry? storages = null,
-        KeymapRegistry? keymaps = null)
+        KeymapRegistry? keymaps = null,
+        IQuestProvider? quests = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -118,6 +121,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _shops = shops ?? new InMemoryShopProvider(Array.Empty<Shop>());
         _storages = storages ?? new StorageRegistry();
         _keymaps = keymaps ?? new KeymapRegistry();
+        _quests = quests ?? new InMemoryQuestProvider(Array.Empty<QuestData>());
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -142,6 +146,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
         _opTrunkRequest = clientOpcodes.Get(ClientOpcode.UserTrunkRequest);
         _opFuncKeyMapped = clientOpcodes.Get(ClientOpcode.FuncKeyMappedModified);
+        _opQuestRequest = clientOpcodes.Get(ClientOpcode.UserQuestRequest);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
@@ -283,6 +288,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opFuncKeyMapped)
         {
             HandleFuncKeyMapped(packet);
+        }
+        else if (opcode == _opQuestRequest)
+        {
+            await HandleQuestRequestAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opPortalScript)
         {
@@ -581,6 +590,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                 mob.RespawnAtTick = MobRespawnService.NextRespawnTick(mob.MobTime); // 0 = never (boss)
                 await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
                 await GrantKillExpAsync(mob.Exp).ConfigureAwait(false);
+                await UpdateQuestKillsAsync(session, mob.TemplateId).ConfigureAwait(false);
                 await DropLootAsync(mob).ConfigureAwait(false);
             }
         }
@@ -1590,6 +1600,321 @@ public sealed class ChannelHandler : PacketHandlerBase
     {
         await session.SendAsync(_packets.StatChanged(_player!.Character, StatFlag.Meso)).ConfigureAwait(false);
         await session.SendAsync(_packets.TrunkMoneyResult(storage)).ConfigureAwait(false);
+    }
+
+    // CP_UserQuestRequest actions (the client's pre-BB OpsQuest values).
+    private const byte QuestReqAccept = 1;
+    private const byte QuestReqComplete = 2;
+    private const byte QuestReqResign = 3;
+
+    /// <summary>
+    /// Handles <c>CP_UserQuestRequest</c> — accepting / completing / forfeiting a quest through the
+    /// client's quest dialog (ports <c>ReqCUser.OnUserQuestRequest</c> + <c>MapleQuest</c>).
+    /// Accept gates on the start check's level, seeds the mob-kill progress, and applies the start
+    /// acts; complete verifies the end check (kills + items), applies the rewards (exp / meso /
+    /// fame / items, negative counts taken away), and plays the completion effect. Lost-item and
+    /// script-quest actions aren't modelled yet.
+    /// </summary>
+    private async ValueTask HandleQuestRequestAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        byte action = packet.ReadByte();
+        int questId = packet.ReadShort() & 0xFFFF;
+        Character c = _player.Character;
+
+        switch (action)
+        {
+            case QuestReqAccept:
+            {
+                int npcId = packet.ReadInt();
+                await AcceptQuestAsync(session, c, questId, npcId).ConfigureAwait(false);
+                break;
+            }
+
+            case QuestReqComplete:
+            {
+                int npcId = packet.ReadInt();
+                await CompleteQuestAsync(session, c, questId, npcId).ConfigureAwait(false);
+                break;
+            }
+
+            case QuestReqResign:
+                if (c.StartedQuests.Remove(questId))
+                {
+                    _characters.Save(c);
+                    await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordNone)).ConfigureAwait(false);
+                }
+
+                break;
+        }
+    }
+
+    private async ValueTask AcceptQuestAsync(MapleSession session, Character c, int questId, int npcId)
+    {
+        if (c.StartedQuests.ContainsKey(questId) || c.CompletedQuests.ContainsKey(questId))
+        {
+            return;
+        }
+
+        QuestData? quest = _quests.GetQuest(questId);
+        if (quest?.StartCheck is { LevelMin: > 0 } start && c.Level < start.LevelMin)
+        {
+            return; // under-leveled
+        }
+
+        string progress = InitialQuestProgress(quest);
+        c.StartedQuests[questId] = progress;
+
+        if (quest?.StartAct is { } act)
+        {
+            await ApplyQuestActAsync(session, c, act).ConfigureAwait(false);
+        }
+
+        _characters.Save(c);
+        await session.SendAsync(_packets.UserQuestResult(questId, npcId)).ConfigureAwait(false);
+        await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted, progress)).ConfigureAwait(false);
+    }
+
+    private async ValueTask CompleteQuestAsync(MapleSession session, Character c, int questId, int npcId)
+    {
+        if (!c.StartedQuests.ContainsKey(questId))
+        {
+            return;
+        }
+
+        QuestData? quest = _quests.GetQuest(questId);
+        if (quest is null || !QuestRequirementsMet(c, quest))
+        {
+            return; // unknown quest or unmet kills/items — the dialog stays open
+        }
+
+        if (quest.EndAct is { } act)
+        {
+            await ApplyQuestActAsync(session, c, act).ConfigureAwait(false);
+        }
+
+        c.StartedQuests.Remove(questId);
+        c.CompletedQuests[questId] = CharacterDataEncoder.FileTimeNow();
+        _characters.Save(c);
+
+        await session.SendAsync(_packets.UserQuestResult(questId, npcId)).ConfigureAwait(false);
+        await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordCompleted)).ConfigureAwait(false);
+        await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectQuestComplete)).ConfigureAwait(false);
+        if (_field is not null)
+        {
+            await _field.BroadcastAsync(
+                _packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectQuestComplete),
+                exceptCharacterId: c.Id).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Zeroed per-mob progress ("000" per required mob) for a fresh quest record.</summary>
+    private static string InitialQuestProgress(QuestData? quest)
+        => quest?.EndCheck is { Mobs.Count: > 0 } end
+            ? string.Concat(Enumerable.Repeat("000", end.Mobs.Count))
+            : string.Empty;
+
+    /// <summary>All end-check kills reached and required items held.</summary>
+    private bool QuestRequirementsMet(Character c, QuestData quest)
+    {
+        if (quest.EndCheck is not { } check)
+        {
+            return true;
+        }
+
+        if (check.Mobs.Count > 0)
+        {
+            string progress = c.StartedQuests.TryGetValue(quest.QuestId, out string? p) ? p : string.Empty;
+            for (int i = 0; i < check.Mobs.Count; i++)
+            {
+                if (QuestProgressCount(progress, i) < check.Mobs[i].Count)
+                {
+                    return false;
+                }
+            }
+        }
+
+        foreach (QuestItemEntry req in check.Items)
+        {
+            if (req.Count > 0 && CountInventoryItem(c, req.ItemId) < req.Count)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Applies a quest act: give/take items, meso, fame, and exp (prop-marked
+    /// selectable/lottery reward rows aren't modelled yet and are skipped).</summary>
+    private async ValueTask ApplyQuestActAsync(MapleSession session, Character c, QuestAct act)
+    {
+        var changes = new List<InventoryChange>();
+        foreach (QuestItemEntry item in act.Items)
+        {
+            if (item.Prop is not null)
+            {
+                continue; // choose-one / lottery rewards: deferred
+            }
+
+            if (item.Count > 0)
+            {
+                int slotMax = _items.GetConsume(item.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+                changes.AddRange(Inventory.Add(c, item.ItemId, item.Count, slotMax));
+            }
+            else if (item.Count < 0)
+            {
+                changes.AddRange(RemoveInventoryQuantity(c, item.ItemId, -item.Count));
+            }
+        }
+
+        PopulateEquipStats(changes);
+        if (changes.Count > 0)
+        {
+            await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        }
+
+        StatFlag flags = 0;
+        if (act.Money != 0)
+        {
+            c.Meso = (int)Math.Clamp((long)c.Meso + act.Money, 0, int.MaxValue);
+            flags |= StatFlag.Meso;
+        }
+
+        if (act.Fame != 0)
+        {
+            c.Fame = (short)Math.Clamp(c.Fame + act.Fame, -30000, 30000);
+            flags |= StatFlag.Fame;
+        }
+
+        if (flags != 0)
+        {
+            await session.SendAsync(_packets.StatChanged(c, flags)).ConfigureAwait(false);
+        }
+
+        if (act.Money > 0)
+        {
+            await session.SendAsync(_packets.IncMoneyMessage(act.Money)).ConfigureAwait(false);
+        }
+
+        if (act.Exp > 0 && _player is not null)
+        {
+            await GrantExpToAsync(_player, act.Exp).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Removes a total quantity of an item across its inventory slots.</summary>
+    private static List<InventoryChange> RemoveInventoryQuantity(Character c, int itemId, int quantity)
+    {
+        var changes = new List<InventoryChange>();
+        int tab = Inventory.Tab(itemId);
+        int remaining = quantity;
+        foreach (InventoryItem item in c.EquippedItems
+                     .Where(i => i.ItemId == itemId && i.Position > 0)
+                     .OrderBy(i => i.Position)
+                     .ToList())
+        {
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            int take = Math.Min(remaining, item.Quantity);
+            if (Inventory.RemoveFromSlot(c, tab, item.Position, take) is { } change)
+            {
+                changes.Add(change);
+            }
+
+            remaining -= take;
+        }
+
+        return changes;
+    }
+
+    private static int CountInventoryItem(Character c, int itemId)
+        => c.EquippedItems.Where(i => i.ItemId == itemId && i.Position > 0).Sum(i => i.Quantity);
+
+    /// <summary>The 3-digit kill count at a mob index of a quest progress string.</summary>
+    private static int QuestProgressCount(string progress, int index)
+    {
+        int start = index * 3;
+        return start + 3 <= progress.Length && int.TryParse(progress.AsSpan(start, 3), out int n) ? n : 0;
+    }
+
+    /// <summary>Rebuilds a progress string with one mob's count changed (3 digits per mob).</summary>
+    private static string SetQuestProgressCount(string progress, int mobCount, int index, int value)
+    {
+        char[] buffer = new char[mobCount * 3];
+        for (int i = 0; i < mobCount; i++)
+        {
+            int v = i == index ? value : QuestProgressCount(progress, i);
+            Math.Clamp(v, 0, 999).ToString("000").CopyTo(0, buffer, i * 3, 3);
+        }
+
+        return new string(buffer);
+    }
+
+    /// <summary>
+    /// Advances the killer's in-progress kill quests for a slain mob and pushes the journal update
+    /// (ports <c>MapleQuestStatus.mobKilled</c> + <c>ResWrapper.updateQuestMobKills</c>: per-mob
+    /// 3-digit counts in the quest's Check order).
+    /// </summary>
+    private async ValueTask UpdateQuestKillsAsync(MapleSession session, int mobTemplateId)
+    {
+        if (_player is null || _player.Character.StartedQuests.Count == 0)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        List<(int QuestId, string Progress)>? updates = null;
+        foreach (KeyValuePair<int, string> entry in c.StartedQuests.ToList())
+        {
+            if (_quests.GetQuest(entry.Key)?.EndCheck is not { Mobs.Count: > 0 } check)
+            {
+                continue;
+            }
+
+            int index = -1;
+            for (int i = 0; i < check.Mobs.Count; i++)
+            {
+                if (check.Mobs[i].MobId == mobTemplateId)
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (index < 0)
+            {
+                continue;
+            }
+
+            int current = QuestProgressCount(entry.Value, index);
+            if (current >= check.Mobs[index].Count)
+            {
+                continue; // this mob's requirement is already met
+            }
+
+            string updated = SetQuestProgressCount(entry.Value, check.Mobs.Count, index, current + 1);
+            c.StartedQuests[entry.Key] = updated;
+            (updates ??= new List<(int, string)>()).Add((entry.Key, updated));
+        }
+
+        if (updates is null)
+        {
+            return;
+        }
+
+        _characters.Save(c);
+        foreach ((int questId, string progress) in updates)
+        {
+            await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted, progress)).ConfigureAwait(false);
+        }
     }
 
     // CP_FuncKeyMappedModified modes (OpsFuncKeyMapped, JMS v186).

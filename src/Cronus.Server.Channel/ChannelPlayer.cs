@@ -142,6 +142,7 @@ public sealed class ChannelPlayer : INpcPlayer
     {
         _character.StartedQuests[questId] = string.Empty;
         _characters.Save(_character);
+        Send(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted)); // journal updates live
     }
 
     public void completeQuest(int questId)
@@ -149,6 +150,8 @@ public sealed class ChannelPlayer : INpcPlayer
         _character.StartedQuests.Remove(questId);
         _character.CompletedQuests[questId] = CharacterDataEncoder.FileTimeNow();
         _characters.Save(_character);
+        Send(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordCompleted));
+        Send(_packets.UserEffectLocal(ChannelPackets.UserEffectQuestComplete)); // the completion jingle
     }
 
     private void Send(byte[] packet)
