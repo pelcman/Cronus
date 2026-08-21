@@ -293,6 +293,92 @@ public class CombatTests
         Assert.Equal(100, dmg);
     }
 
+    private sealed class EffectWatcher : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opEffect = ServerOps.Get(ServerOpcode.UserEffectRemote);
+
+        public EffectWatcher(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<(int Cid, byte Type)> SawEffect { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField)
+            {
+                Ready.TrySetResult();
+            }
+            else if (opcode == _opEffect)
+            {
+                int cid = p.ReadInt();
+                byte type = p.ReadByte();
+                SawEffect.TrySetResult((cid, type));
+            }
+
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task MeleeAttack_LevelUp_BroadcastsRemoteEffect()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character attacker = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Newbie", MapId = 100000000, Level = 1, Exp = 0 });
+        Character bystander = repo.Create(new Character { AccountId = 2, WorldId = 0, Name = "Observer", MapId = 100000000 });
+
+        var map = new MapData
+        {
+            MapId = 100000000,
+            Portals = Array.Empty<PortalData>(),
+            Mobs = new[] { new MobSpawn { TemplateId = 100100, X = 0, Y = 0, MaxHp = 50 } },
+        };
+        // 20 exp >= ExpForLevel(1) = 15, so the kill dings the attacker to level 2.
+        var mobData = new InMemoryMobProvider(new[] { new MobData { TemplateId = 100100, MaxHp = 50, Exp = 20 } });
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }), mobData);
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        // Observer enters first and waits until it's actually in the field.
+        var observer = new EffectWatcher(bystander.Id);
+        var observerHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var b2s = new Pipe();
+        var s2b = new Pipe();
+        await using var oServer = new MapleSession(b2s.Reader, s2b.Writer, ServerConfig.Jms186, SessionRole.Server, observerHandler);
+        await using var oClient = new MapleSession(s2b.Reader, b2s.Writer, ServerConfig.Jms186, SessionRole.Client, observer);
+        _ = oServer.RunAsync(cts.Token);
+        _ = oClient.RunAsync(cts.Token);
+        await observer.Ready.Task.WaitAsync(cts.Token);
+
+        // Attacker enters and kills the mob (40 + 40 = 80 > 50 HP).
+        var fighter = new Fighter(attacker.Id, new[] { 40, 40 });
+        var fighterHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var a2s = new Pipe();
+        var s2a = new Pipe();
+        await using var aServer = new MapleSession(a2s.Reader, s2a.Writer, ServerConfig.Jms186, SessionRole.Server, fighterHandler);
+        await using var aClient = new MapleSession(s2a.Reader, a2s.Writer, ServerConfig.Jms186, SessionRole.Client, fighter);
+        _ = aServer.RunAsync(cts.Token);
+        _ = aClient.RunAsync(cts.Token);
+
+        (int cid, byte type) = await observer.SawEffect.Task.WaitAsync(cts.Token);
+        Assert.Equal(attacker.Id, cid);
+        Assert.Equal(0, type);         // UserEffect_LevelUp
+        Assert.Equal(2, attacker.Level);
+    }
+
     [Fact]
     public void ParseMelee_ReadsTargetsAndDamages()
     {

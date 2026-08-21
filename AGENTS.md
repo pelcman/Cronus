@@ -227,6 +227,11 @@ Each milestone means adding one "working vertical slice".
       and /find reports the target's map or "not found" (`WhisperLocationResult`, ports
       `ReqCUser.OnWhisper` + `OpsLocationResult`). End-to-end tested through encrypted sessions.
       Cross-channel routing is out of scope (single-channel server). First cross-field social feature.
+- [x] **M20: Level-up effect** — a kill that levels you up now broadcasts `LP_UserEffectRemote`
+      (`UserEffect_LevelUp` = type 0: `[charId:4][type:1]`) to the rest of the field, so onlookers
+      see the level-up animation. The local client plays its own from the level `LP_StatChanged`, so
+      only the remote effect needs sending (ports `MapleCharacter.levelUp` →
+      `ResCUserRemote.UserEffectRemote`). End-to-end tested (observer sees the attacker's ding).
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

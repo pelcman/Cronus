@@ -584,6 +584,15 @@ public sealed class ChannelHandler : PacketHandlerBase
         StatFlag changed = CharacterProgression.GainExp(c, exp); // processes level-ups
         _characters.Save(c);
         await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
+
+        // A level-up plays a show effect: the local client triggers its own from the stat change,
+        // so only the remote animation (for onlookers in the field) needs broadcasting.
+        if (changed.HasFlag(StatFlag.Level) && _field is not null)
+        {
+            await _field.BroadcastAsync(
+                _packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectLevelUp),
+                exceptCharacterId: c.Id).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

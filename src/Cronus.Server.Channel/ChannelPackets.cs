@@ -648,6 +648,22 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>User effect type: the level-up show (ports <c>OpsUserEffect.UserEffect_LevelUp</c>).</summary>
+    public const byte UserEffectLevelUp = 0x00;
+
+    /// <summary>
+    /// Builds <c>LP_UserEffectRemote</c> so onlookers see another player's effect — used for the
+    /// level-up animation (ports <c>ResCUserRemote.UserEffectRemote</c> + <c>EffectData</c>):
+    /// character id then the effect type. Level-up (type 0) carries no extra payload.
+    /// </summary>
+    public byte[] UserEffectRemote(int characterId, byte effectType)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserEffectRemote);
+        w.WriteInt(characterId);
+        w.WriteByte(effectType);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_UserSitResult</c> (ports <c>ResCUserLocal.UserSitResult</c>): whether the
     /// player is now seated, and the seat id when they are. <paramref name="seatId"/> == -1 stands.

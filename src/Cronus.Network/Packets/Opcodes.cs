@@ -66,6 +66,8 @@ public static class ServerOpcode
     public const string UserEmotion = "LP_UserEmotion";
     public const string UserSitResult = "LP_UserSitResult";
     public const string Whisper = "LP_Whisper";
+    public const string UserEffectLocal = "LP_UserEffectLocal";
+    public const string UserEffectRemote = "LP_UserEffectRemote";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string UserShootAttack = "LP_UserShootAttack";
