@@ -1369,8 +1369,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await HandleShopSellAsync(session, packet).ConfigureAwait(false);
                 break;
             case ShopReqRecharge:
-                // Rechargeables (stars/bullets) aren't modelled yet.
-                await session.SendAsync(_packets.ShopResult(ShopResultCode.RechargeNoStock)).ConfigureAwait(false);
+                await HandleShopRechargeAsync(session, packet).ConfigureAwait(false);
                 break;
         }
     }
@@ -1417,6 +1416,54 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
         await session.SendAsync(_packets.ShopResult(ShopResultCode.BuySuccess)).ConfigureAwait(false);
+    }
+
+    // Mastery skills that raise a rechargeable's stack cap by level x 10 (ports getMasterySkill).
+    private const int ClawMastery = 4100000;
+    private const int GunMastery = 5200000;
+
+    /// <summary>
+    /// Handles the shop recharge (ports <c>MapleShop.recharge</c>): refills a star/bullet stack to
+    /// its cap (wz <c>slotMax</c> + mastery-skill bonus) for <c>round(unitPrice × missing)</c> meso.
+    /// Recharge reuses the Sell result codes in the reference.
+    /// </summary>
+    private async ValueTask HandleShopRechargeAsync(MapleSession session, PacketReader packet)
+    {
+        short slot = packet.ReadShort();
+        Character c = _player!.Character;
+        InventoryItem? item = Inventory.ItemAt(c, UseTab, slot);
+        if (item is null || !ShopItems.IsRechargeable(item.ItemId))
+        {
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.SellNoStock)).ConfigureAwait(false);
+            return;
+        }
+
+        int slotMax = _items.GetConsume(item.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+        int mastery = c.Skills.TryGetValue(item.ItemId / 10000 == 207 ? ClawMastery : GunMastery, out int lvl) ? lvl : 0;
+        slotMax += mastery * 10;
+        if (item.Quantity >= slotMax)
+        {
+            return; // already full — the client shouldn't ask
+        }
+
+        double unit = _items.GetUnitPrice(item.ItemId) ?? 0;
+        int price = (int)Math.Round(unit * (slotMax - item.Quantity));
+        if (price > 0 && c.Meso < price)
+        {
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.SellUnknown)).ConfigureAwait(false);
+            return;
+        }
+
+        item.Quantity = (short)slotMax;
+        c.Meso -= price;
+        _characters.Save(c);
+
+        await session.SendAsync(_packets.InventoryOperation(new[]
+        {
+            new InventoryChange(InvMode.Update, UseTab, slot, item, item.Quantity),
+        })).ConfigureAwait(false);
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        await session.SendAsync(_packets.ShopResult(ShopResultCode.SellSuccess)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleShopSellAsync(MapleSession session, PacketReader packet)

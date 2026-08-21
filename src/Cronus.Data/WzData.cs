@@ -61,6 +61,13 @@ public sealed class WzData
     /// <summary>String value at <paramref name="path"/> below this node, or <paramref name="fallback"/>.</summary>
     public string GetString(string path, string fallback = "") => Resolve(path)?.AsString(fallback) ?? fallback;
 
+    /// <summary>This node's own value parsed as a double (wz <c>double</c>/<c>float</c> leaves).</summary>
+    public double AsDouble(double fallback = 0)
+        => double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double v) ? v : fallback;
+
+    /// <summary>Double value at <paramref name="path"/> below this node, or <paramref name="fallback"/>.</summary>
+    public double GetDouble(string path, double fallback = 0) => Resolve(path)?.AsDouble(fallback) ?? fallback;
+
     /// <summary>Parses a wz_xml document (a stream or file) into a <see cref="WzData"/> root.</summary>
     public static WzData Parse(Stream stream)
     {

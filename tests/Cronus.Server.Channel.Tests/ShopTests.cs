@@ -162,6 +162,90 @@ public class ShopTests
         }
     }
 
+    /// <summary>Opens the shop and recharges the star stack in USE slot 1.</summary>
+    private sealed class Recharger : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opOpenShop = ServerOps.Get(ServerOpcode.OpenShopDlg);
+        private readonly int _opShopResult = ServerOps.Get(ServerOpcode.ShopResult);
+        private bool _opened;
+
+        public Recharger(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource<byte> Result { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_opened)
+            {
+                _opened = true;
+                var chat = new PacketWriter(ClientOps.Get(ClientOpcode.UserChat), session.Config.PacketHeaderSize, session.Config.CodePage);
+                chat.WriteInt(0);
+                chat.WriteString("/shop 100");
+                chat.WriteByte(0);
+                await session.SendAsync(chat.ToArray());
+            }
+            else if (opcode == _opOpenShop)
+            {
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserShopRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteByte(2);      // ShopReq_Recharge
+                w.WriteShort(1);     // USE slot
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opShopResult)
+            {
+                Result.TrySetResult(p.ReadByte());
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Recharge_RefillsStarsForUnitPrice()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Ninja", MapId = 100000000, Meso = 1000 });
+        hero.EquippedItems.Add(new InventoryItem { ItemId = 2070000, Position = 1, Quantity = 100, CharacterId = hero.Id });
+        repo.Save(hero);
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var shops = new InMemoryShopProvider(new[]
+        {
+            new Shop { ShopId = 100, NpcId = 9000000, Items = new[] { new ShopItem(2070000, 500, 1, 0, 0) } },
+        });
+        var items = new InMemoryItemProvider(
+            new[] { new ConsumeSpec { ItemId = 2070000, SlotMax = 500 } },
+            unitPrices: new Dictionary<int, double> { [2070000] = 0.5 });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new Recharger(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, shops: shops, items: items);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        byte result = await client.Result.Task.WaitAsync(cts.Token);
+
+        Assert.Equal((byte)ShopResultCode.SellSuccess, result);  // recharge reuses the Sell codes
+        Assert.Equal(500, Assert.Single(hero.EquippedItems).Quantity); // topped up to slotMax
+        Assert.Equal(800, hero.Meso);                            // 1000 - 0.5 x 400 missing
+    }
+
     [Fact]
     public async Task Buy_DebitsMesoAndAddsItem()
     {

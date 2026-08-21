@@ -132,6 +132,9 @@ public interface IItemProvider
     /// null for non-equips or when no equip file is found.
     /// </summary>
     EquipStats? GetEquipStats(int itemId);
+
+    /// <summary>The per-unit price of a rechargeable stack (wz <c>info/unitPrice</c>), or null.</summary>
+    double? GetUnitPrice(int itemId);
 }
 
 /// <summary>
@@ -212,6 +215,22 @@ public sealed class WzItemProvider : IItemProvider
 
         WzData? info = WzData.ParseFile(path).Child($"{itemId:00000000}")?.Child("info");
         return info?.Child("price")?.AsInt();
+    }
+
+    private readonly ConcurrentDictionary<int, double?> _unitPriceCache = new();
+
+    public double? GetUnitPrice(int itemId) => _unitPriceCache.GetOrAdd(itemId, LoadUnitPrice);
+
+    private double? LoadUnitPrice(int itemId)
+    {
+        string? path = ItemImagePath(_wzRoot, itemId);
+        if (path is null || !File.Exists(path))
+        {
+            return null;
+        }
+
+        WzData? info = WzData.ParseFile(path).Child($"{itemId:00000000}")?.Child("info");
+        return info?.Child("unitPrice")?.AsDouble();
     }
 
     private EquipStats? LoadEquip(int itemId)
@@ -305,15 +324,18 @@ public sealed class InMemoryItemProvider : IItemProvider
     private readonly Dictionary<int, ConsumeSpec> _items;
     private readonly Dictionary<int, int> _prices;
     private readonly Dictionary<int, EquipStats> _equips;
+    private readonly Dictionary<int, double> _unitPrices;
 
     public InMemoryItemProvider(
         IEnumerable<ConsumeSpec> items,
         IReadOnlyDictionary<int, int>? prices = null,
-        IReadOnlyDictionary<int, EquipStats>? equips = null)
+        IReadOnlyDictionary<int, EquipStats>? equips = null,
+        IReadOnlyDictionary<int, double>? unitPrices = null)
     {
         _items = items.ToDictionary(i => i.ItemId);
         _prices = prices is null ? new Dictionary<int, int>() : new Dictionary<int, int>(prices);
         _equips = equips is null ? new Dictionary<int, EquipStats>() : new Dictionary<int, EquipStats>(equips);
+        _unitPrices = unitPrices is null ? new Dictionary<int, double>() : new Dictionary<int, double>(unitPrices);
     }
 
     public ConsumeSpec? GetConsume(int itemId) => _items.TryGetValue(itemId, out ConsumeSpec? s) ? s : null;
@@ -321,4 +343,6 @@ public sealed class InMemoryItemProvider : IItemProvider
     public int? GetPrice(int itemId) => _prices.TryGetValue(itemId, out int p) ? p : null;
 
     public EquipStats? GetEquipStats(int itemId) => _equips.TryGetValue(itemId, out EquipStats? e) ? e : null;
+
+    public double? GetUnitPrice(int itemId) => _unitPrices.TryGetValue(itemId, out double u) ? u : null;
 }
