@@ -74,6 +74,38 @@ public static class CharacterProgression
         return (int)Math.Round(fraction * weight, MidpointRounding.AwayFromZero);
     }
 
+    private const short StatCap = 999;
+    private const int MaxHpPerAp = 15; // simplified flat gain (reference is job-scaled random)
+    private const int MaxMpPerAp = 12;
+
+    /// <summary>
+    /// Spends one ability point to raise a stat: STR/DEX/INT/LUK by 1 (capped at 999), or MaxHP/MaxMP
+    /// by a flat amount. Returns the changed stats (the raised stat plus <see cref="StatFlag.Ap"/>),
+    /// or 0 if it can't be honored — no AP, a capped base stat, or a non-assignable flag. Ports
+    /// <c>OnAbilityUpRequest</c>; HP/MP gains are simplified flat values (server owns HP/MP).
+    /// </summary>
+    public static StatFlag SpendAbilityPoint(Character c, StatFlag stat)
+    {
+        if (c.Ap <= 0)
+        {
+            return 0;
+        }
+
+        switch (stat)
+        {
+            case StatFlag.Str when c.Str < StatCap: c.Str++; break;
+            case StatFlag.Dex when c.Dex < StatCap: c.Dex++; break;
+            case StatFlag.Int when c.Int < StatCap: c.Int++; break;
+            case StatFlag.Luk when c.Luk < StatCap: c.Luk++; break;
+            case StatFlag.MaxHp: c.MaxHp = (short)Math.Min(short.MaxValue, c.MaxHp + MaxHpPerAp); break;
+            case StatFlag.MaxMp: c.MaxMp = (short)Math.Min(short.MaxValue, c.MaxMp + MaxMpPerAp); break;
+            default: return 0; // capped base stat, or not an AP-assignable flag
+        }
+
+        c.Ap--;
+        return stat | StatFlag.Ap;
+    }
+
     private static void LevelUp(Character c)
     {
         c.Level++;

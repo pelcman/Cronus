@@ -109,4 +109,56 @@ public class ProgressionTests
         Assert.Equal(0, CharacterProgression.PartyExpShare(0, 2, isKiller: true));
         Assert.Equal(0, CharacterProgression.PartyExpShare(1000, 0, isKiller: true));
     }
+
+    [Fact]
+    public void SpendAbilityPoint_RaisesStat_AndSpendsAp()
+    {
+        var c = new Character { Name = "N", Str = 4, Ap = 3 };
+
+        StatFlag changed = CharacterProgression.SpendAbilityPoint(c, StatFlag.Str);
+
+        Assert.Equal(StatFlag.Str | StatFlag.Ap, changed);
+        Assert.Equal(5, c.Str);
+        Assert.Equal(2, c.Ap);
+    }
+
+    [Fact]
+    public void SpendAbilityPoint_NoAp_DoesNothing()
+    {
+        var c = new Character { Name = "N", Dex = 4, Ap = 0 };
+
+        Assert.Equal((StatFlag)0, CharacterProgression.SpendAbilityPoint(c, StatFlag.Dex));
+        Assert.Equal(4, c.Dex);
+    }
+
+    [Fact]
+    public void SpendAbilityPoint_CappedStat_DoesNotSpend()
+    {
+        var c = new Character { Name = "N", Luk = 999, Ap = 5 };
+
+        Assert.Equal((StatFlag)0, CharacterProgression.SpendAbilityPoint(c, StatFlag.Luk));
+        Assert.Equal(999, c.Luk);
+        Assert.Equal(5, c.Ap); // AP not spent on a rejected raise
+    }
+
+    [Fact]
+    public void SpendAbilityPoint_MaxHp_AddsFlatAmount()
+    {
+        var c = new Character { Name = "N", MaxHp = 100, Ap = 1 };
+
+        StatFlag changed = CharacterProgression.SpendAbilityPoint(c, StatFlag.MaxHp);
+
+        Assert.Equal(StatFlag.MaxHp | StatFlag.Ap, changed);
+        Assert.Equal(115, c.MaxHp); // +15
+        Assert.Equal(0, c.Ap);
+    }
+
+    [Fact]
+    public void SpendAbilityPoint_NonAssignableFlag_DoesNothing()
+    {
+        var c = new Character { Name = "N", Ap = 5 };
+
+        Assert.Equal((StatFlag)0, CharacterProgression.SpendAbilityPoint(c, StatFlag.Exp));
+        Assert.Equal(5, c.Ap);
+    }
 }

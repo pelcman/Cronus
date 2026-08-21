@@ -49,6 +49,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opDropPickUp;
     private readonly int _opDropMoney;
     private readonly int _opSkillUp;
+    private readonly int _opAbilityUp;
     private readonly int _opMobMove;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
@@ -97,6 +98,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
+        _opAbilityUp = clientOpcodes.Get(ClientOpcode.UserAbilityUpRequest);
         _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
@@ -170,6 +172,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opSkillUp)
         {
             await HandleSkillUpAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opAbilityUp)
+        {
+            await HandleAbilityUpAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opMobMove)
         {
@@ -554,6 +560,32 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
         await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false); // party sees the health drop
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserAbilityUpRequest</c> — spends one ability point on a base stat (ports
+    /// <c>ReqCUser.OnUserAbilityUpRequest</c>). The flag is a <c>CS_*</c> bit that maps 1:1 onto
+    /// <see cref="StatFlag"/>. Rejected requests (no AP / capped) send nothing, matching the client
+    /// which only updates from the resulting <c>LP_StatChanged</c>.
+    /// </summary>
+    private async ValueTask HandleAbilityUpAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        packet.ReadInt();                          // timestamp
+        var stat = (StatFlag)packet.ReadInt();     // CS_* flag == StatFlag bit
+
+        StatFlag changed = CharacterProgression.SpendAbilityPoint(_player.Character, stat);
+        if (changed == 0)
+        {
+            return; // no AP, capped stat, or a non-assignable flag
+        }
+
+        _characters.Save(_player.Character);
+        await session.SendAsync(_packets.StatChanged(_player.Character, changed)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleSkillUpAsync(MapleSession session, PacketReader packet)

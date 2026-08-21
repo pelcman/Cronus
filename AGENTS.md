@@ -292,6 +292,13 @@ Each milestone means adding one "working vertical slice".
       existing pickup path then credits whoever grabs it — so friends can hand each other meso, the
       working currency, without an inventory system. End-to-end tested (250 meso Alice → Bob) plus the
       below-minimum reject. No entry-blob bytes touched.
+- [x] **M30: AP allocation** — `CP_UserAbilityUpRequest` spends an ability point on a base stat
+      (ports `ReqCUser.OnUserAbilityUpRequest`): the `CS_*` flag maps 1:1 onto `StatFlag`, so
+      `CharacterProgression.SpendAbilityPoint` raises STR/DEX/INT/LUK by 1 (capped at 999) or MaxHP/
+      MaxMP by a flat amount (job-scaled random is simplified away — server owns HP/MP), spends the AP,
+      and replies `LP_StatChanged`. Rejected clicks (no AP / capped) send nothing, matching the client.
+      Completes the level-up loop with the skill-up (`CP_UserSkillUpRequest`) already in place.
+      End-to-end tested (STR 4→5, AP 3→2) plus the no-AP / capped / bad-flag units.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
