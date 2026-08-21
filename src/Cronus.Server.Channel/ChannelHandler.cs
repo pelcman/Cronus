@@ -73,6 +73,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opMobApplyCtrl;
     private readonly int _opTransferChannel;
     private readonly int _opMigrateCashShop;
+    private readonly int _opCashItemUse;
     private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
@@ -189,6 +190,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opMobApplyCtrl = clientOpcodes.Get(ClientOpcode.MobApplyCtrl);
         _opTransferChannel = clientOpcodes.Get(ClientOpcode.UserTransferChannelRequest);
         _opMigrateCashShop = clientOpcodes.Get(ClientOpcode.UserMigrateToCashShopRequest);
+        _opCashItemUse = clientOpcodes.Get(ClientOpcode.UserConsumeCashItemUseRequest);
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
@@ -331,6 +333,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             // No cash shop server: decline (2 = shop server unavailable).
             await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 2)).ConfigureAwait(false);
+        }
+        else if (opcode == _opCashItemUse)
+        {
+            await HandleCashItemUseAsync(packet).ConfigureAwait(false);
         }
         else if (opcode == _opChangeSlot)
         {
@@ -4823,6 +4829,72 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             mob.ControllerId = _player.Character.Id;
             await session.SendAsync(_packets.MobChangeController(mob, aggro: true)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserConsumeCashItemUseRequest</c> — currently the megaphone family (ports
+    /// <c>cashItem507_Megaphone</c>): the line goes to every online player and the megaphone is
+    /// consumed. Other cash items are ignored (and kept).
+    /// </summary>
+    private async ValueTask HandleCashItemUseAsync(PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        // JMS v186: [time:4][cashSlot:2][itemId:4][per-item payload]
+        packet.ReadInt();
+        short slot = packet.ReadShort();
+        int itemId = packet.ReadInt();
+
+        Character c = _player.Character;
+        InventoryItem? item = Inventory.ItemAt(c, 5, slot);
+        if (item is null || item.ItemId != itemId || itemId / 10000 != 507)
+        {
+            return;
+        }
+
+        byte type;
+        string message;
+        byte ear = 0;
+        switch (itemId)
+        {
+            case 5070000:
+                type = ChannelPackets.MegaphoneChannel;
+                message = packet.ReadString();
+                break;
+            case 5071000:
+                type = ChannelPackets.MegaphoneWorld;
+                message = packet.ReadString();
+                ear = packet.ReadByte();
+                break;
+            case 5073000:
+                type = ChannelPackets.MegaphoneHeart;
+                message = packet.ReadString();
+                ear = packet.ReadByte();
+                break;
+            case 5074000:
+                type = ChannelPackets.MegaphoneSkull;
+                message = packet.ReadString();
+                ear = packet.ReadByte();
+                break;
+            default:
+                return; // other megaphone variants (item/triple/avatar) aren't modelled
+        }
+
+        InventoryChange? used = Inventory.RemoveFromSlot(c, 5, slot, 1);
+        _characters.Save(c);
+        if (used is { } uch)
+        {
+            await _player.Session.SendAsync(_packets.InventoryOperation(new[] { uch })).ConfigureAwait(false);
+        }
+
+        byte[] shout = _packets.Megaphone(type, $"{c.Name} : {message}", ear);
+        foreach (Field field in _fields.Fields)
+        {
+            await field.BroadcastAsync(shout).ConfigureAwait(false);
         }
     }
 

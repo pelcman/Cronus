@@ -288,6 +288,31 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_BroadcastMsg megaphone types (OpsBroadcastMsg, JMS v186 declaration values).
+    public const byte MegaphoneChannel = 2;   // メガホン 5070000
+    public const byte MegaphoneWorld = 3;     // 拡声器 5071000
+    public const byte MegaphoneHeart = 12;    // ハート拡声器 5073000
+    public const byte MegaphoneSkull = 13;    // ドクロ拡声器 5074000
+
+    /// <summary>
+    /// A megaphone line (ports the speaker branches of <c>ResCWvsContext.BroadcastMsg</c>): the
+    /// channel megaphone carries just the text; the world/heart/skull ones add channel + whisper
+    /// ("ear") flags.
+    /// </summary>
+    public byte[] Megaphone(byte type, string text, byte ear = 0, byte channel = 0)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.BroadcastMsg);
+        w.WriteByte(type);
+        w.WriteString(text);
+        if (type != MegaphoneChannel)
+        {
+            w.WriteByte(channel);
+            w.WriteByte(ear);
+        }
+
+        return w.ToArray();
+    }
+
     /// <summary>Mirrors a melee attack to onlookers (<c>LP_UserMeleeAttack</c>).</summary>
     public byte[] UserMeleeAttack(int characterId, int level, AttackInfo attack)
         => UserAttack(ServerOpcode.UserMeleeAttack, characterId, level, attack, bulletItemId: 0, x: 0, y: 0, isShoot: false);

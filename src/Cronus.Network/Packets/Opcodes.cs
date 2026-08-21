@@ -71,6 +71,7 @@ public static class ClientOpcode
     public const string MobApplyCtrl = "CP_MobApplyCtrl";
     public const string UserTransferChannelRequest = "CP_UserTransferChannelRequest";
     public const string UserMigrateToCashShopRequest = "CP_UserMigrateToCashShopRequest";
+    public const string UserConsumeCashItemUseRequest = "CP_UserConsumeCashItemUseRequest";
 }
 
 /// <summary>
