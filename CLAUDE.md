@@ -252,20 +252,22 @@ No commercial or public operation.
 
 Detailed progress and the task board live in [AGENTS.md](AGENTS.md) ("Roadmap", "Backlog").
 
-- **Done**: the full thin path works with the real JMS v186 client — login → character select →
-  game entry — plus a single-process channel serving movement, chat, combat (melee/magic/ranged with
-  server-side damage bounding), mob respawn/control, HP/MP regen, death & revive, a general
-  **inventory** system (USE/ETC/SETUP/CASH tabs in the entry blob + live `LP_InventoryOperation`;
-  add/stack/use consumables), **mob item drops** (drop tables from `drop_data.sql` → items/meso on
-  the field → pickup → inventory; `CRONUS_DROPS`), **item move/equip/unequip**, **NPC shops**
-  (buy/sell; `CRONUS_SHOPS`), meso drops (incl. player-thrown), and a complete
-  social layer: whisper/`/find`, emotes, sitting, messenger, and the full party system (invite/join/
-  leave/expel/change-leader, exp sharing, live HP bars and window updates). In-game commands use the
-  `/` prefix. Persistence is MySQL (Pomelo/EF Core); deploy is env-driven (`CRONUS_HOST`/`CRONUS_DB`/
-  `CRONUS_WZ`/`CRONUS_SCRIPTS`/`CRONUS_DROPS`/`CRONUS_SHOPS`).
-- **Deferred until client-verified**: *equip* item drops and equip shop-buys — the equip item body
-  in a live `LP_InventoryOperation` isn't client-verified yet (a byte error would corrupt the
-  packet), so only bundle (non-equip) items drop for now. Next: item move/equip
-  (`CP_UserChangeSlotPositionRequest`) and NPC shops. See AGENTS.md §4 and the entry-blob memory note.
+- **Done**: the full path works with the real JMS v186 client — login → character select → game
+  entry — plus a single-process channel serving movement, chat, combat (melee/magic/ranged with
+  server-side damage bounding, mob skills incl. heal/summons), mob respawn/control, HP/MP regen,
+  death & revive, the full **item economy** (inventory on all tabs, mob drops from `drop_data.sql`,
+  equip drops carrying instances, NPC shops with token currency + recharge, equip scrolling,
+  storage, gather/sort), **progression** (exp/level-ups with party share, SP → skills, buff skills
+  with server-side expiry, quests incl. kill counters + lottery rewards + Jint quest scripts, skill
+  macros, key bindings), and a complete **social layer**: whisper/`/find`, emotes, chairs,
+  messenger, parties, buddy list (offline adds), guilds (+guild/party/friend chat), megaphones,
+  trade, Omok/match-card rooms, personal shops, and hired merchants that persist across restarts.
+  In-game commands use the `/` prefix (docs/COMMANDS.md, EN/JA). Persistence is MySQL
+  (Pomelo/EF Core); deploy is env-driven (`CRONUS_HOST`/`CRONUS_DB`/`CRONUS_WZ`/`CRONUS_SCRIPTS`/
+  `CRONUS_DROPS`/`CRONUS_SHOPS`/`CRONUS_RATE_*`).
+- **Deferred**: guild BBS (its LP opcode is unresolved even in the reference), alliances,
+  mastery books (skills level to wz max directly — an intentional simplification), mob stat
+  buffs/player diseases (dead code in the reference), mini-game invites via the game UI.
 - **Verification**: unit round-trips + golden vectors + end-to-end tests through encrypted sessions
-  (~180 tests). Add RirePE golden captures once the Java build is run side by side.
+  (300+ tests). Most of the newer systems are byte-verified against the Java oracle but not yet
+  re-tested with the live client — that client pass is the next milestone.

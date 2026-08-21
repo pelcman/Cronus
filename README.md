@@ -24,22 +24,27 @@ them as our own asset.
 
 ## Current status
 
-A playable slice is up and running (all through the real encrypted protocol):
+A playable in-group server (all through the real encrypted protocol):
 
-- **Login** — handshake + AES-OFB crypto, `CP_CheckPassword` → `LP_CheckPasswordResult`
-- **World / character select** — world list, world/channel select, character list,
-  name check, character creation
-- **Game entry** — `CP_MigrateIn` → `LP_SetField` (full CharacterData)
-- **Field** — multiplayer enter/leave, movement relay, chat, map transfer (portals),
-  NPC/mob spawns, mob controller movement
-- **NPC dialogue** — JavaScript scripts (Jint) drive `LP_ScriptMessage` conversations, with a
-  player API (meso/exp/hp, quests, skills)
-- **Items** — equipment serialization + persistence; starter equips on creation
-- **Combat & progression** — melee attack (mirrored to others) → mob HP → death → exp
-  (level-up) → meso drops → pickup; SP → skills; script-driven quests
-- **Keep-alive** — the server pings idle clients (`LP_AliveReq`) to hold the connection
+- **Login → world/character select → game entry** — the full entry path with the real
+  JMS v186 client (handshake, AES-OFB, character creation, `LP_SetField`)
+- **Field & combat** — multiplayer enter/leave, movement, chat/emotes/whispers, map
+  transfer, mob spawns/AI delegation/respawn, melee/magic/ranged attacks with server-side
+  damage bounding, mob skills (heal/summons), death & revive, HP/MP regen ticks
+- **Items & economy** — inventory (all tabs), mob drops from real drop tables, NPC shops
+  (meso + token currency, recharge), equip/unequip, **scrolling** (success/curse, clean
+  slates, chaos, white scrolls), storage, gather/sort, portable chairs
+- **Progression** — exp/level-ups with party sharing, SP → skills, buff skills with
+  server-side expiry, quests (accept/complete with kill counters, rewards, lottery,
+  quest scripts on Jint), skill macros, key bindings — all persisted
+- **Social** — parties (invite/accept/decline, HP bars, exp share), buddy list (offline
+  adds included), guilds (create/invite/ranks/emblem/notice + guild chat), messenger,
+  megaphones, trade, **Omok & match-card game rooms**, **personal shops**, **hired
+  merchants** that keep selling while the owner is offline (and survive restarts)
+- **Scripts & data** — NPC / portal / quest scripts (JavaScript, Jint), wz_xml game data,
+  the reference's SQL drop/shop tables, env-driven rates (`CRONUS_RATE_*`)
 
-93 tests, all green. See the roadmap and design notes in
+300+ tests, all green. See the roadmap and design notes in
 [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md), and the real-client runbook in
 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
