@@ -62,6 +62,7 @@ public static class ClientOpcode
     public const string UserGatherItemRequest = "CP_UserGatherItemRequest";
     public const string UserSortItemRequest = "CP_UserSortItemRequest";
     public const string UserUpgradeItemUseRequest = "CP_UserUpgradeItemUseRequest";
+    public const string UserPortalScrollUseRequest = "CP_UserPortalScrollUseRequest";
 }
 
 /// <summary>

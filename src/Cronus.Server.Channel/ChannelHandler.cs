@@ -63,6 +63,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opDropMoney;
     private readonly int _opUseItem;
     private readonly int _opUpgradeItem;
+    private readonly int _opPortalScroll;
     private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
@@ -168,6 +169,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
         _opUseItem = clientOpcodes.Get(ClientOpcode.UserStatChangeItemUseRequest);
         _opUpgradeItem = clientOpcodes.Get(ClientOpcode.UserUpgradeItemUseRequest);
+        _opPortalScroll = clientOpcodes.Get(ClientOpcode.UserPortalScrollUseRequest);
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
@@ -270,6 +272,12 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opUpgradeItem)
         {
             await HandleUpgradeItemAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opPortalScroll)
+        {
+            // Same body as a stat-change item use; the moveTo path warps (ports
+            // OnUserPortalScrollUseRequest -> applyReturnScroll).
+            await HandleUseItemAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opChangeSlot)
         {
