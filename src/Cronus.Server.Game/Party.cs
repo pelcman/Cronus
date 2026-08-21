@@ -1,4 +1,4 @@
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>How a member left a party — shapes the <c>LP_PartyResult</c> departure packet.</summary>
 public enum PartyDepart

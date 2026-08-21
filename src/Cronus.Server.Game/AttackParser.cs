@@ -1,6 +1,6 @@
 using Cronus.Network.Packets;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>One attacked monster and the damage dealt to it across the attack's hits.</summary>
 public sealed class AttackTarget

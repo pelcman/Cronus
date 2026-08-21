@@ -1,6 +1,6 @@
 using Cronus.Domain;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>Natural HP/MP recovery rules (pure, so they're easy to test).</summary>
 public static class PlayerRegen

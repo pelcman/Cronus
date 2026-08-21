@@ -2,7 +2,7 @@ using Cronus.Common;
 using Cronus.Domain;
 using Cronus.Network.Packets;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// Builds channel-stage server packets for JMS v186 (ports <c>ResCStage.SetField</c>, JMS
@@ -1102,17 +1102,17 @@ public sealed class ChannelPackets
         w.WriteByte(PartyDepartOp);
         w.WriteInt(partyId);
         w.WriteInt(targetId);
-        w.WriteBool(kind != Channel.PartyDepart.Disband); // 0 = disband, 1 = a member left
+        w.WriteBool(kind != Cronus.Server.Game.PartyDepart.Disband); // 0 = disband, 1 = a member left
 
-        if (kind == Channel.PartyDepart.Disband)
+        if (kind == Cronus.Server.Game.PartyDepart.Disband)
         {
             w.WriteInt(targetId);
         }
         else
         {
-            w.WriteBool(kind == Channel.PartyDepart.Expel); // 1 = expelled, 0 = voluntary
+            w.WriteBool(kind == Cronus.Server.Game.PartyDepart.Expel); // 1 = expelled, 0 = voluntary
             w.WriteString(targetName);
-            WritePartyStatus(w, slots, leaderId, forChannel, leaving: kind == Channel.PartyDepart.Leave);
+            WritePartyStatus(w, slots, leaderId, forChannel, leaving: kind == Cronus.Server.Game.PartyDepart.Leave);
         }
 
         return w.ToArray();

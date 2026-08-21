@@ -1,4 +1,4 @@
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// The field world tick: each pass it fades stale drops (<c>LP_DropLeaveField</c> timeout) and

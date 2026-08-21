@@ -1,7 +1,7 @@
 using Cronus.Domain;
 using Cronus.Server.Login;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>An <c>LP_InventoryOperation</c> mode (ports the InvOp modes).</summary>
 public enum InvMode : byte

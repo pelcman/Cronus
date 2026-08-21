@@ -1,4 +1,4 @@
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// Pre-Big-Bang experience table (ports <c>SharedExpTable.exp_table_old</c>, used by JMS &lt;= 186).

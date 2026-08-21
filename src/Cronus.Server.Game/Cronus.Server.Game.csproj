@@ -11,12 +11,6 @@
     <ProjectReference Include="..\Cronus.Network\Cronus.Network.csproj" />
     <ProjectReference Include="..\Cronus.Scripting\Cronus.Scripting.csproj" />
     <ProjectReference Include="..\Cronus.Server.Login\Cronus.Server.Login.csproj" />
-    <ProjectReference Include="..\Cronus.Server.Game\Cronus.Server.Game.csproj" />
-  </ItemGroup>
-
-  <!-- The channel handler orchestrates the game systems, which now live in Cronus.Server.Game. -->
-  <ItemGroup>
-    <Using Include="Cronus.Server.Game" />
   </ItemGroup>
 
 </Project>

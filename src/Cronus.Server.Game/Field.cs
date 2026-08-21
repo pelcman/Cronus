@@ -2,7 +2,7 @@ using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>A meso drop lying on the field.</summary>
 public sealed class FieldDrop

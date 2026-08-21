@@ -13,7 +13,12 @@
     <ProjectReference Include="..\Cronus.Network\Cronus.Network.csproj" />
     <ProjectReference Include="..\Cronus.Scripting\Cronus.Scripting.csproj" />
     <ProjectReference Include="..\Cronus.Server.Login\Cronus.Server.Login.csproj" />
+    <ProjectReference Include="..\Cronus.Server.Game\Cronus.Server.Game.csproj" />
     <ProjectReference Include="..\Cronus.Server.Channel\Cronus.Server.Channel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Cronus.Server.Game" />
   </ItemGroup>
 
   <ItemGroup>

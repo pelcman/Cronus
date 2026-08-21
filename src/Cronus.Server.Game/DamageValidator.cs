@@ -1,4 +1,4 @@
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// Server-authoritative sanity checks on client-reported attack damage. MapleStory sends damage

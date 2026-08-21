@@ -3,7 +3,7 @@ using Cronus.Domain;
 using Cronus.Network.Packets;
 using Cronus.Server.Login;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// Serializes the full CharacterData blob sent inside <c>LP_SetField</c> on game entry.

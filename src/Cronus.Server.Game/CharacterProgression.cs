@@ -1,6 +1,6 @@
 using Cronus.Domain;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// Applies experience gains and level-ups to a character. HP/MP gains use simple flat per-level

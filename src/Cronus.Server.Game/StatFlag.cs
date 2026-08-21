@@ -1,4 +1,4 @@
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// Character stat change bits (ports <c>OpsChangeStat</c>) used by <c>LP_StatChanged</c>.

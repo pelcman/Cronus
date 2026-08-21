@@ -1,6 +1,6 @@
 using Cronus.Domain;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// A server tick that periodically persists every online character, so an unexpected shutdown loses

@@ -1,6 +1,6 @@
 using Cronus.Network;
 
-namespace Cronus.Server.Channel;
+namespace Cronus.Server.Game;
 
 /// <summary>
 /// One messenger window: up to three players who share a private chat, independent of which map

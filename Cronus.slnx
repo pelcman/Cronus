@@ -7,6 +7,7 @@
     <Project Path="src/Cronus.Network/Cronus.Network.csproj" />
     <Project Path="src/Cronus.Scripting/Cronus.Scripting.csproj" />
     <Project Path="src/Cronus.Server.Channel/Cronus.Server.Channel.csproj" />
+    <Project Path="src/Cronus.Server.Game/Cronus.Server.Game.csproj" />
     <Project Path="src/Cronus.Server.Host/Cronus.Server.Host.csproj" />
     <Project Path="src/Cronus.Server.Login/Cronus.Server.Login.csproj" />
   </Folder>
