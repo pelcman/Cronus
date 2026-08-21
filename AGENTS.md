@@ -325,6 +325,14 @@ Each milestone means adding one "working vertical slice".
       `ApplyAttackDamageAsync` broadcasts the gauge on each hit to a tagged mob. Ordinary mobs (tag 0)
       are unaffected. End-to-end tested (boss 1000→750 gauge) plus the wz-parse and encoder units — a
       nice touch for an in-group boss run.
+- [x] **M35: Loot feedback messages** — the satisfying floating text on a kill / pickup
+      (`LP_Message`, ports `ResCWvsContext.Message`): "+N exp" (`IncExpMessage`, MS_IncEXPMessage=3,
+      all bonus fields zeroed) fires from `GrantExpToAsync` for each recipient, and "+N mesos"
+      (`IncMoneyMessage`, MS_IncMoneyMessage=6) fires on meso pickup. The JMS v186 message-type values
+      are unambiguous (no OpsMessage remap applies to 148–193, so the enum defaults hold). End-to-end
+      tested (kill shows the mob's 42 exp) plus both encoder layouts. Also capped the Channel test
+      assembly's parallelism (`MaxParallelThreads = 4`) so the growing integration suite stays reliable
+      under CPU load.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

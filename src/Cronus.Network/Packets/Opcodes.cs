@@ -79,6 +79,7 @@ public static class ServerOpcode
     public const string UserHP = "LP_UserHP";
     public const string GivePopularityResult = "LP_GivePopularityResult";
     public const string FieldEffect = "LP_FieldEffect";
+    public const string Message = "LP_Message";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
     public const string UserShootAttack = "LP_UserShootAttack";

@@ -712,6 +712,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         c.Meso = (int)Math.Clamp((long)c.Meso + drop.Meso, 0, int.MaxValue);
         _characters.Save(c);
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        await session.SendAsync(_packets.IncMoneyMessage(drop.Meso)).ConfigureAwait(false); // "+N mesos"
     }
 
     /// <summary>Meso-drop bounds (ports <c>OnUserDropMoneyRequest</c>): a throw is 10..50000 mesos.</summary>
@@ -840,6 +841,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         StatFlag changed = CharacterProgression.GainExp(c, exp); // processes level-ups
         _characters.Save(c);
         await TrySendAsync(recipient, _packets.StatChanged(c, changed)).ConfigureAwait(false);
+        await TrySendAsync(recipient, _packets.IncExpMessage(exp)).ConfigureAwait(false); // "+N exp"
 
         // A level-up plays a show effect: the local client triggers its own from the stat change,
         // so only the remote animation (for onlookers in the field) needs broadcasting.

@@ -674,6 +674,48 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_Message types for JMS v186 (OpsMessage: no per-region remap applies to 148..193, so the
+    // enum defaults hold — MS_IncEXPMessage = 3, MS_IncMoneyMessage = 6).
+    private const byte MsgIncExp = 3;
+    private const byte MsgIncMoney = 6;
+
+    /// <summary>
+    /// Builds the "+N exp" floating message (<c>LP_Message</c> / MS_IncEXPMessage) shown on a kill
+    /// (ports <c>ResCWvsContext.Message</c>, JMS v186 path). All the bonus fields (party/equip/event/
+    /// wedding/rainbow) are zero — the simplified server doesn't model those bonuses.
+    /// </summary>
+    public byte[] IncExpMessage(int exp)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Message);
+        w.WriteByte(MsgIncExp);
+        w.WriteByte(0);        // nTextColor (white)
+        w.WriteInt(exp);       // gained exp
+        w.WriteByte(0);        // bOnQuest / in-chat
+        w.WriteInt(0);
+        w.WriteByte(0);        // nMobEventBonusPercentage (0 -> no play-time byte follows)
+        w.WriteByte(0);
+        w.WriteInt(0);         // wedding bonus
+        w.WriteInt(0);         // group ring bonus
+        w.WriteByte(0);        // nPartyBonusEventRate
+        w.WriteInt(0);         // party bonus exp
+        w.WriteInt(0);         // equipment bonus exp
+        w.WriteInt(0);
+        w.WriteInt(0);         // rainbow-week bonus exp
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the "+N mesos" floating message (<c>LP_Message</c> / MS_IncMoneyMessage, JMS v186 path:
+    /// just the amount) shown when meso is gained (ports <c>ResCWvsContext.Message</c>).
+    /// </summary>
+    public byte[] IncMoneyMessage(int meso)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Message);
+        w.WriteByte(MsgIncMoney);
+        w.WriteInt(meso);
+        return w.ToArray();
+    }
+
     /// <summary>User effect type: the level-up show (ports <c>OpsUserEffect.UserEffect_LevelUp</c>).</summary>
     public const byte UserEffectLevelUp = 0x00;
 
