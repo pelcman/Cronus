@@ -312,6 +312,12 @@ Each milestone means adding one "working vertical slice".
       Guards: level 15 minimum, not self, target must be online on the same map, and one fame per target
       per session (a simplified stand-in for the once-per-day limit — a persisted fame log would make it
       real). End-to-end tested (Bob 0→1 fame, both notified, repeat rejected).
+- [x] **M33: Periodic auto-save** — `CharacterAutoSaveService` is a server tick (every 2 min) that
+      persists every online character, so an unexpected shutdown loses at most one interval's progress.
+      Most stat changes already save on mutation (exp/meso/level/AP/map); this is the safety net that
+      also flushes the drift saved lazily (notably regen'd HP/MP). Wired into the host's tick set. A
+      pure `Tick()` (deduping characters across fields) is unit-tested. Rounds out durability for a
+      real multi-hour in-group session.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

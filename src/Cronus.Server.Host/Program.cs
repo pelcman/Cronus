@@ -84,9 +84,11 @@ var channelListener = new MapleListener(
         "channel"),
     keepAlive);
 
-// Server ticks: respawn dead mobs, and regenerate idle players' HP/MP.
+// Server ticks: respawn dead mobs, regenerate idle players' HP/MP, and periodically persist
+// online characters so a crash loses at most a couple of minutes of progress.
 var mobRespawn = new MobRespawnService(fields, new ChannelPackets(serverOps, config));
 var playerRegen = new PlayerRegenService(fields, new ChannelPackets(serverOps, config), parties);
+var autoSave = new CharacterAutoSaveService(fields, characters);
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -110,7 +112,8 @@ try
         loginListener.RunAsync(cts.Token),
         channelListener.RunAsync(cts.Token),
         mobRespawn.RunAsync(cts.Token),
-        playerRegen.RunAsync(cts.Token));
+        playerRegen.RunAsync(cts.Token),
+        autoSave.RunAsync(cts.Token));
 }
 finally
 {
