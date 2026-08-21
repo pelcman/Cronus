@@ -84,6 +84,12 @@ public static class SkillBuff
     private const int MaxHp = 13;
     private const int MaxMp = 14;
 
+    /// <summary>CTS_ComboCounter (bit 21) — the Crusader combo orb display.</summary>
+    public const int ComboCounter = 21;
+
+    /// <summary>Crusader Combo Attack (the orb buff).</summary>
+    public const int ComboAttackSkill = 1111002;
+
     /// <summary>The active buff stats a self-buff skill grants, in ascending bit order (empty if none).</summary>
     public static List<BuffStat> FromEffect(int skillId, SkillEffect effect)
     {
@@ -114,6 +120,9 @@ public static class SkillBuff
         // Signature buffs whose value comes from the skill's x (and y).
         switch (skillId)
         {
+            case ComboAttackSkill: // Crusader: Combo Attack (value = orbs + 1, fresh = 1)
+                Add(1, ComboCounter);
+                break;
             case 2001002: // Magician: Magic Guard
                 Add(effect.X, MagicGuard);
                 break;

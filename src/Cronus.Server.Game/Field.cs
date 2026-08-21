@@ -211,6 +211,9 @@ public sealed class FieldPlayer
 
     /// <summary>The ad board (黒板) message standing over the player, or null.</summary>
     public string? AdBoard { get; set; }
+
+    /// <summary>Crusader combo orbs currently charged (0 when combo is off or fresh).</summary>
+    public int ComboOrbs { get; set; }
 }
 
 /// <summary>

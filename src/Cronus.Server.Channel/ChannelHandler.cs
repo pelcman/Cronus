@@ -742,6 +742,52 @@ public sealed class ChannelHandler : PacketHandlerBase
             _packets.UserMeleeAttack(_player.Character.Id, _player.Character.Level, attack),
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
         await ApplyAttackDamageAsync(session, attack).ConfigureAwait(false);
+        await UpdateComboOrbsAsync(session, attack).ConfigureAwait(false);
+    }
+
+    // Panic / Coma variants consume the charged combo orbs.
+    private static bool ConsumesComboOrbs(int skillId) => skillId is 1111003 or 1111004 or 1111005 or 1111006;
+
+    /// <summary>
+    /// Charges (one per landed swing) or consumes (Panic/Coma) Crusader combo orbs, re-sending the
+    /// ComboCounter temporary stat with the new count (value = orbs + 1). The reference declares
+    /// the CTS bit but never tracks orbs; this uses the already-verified stat-set layout.
+    /// </summary>
+    private async ValueTask UpdateComboOrbsAsync(MapleSession session, AttackInfo attack)
+    {
+        Character c = _player!.Character;
+        ActiveBuff? combo = _buffs.Find(c.Id, SkillBuff.ComboAttackSkill);
+        if (combo is null)
+        {
+            _player.ComboOrbs = 0;
+            return;
+        }
+
+        int level = c.Skills.TryGetValue(SkillBuff.ComboAttackSkill, out int lvl) ? lvl : 1;
+        int maxOrbs = _skills.GetSkillEffect(SkillBuff.ComboAttackSkill, level)?.X ?? 5;
+
+        int orbs = _player.ComboOrbs;
+        if (ConsumesComboOrbs(attack.SkillId))
+        {
+            orbs = 0;
+        }
+        else if (attack.Targets.Count > 0)
+        {
+            orbs = Math.Min(maxOrbs, orbs + 1);
+        }
+
+        if (orbs == _player.ComboOrbs)
+        {
+            return;
+        }
+
+        _player.ComboOrbs = orbs;
+        int remainingMs = (int)Math.Max(0, (combo.ExpiresAt - DateTime.UtcNow).TotalMilliseconds);
+        var stat = new List<BuffStat>
+        {
+            new(SkillBuff.ComboCounter, (short)(orbs + 1), SkillBuff.ComboAttackSkill, remainingMs),
+        };
+        await session.SendAsync(_packets.TemporaryStatSet(stat)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleMagicAttackAsync(MapleSession session, PacketReader packet)
@@ -1260,6 +1306,11 @@ public sealed class ChannelHandler : PacketHandlerBase
         byte[] buffPacket = _packets.TemporaryStatSet(buffs);
         uint mask = BuffEffect.Word0Mask(buffs);
         _buffs.Register(c.Id, skillId, mask, effect.DurationMs); // state before the packet
+        if (skillId == SkillBuff.ComboAttackSkill)
+        {
+            _player.ComboOrbs = 0; // a fresh combo starts uncharged
+        }
+
         await session.SendAsync(buffPacket).ConfigureAwait(false);
 
         // A party buff (Haste, Rage, Hyper Body, … — marked by the wz affect box) also lands on

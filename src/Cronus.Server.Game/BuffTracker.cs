@@ -62,6 +62,20 @@ public sealed class BuffTracker
         }
     }
 
+    /// <summary>The character's active buff with this reason, or null.</summary>
+    public ActiveBuff? Find(int characterId, int reason)
+    {
+        if (!_byCharacter.TryGetValue(characterId, out List<ActiveBuff>? buffs))
+        {
+            return null;
+        }
+
+        lock (buffs)
+        {
+            return buffs.FirstOrDefault(b => b.Reason == reason);
+        }
+    }
+
     /// <summary>Drops all state for a character (logout).</summary>
     public void Clear(int characterId) => _byCharacter.TryRemove(characterId, out _);
 
