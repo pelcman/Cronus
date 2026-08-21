@@ -134,4 +134,74 @@ public class CommandTests
         Assert.Equal(alice.Id, enteredId);    // Alice showed up in Bob's map
         Assert.Equal(BobMap, alice.MapId);     // and her map is now Bob's
     }
+
+    /// <summary>Sends a chat command on entry and reads back a single-stat StatChanged.</summary>
+    private sealed class Commander : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly string _command;
+        private readonly int _statBit;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opStat = ServerOps.Get(ServerOpcode.StatChanged);
+        private bool _sent;
+
+        public Commander(int characterId, string command, int statBit)
+        {
+            _characterId = characterId;
+            _command = command;
+            _statBit = statBit;
+        }
+
+        public TaskCompletionSource<int> StatValue { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session) =>
+            await session.SendAsync(MigrateIn(session, _characterId));
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChat), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);
+                w.WriteString(_command);
+                w.WriteBool(false);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opStat)
+            {
+                p.ReadByte();               // unlock
+                int mask = p.ReadInt();
+                if ((mask & _statBit) != 0)
+                {
+                    StatValue.TrySetResult(p.ReadShort()); // single-stat command -> the value follows
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task JobCommand_SetsJob()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Boss", MapId = 100000000, Job = 0 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var client = new Commander(hero.Id, "!job 100", statBit: 0x20); // StatFlag.Job
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        int job = await client.StatValue.Task.WaitAsync(cts.Token);
+        Assert.Equal(100, job);
+        Assert.Equal(100, hero.Job);
+    }
 }

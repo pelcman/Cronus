@@ -1398,6 +1398,27 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
             }
 
+            case "job" when parts.Length >= 2 && int.TryParse(parts[1], out int job):
+                await SetStatAsync(session, StatFlag.Job, c => c.Job = (short)job).ConfigureAwait(false);
+                break;
+
+            case "ap" when parts.Length >= 2 && int.TryParse(parts[1], out int ap):
+                await SetStatAsync(session, StatFlag.Ap, c => c.Ap = (short)Math.Clamp(c.Ap + ap, 0, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "sp" when parts.Length >= 2 && int.TryParse(parts[1], out int sp):
+                await SetStatAsync(session, StatFlag.Sp, c => c.Sp = (short)Math.Clamp(c.Sp + sp, 0, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "fame" when parts.Length >= 2 && int.TryParse(parts[1], out int fame):
+                await SetStatAsync(session, StatFlag.Fame, c => c.Fame = (short)Math.Clamp(fame, -30000, 30000)).ConfigureAwait(false);
+                break;
+
+            case "save":
+                _characters.Save(_player!.Character);
+                await ReplyAsync(session, "saved").ConfigureAwait(false);
+                break;
+
             case "warp" when parts.Length >= 2:
             {
                 FieldPlayer? target = _fields.FindPlayerByName(parts[1]);
@@ -1434,7 +1455,8 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
 
             case "help":
-                await ReplyAsync(session, "commands: !map <id>, !warp <name>, !meso <n>, !heal, !players, !notice <msg>, !pos, !help")
+                await ReplyAsync(session, "commands: !map <id>, !warp <name>, !meso <n>, !heal, !job <n>, "
+                    + "!ap <n>, !sp <n>, !fame <n>, !save, !players, !notice <msg>, !pos, !help")
                     .ConfigureAwait(false);
                 break;
 
@@ -1442,6 +1464,15 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await ReplyAsync(session, $"unknown command: {parts[0]}").ConfigureAwait(false);
                 break;
         }
+    }
+
+    /// <summary>Applies a stat mutation to the caller, persists it, and pushes the changed stat.</summary>
+    private async ValueTask SetStatAsync(MapleSession session, StatFlag flag, Action<Character> mutate)
+    {
+        Character c = _player!.Character;
+        mutate(c);
+        _characters.Save(c);
+        await session.SendAsync(_packets.StatChanged(c, flag)).ConfigureAwait(false);
     }
 
     /// <summary>Sends a chat line visible only to the calling player (as their own message).</summary>

@@ -370,6 +370,10 @@ Each milestone means adding one "working vertical slice".
       End-to-end tested: a scripted portal warps the character, a plain portal is a no-op; the wz
       `script` field is parse-tested. (Also fixed a `FakePlayer` test double left incomplete by M38/M39's
       wider `INpcPlayer`.)
+- [x] **M42: More admin commands** — rounded out the operator toolkit (chat `!` commands, no client
+      risk): `!job <n>`, `!ap <n>`, `!sp <n>`, `!fame <n>` (via a shared `SetStatAsync` that mutates,
+      persists, and pushes the one changed stat), and `!save` (force-persist now). Handy for setting up
+      test characters on an in-group server. `!job` is end-to-end tested; `!help` lists them all.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
