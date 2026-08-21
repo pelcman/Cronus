@@ -69,8 +69,10 @@ onto our slower, event-driven 2D MMORPG (not a fast FPS):
 
 - **Server authority (most applicable).** The server is the single source of truth: it owns
   world state, validates combat, and grants exp/drops. Cronus should trend *more* authoritative
-  over time — today it trusts client-reported damage (M9b) and client movement, which is the
-  MapleStory norm but a known soft spot to tighten (validate damage vs. mob/skill data).
+  over time. Combat damage is still client-reported (the MapleStory norm) but no longer trusted
+  verbatim: `DamageValidator` bounds every line to the pre-Big-Bang cap of 99,999 (M18). Remaining
+  soft spots to tighten: per-skill/weapon damage ceilings from wz, attack-rate limiting, range
+  checks, and client-authoritative movement.
 - **Tick / fixed simulation step.** Server-owned periodic work — mob AI/respawn, buff and drop
   expiry, spawn timers — belongs on a server tick, decoupled from client packets.
 - **Input commands.** Client → server packets are *commands* the server processes; never treat

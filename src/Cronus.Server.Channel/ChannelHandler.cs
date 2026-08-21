@@ -380,7 +380,9 @@ public sealed class ChannelHandler : PacketHandlerBase
                 continue;
             }
 
-            long damage = target.TotalDamage;
+            // Server authority: bound the client-reported damage to what a legit pre-BB client
+            // can produce (per-line cap) rather than trusting target.TotalDamage verbatim.
+            long damage = DamageValidator.ValidatedDamage(target);
             mob.Damage(damage > int.MaxValue ? int.MaxValue : (int)damage);
 
             if (mob.IsDead)
@@ -482,7 +484,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         packet.ReadInt();   // time
         packet.ReadByte();  // nAttackIdx
         packet.ReadByte();  // nMagicElemAttr
-        int damage = packet.ReadInt();
+        int damage = DamageValidator.ClampLine(packet.ReadInt()); // bound the client-reported hit
         if (damage <= 0)
         {
             return; // a miss / no damage

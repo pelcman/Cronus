@@ -213,6 +213,13 @@ Each milestone means adding one "working vertical slice".
       `PlayerRegen` recovers 3× while `FieldPlayer.Seated`, and the regen tick skips the idle wait
       for them. Moving or attacking stands you back up (`Seated = false`). Map-chair objects and
       portable (cash) chair items aren't validated against inventory yet — any seat id is accepted.
+- [x] **M18: Damage validation (server authority)** — `DamageValidator` bounds client-reported
+      attack damage to what a legitimate pre-Big-Bang v186 client can produce: the hard per-line
+      cap of 99,999 (`MaxDamagePerLine`), critical bit stripped, negatives floored.
+      `ApplyAttackDamageAsync` now applies `ValidatedDamage(target)` (clamped-line sum) not trusting
+      `target.TotalDamage`, and `CP_UserHit` clamps the reported hit too. Closes the "trusts
+      client-reported damage" soft spot flagged in CLAUDE.md §2. Follow-ups: per-skill/weapon damage
+      ceilings from wz, attack-rate limiting, and range checks vs. mob position.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
