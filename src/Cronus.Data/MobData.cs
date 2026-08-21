@@ -15,6 +15,15 @@ public sealed class MobData
 
     public int Level { get; init; } = 1;
 
+    /// <summary>
+    /// Boss HP-gauge tag colour (<c>info/hpTagColor</c>); 0 for ordinary mobs. A non-zero value
+    /// marks a boss whose HP bar shows at the bottom of the screen.
+    /// </summary>
+    public int TagColor { get; init; }
+
+    /// <summary>Boss HP-gauge background colour (<c>info/hpTagBgcolor</c>); 0 for ordinary mobs.</summary>
+    public int TagBgColor { get; init; }
+
     /// <summary>Parses a Mob <c>.img</c> WZ document's <c>info</c> subtree.</summary>
     public static MobData FromWz(int templateId, WzData mobImg)
     {
@@ -26,6 +35,8 @@ public sealed class MobData
             MaxMp = info?.GetInt("maxMP") ?? 0,
             Exp = info?.GetInt("exp") ?? 0,
             Level = info?.GetInt("level", 1) ?? 1,
+            TagColor = info?.GetInt("hpTagColor") ?? 0,
+            TagBgColor = info?.GetInt("hpTagBgcolor") ?? 0,
         };
     }
 }

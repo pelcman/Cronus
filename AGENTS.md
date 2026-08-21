@@ -318,6 +318,13 @@ Each milestone means adding one "working vertical slice".
       also flushes the drift saved lazily (notably regen'd HP/MP). Wired into the host's tick set. A
       pure `Tick()` (deduping characters across fields) is unit-tested. Rounds out durability for a
       real multi-hour in-group session.
+- [x] **M34: Boss HP gauge** — damaging a boss now shows the whole field its HP gauge
+      (`LP_FieldEffect` MobHPTag: `[flag=5][mobId:4][hp:4][maxHp:4][tagColor:1][tagBgColor:1]`, ports
+      `ResCField.FieldEffect`). A mob counts as a boss when its wz `info/hpTagColor` is non-zero;
+      `MobData.FromWz` now parses `hpTagColor`/`hpTagBgcolor`, `FieldMob` carries them (`IsBoss`), and
+      `ApplyAttackDamageAsync` broadcasts the gauge on each hit to a tagged mob. Ordinary mobs (tag 0)
+      are unaffected. End-to-end tested (boss 1000→750 gauge) plus the wz-parse and encoder units — a
+      nice touch for an in-group boss run.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

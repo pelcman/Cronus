@@ -17,6 +17,18 @@ public class MobDataTests
         </imgdir>
         """;
 
+    private const string BossXml = """
+        <imgdir name="8800000.img">
+          <imgdir name="info">
+            <int name="maxHP" value="30000"/>
+            <int name="exp" value="5000"/>
+            <int name="level" value="50"/>
+            <int name="hpTagColor" value="4"/>
+            <int name="hpTagBgcolor" value="6"/>
+          </imgdir>
+        </imgdir>
+        """;
+
     [Fact]
     public void ParsesMobStats()
     {
@@ -27,6 +39,18 @@ public class MobDataTests
         Assert.Equal(50, mob.MaxHp);
         Assert.Equal(25, mob.Exp);
         Assert.Equal(3, mob.Level);
+        Assert.Equal(0, mob.TagColor);   // ordinary mob: no boss HP gauge
+        Assert.Equal(0, mob.TagBgColor);
+    }
+
+    [Fact]
+    public void ParsesBossHpTagColors()
+    {
+        WzData wz = WzData.Parse(new MemoryStream(Encoding.UTF8.GetBytes(BossXml)));
+        MobData mob = MobData.FromWz(8800000, wz);
+
+        Assert.Equal(4, mob.TagColor);
+        Assert.Equal(6, mob.TagBgColor);
     }
 
     [Fact]

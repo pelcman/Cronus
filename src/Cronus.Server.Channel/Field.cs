@@ -51,6 +51,15 @@ public sealed class FieldMob
     /// <summary>Experience granted on kill (from mob wz data; 0 if unknown).</summary>
     public int Exp { get; init; }
 
+    /// <summary>Boss HP-gauge tag colour (0 = ordinary mob, no gauge); marks a boss.</summary>
+    public int TagColor { get; init; }
+
+    /// <summary>Boss HP-gauge background colour.</summary>
+    public int TagBgColor { get; init; }
+
+    /// <summary>True when this mob shows the boss HP gauge (has a tag colour).</summary>
+    public bool IsBoss => TagColor != 0;
+
     /// <summary>Respawn time in seconds from the map spawn: &gt;0 delay, -1 never, 0 = default.</summary>
     public int MobTime { get; init; }
 
@@ -244,6 +253,8 @@ public sealed class Field
                 Hp = maxHp,
                 Exp = stats?.Exp ?? 0,
                 MobTime = spawn.MobTime,
+                TagColor = stats?.TagColor ?? 0,
+                TagBgColor = stats?.TagBgColor ?? 0,
             });
         }
 

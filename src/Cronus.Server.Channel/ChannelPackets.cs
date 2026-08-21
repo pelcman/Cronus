@@ -655,6 +655,25 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_FieldEffect</c> of type MobHPTag — the boss HP gauge at the bottom of the screen
+    /// (ports <c>ResCField.FieldEffect</c> + <c>OpsFieldEffect.FieldEffect_MobHPTag</c>): the mob's
+    /// object id, current HP, max HP, and the two tag colours from its wz data.
+    /// </summary>
+    public byte[] MobHpTag(FieldMob mob)
+    {
+        const byte fieldEffectMobHpTag = 5;
+
+        PacketWriter w = NewPacket(ServerOpcode.FieldEffect);
+        w.WriteByte(fieldEffectMobHpTag);
+        w.WriteInt(mob.ObjectId);
+        w.WriteInt(Math.Max(0, mob.Hp));
+        w.WriteInt(mob.MaxHp);
+        w.WriteByte((byte)mob.TagColor);
+        w.WriteByte((byte)mob.TagBgColor);
+        return w.ToArray();
+    }
+
     /// <summary>User effect type: the level-up show (ports <c>OpsUserEffect.UserEffect_LevelUp</c>).</summary>
     public const byte UserEffectLevelUp = 0x00;
 

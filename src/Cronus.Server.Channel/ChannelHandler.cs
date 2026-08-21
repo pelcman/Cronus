@@ -458,6 +458,12 @@ public sealed class ChannelHandler : PacketHandlerBase
             long damage = DamageValidator.ValidatedDamage(target);
             mob.Damage(damage > int.MaxValue ? int.MaxValue : (int)damage);
 
+            // Bosses show an HP gauge to the whole field as they're whittled down.
+            if (mob.IsBoss)
+            {
+                await _field!.BroadcastAsync(_packets.MobHpTag(mob)).ConfigureAwait(false);
+            }
+
             if (mob.IsDead)
             {
                 mob.ControllerId = -1;
