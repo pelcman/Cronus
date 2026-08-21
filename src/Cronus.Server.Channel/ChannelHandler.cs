@@ -37,6 +37,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly StorageRegistry _storages;
     private readonly KeymapRegistry _keymaps;
     private readonly IQuestProvider _quests;
+    private readonly Rates _rates;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -109,7 +110,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         IShopProvider? shops = null,
         StorageRegistry? storages = null,
         KeymapRegistry? keymaps = null,
-        IQuestProvider? quests = null)
+        IQuestProvider? quests = null,
+        Rates? rates = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -122,6 +124,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _storages = storages ?? new StorageRegistry();
         _keymaps = keymaps ?? new KeymapRegistry();
         _quests = quests ?? new InMemoryQuestProvider(Array.Empty<QuestData>());
+        _rates = rates ?? Rates.Default;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -519,11 +522,26 @@ public sealed class ChannelHandler : PacketHandlerBase
         AttackInfo attack = AttackParser.ParseShoot(packet);
         await PrepareSkillAttackAsync(session, attack).ConfigureAwait(false);
 
-        // The bullet item id isn't resolved yet (no USE-inventory model) — send 0; the shot still
-        // fires and applies damage, it just may not render a specific arrow. Follow-up: resolve
-        // the bullet from the shooter's inventory slot and consume it.
+        // Resolve the bullet (arrow/star/bullet) from the shooter's USE slot so onlookers see the
+        // right projectile, and consume one per shot.
+        int bulletItemId = 0;
+        if (attack.BulletSlot > 0)
+        {
+            Character c = _player.Character;
+            if (Inventory.ItemAt(c, UseTab, attack.BulletSlot) is { } bullet)
+            {
+                bulletItemId = bullet.ItemId;
+                InventoryChange? change = Inventory.RemoveFromSlot(c, UseTab, attack.BulletSlot, 1);
+                _characters.Save(c);
+                if (change is { } ch)
+                {
+                    await session.SendAsync(_packets.InventoryOperation(new[] { ch })).ConfigureAwait(false);
+                }
+            }
+        }
+
         await _field.BroadcastAsync(
-            _packets.UserShootAttack(_player.Character.Id, _player.Character.Level, attack, bulletItemId: 0, _player.X, _player.Y),
+            _packets.UserShootAttack(_player.Character.Id, _player.Character.Level, attack, bulletItemId, _player.X, _player.Y),
             exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
         await ApplyAttackDamageAsync(session, attack).ConfigureAwait(false);
     }
@@ -620,7 +638,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         int dropped = 0;
         foreach (DropEntry entry in entries)
         {
-            if (!DropRoller.ShouldDrop(entry, Random.Shared.Next(1000), forced: mob.IsBoss))
+            // Quest-locked drops only fall for a killer who is on that quest (the reference gates
+            // them by quest status; per-viewer visibility is simplified to the killer's status).
+            if (entry.QuestId > 0 && _player?.Character.StartedQuests.ContainsKey(entry.QuestId) != true)
+            {
+                continue;
+            }
+
+            if (!DropRoller.ShouldDrop(entry, Random.Shared.Next(1000), forced: mob.IsBoss, rate: _rates.Drop))
             {
                 continue;
             }
@@ -628,7 +653,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             short x = (short)(mob.X + DropRoller.ScatterX(dropped));
             if (entry.ItemId == 0)
             {
-                int meso = DropRoller.MesoAmount(entry, Random.Shared.Next);
+                int meso = (int)(DropRoller.MesoAmount(entry, Random.Shared.Next) * _rates.Meso);
                 if (meso <= 0)
                 {
                     continue;
@@ -656,7 +681,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        int meso = Math.Max(1, mob.MaxHp / 5); // placeholder formula
+        int meso = Math.Max(1, (int)(mob.MaxHp / 5 * _rates.Meso)); // placeholder formula
         FieldDrop drop = _field.AddMesoDrop(meso, mob.X, mob.Y, mob);
         await _field.BroadcastAsync(_packets.DropEnterFieldMeso(drop)).ConfigureAwait(false);
     }
@@ -876,18 +901,23 @@ public sealed class ChannelHandler : PacketHandlerBase
         // JMS v186 CP_UserSkillUseRequest (self-buff): [updateTime:4][skillId:4][skillLevel:1]
         packet.ReadInt();
         int skillId = packet.ReadInt();
-        byte level = packet.ReadByte();
+        packet.ReadByte(); // client-claimed level — the server uses the learned level instead
 
         // The reference acks every cast unconditionally.
         await session.SendAsync(_packets.SkillUseResult()).ConfigureAwait(false);
+
+        Character c = _player.Character;
+        int level = c.Skills.TryGetValue(skillId, out int learned) ? learned : 0;
+        if (level <= 0)
+        {
+            return; // skill not learned — server authority over the cast
+        }
 
         SkillEffect? effect = _skills.GetSkillEffect(skillId, level);
         if (effect is null)
         {
             return; // unknown skill / no wz effect
         }
-
-        Character c = _player.Character;
         if (effect.MpCon > 0 && c.Mp >= effect.MpCon)
         {
             c.Mp = (short)(c.Mp - effect.MpCon);
@@ -1666,9 +1696,28 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         QuestData? quest = _quests.GetQuest(questId);
-        if (quest?.StartCheck is { LevelMin: > 0 } start && c.Level < start.LevelMin)
+        if (quest?.StartCheck is { } start)
         {
-            return; // under-leveled
+            if (start.LevelMin > 0 && c.Level < start.LevelMin)
+            {
+                return; // under-leveled
+            }
+
+            foreach (QuestPrereq prereq in start.Quests)
+            {
+                bool met = prereq.State == 1
+                    ? c.StartedQuests.ContainsKey(prereq.QuestId)
+                    : c.CompletedQuests.ContainsKey(prereq.QuestId);
+                if (!met)
+                {
+                    return; // prerequisite quest not at the required state
+                }
+            }
+
+            if (start.Jobs.Count > 0 && !start.Jobs.Contains(c.Job))
+            {
+                return; // wrong job
+            }
         }
 
         string progress = InitialQuestProgress(quest);
@@ -1762,6 +1811,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private async ValueTask ApplyQuestActAsync(MapleSession session, Character c, QuestAct act, int selection = -1)
     {
         var changes = new List<InventoryChange>();
+        QuestItemEntry? lotteryPick = PickLotteryReward(act.Items);
         int selectableIndex = 0;
         foreach (QuestItemEntry item in act.Items)
         {
@@ -1772,9 +1822,16 @@ public sealed class ChannelHandler : PacketHandlerBase
                     continue; // not the row the player chose
                 }
             }
+            else if (item.Prop is > 0)
+            {
+                if (!ReferenceEquals(item, lotteryPick))
+                {
+                    continue; // lottery: only the weighted-random winner is given
+                }
+            }
             else if (item.Prop is not null)
             {
-                continue; // weighted-lottery rewards: deferred
+                continue; // prop 0: unused marker rows
             }
 
             if (item.Count > 0)
@@ -1821,6 +1878,39 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await GrantExpToAsync(_player, act.Exp).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>Picks the weighted-random winner among lottery (<c>prop &gt; 0</c>) reward rows.</summary>
+    private static QuestItemEntry? PickLotteryReward(IReadOnlyList<QuestItemEntry> items)
+    {
+        int total = 0;
+        foreach (QuestItemEntry item in items)
+        {
+            if (item.Prop is > 0)
+            {
+                total += item.Prop.Value;
+            }
+        }
+
+        if (total <= 0)
+        {
+            return null;
+        }
+
+        int roll = Random.Shared.Next(total);
+        foreach (QuestItemEntry item in items)
+        {
+            if (item.Prop is > 0)
+            {
+                roll -= item.Prop.Value;
+                if (roll < 0)
+                {
+                    return item;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Removes a total quantity of an item across its inventory slots.</summary>
@@ -2057,6 +2147,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
     private async ValueTask GrantKillExpAsync(int exp)
     {
+        exp = (int)(exp * _rates.Exp); // server exp rate applies to kill exp (not quest rewards)
         if (exp <= 0 || _player is null)
         {
             return;
@@ -2814,7 +2905,9 @@ public sealed class ChannelHandler : PacketHandlerBase
         var dialog = new ChannelNpcDialog(session, _packets);
         var player = new ChannelPlayer(
             _player.Character, _characters, session, _packets,
-            warp: (map, portal) => MovePlayerToMapAsync(session, map, portal));
+            warp: (map, portal) => MovePlayerToMapAsync(session, map, portal),
+            openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
+            openStorage: () => OpenStorageAsync(session));
         _conversation = _npcScripts.Start(templateId, dialog, player);
     }
 
@@ -2843,7 +2936,9 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         var scriptPlayer = new ChannelPlayer(
             _player.Character, _characters, session, _packets,
-            warp: (map, spawn) => MovePlayerToMapAsync(session, map, spawn));
+            warp: (map, spawn) => MovePlayerToMapAsync(session, map, spawn),
+            openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
+            openStorage: () => OpenStorageAsync(session));
         await Task.Run(() => _portalScripts.Run(portal.Script, scriptPlayer)).ConfigureAwait(false);
     }
 

@@ -25,6 +25,9 @@ public sealed class AttackInfo
     /// handler fills it from the character's learned skills before mirroring the attack.</summary>
     public int SkillLevel { get; set; }
 
+    /// <summary>Shoot attacks: the USE-inventory slot the bullet (arrow/star) came from; 0 = none.</summary>
+    public short BulletSlot { get; init; }
+
     public required int BuffKey { get; init; }
 
     public required int AttackActionKey { get; init; }
@@ -80,11 +83,12 @@ public static class AttackParser
         p.ReadInt();               // tAttackTime
         p.ReadInt();               // dwID (JMS >= 186)
 
+        short bulletSlot = 0;
         if (isShoot)
         {
-            p.ReadShort();         // ProperBulletPosition (USE-inventory bullet slot)
-            p.ReadShort();         // pnCashItemPos (cash-bullet slot)
-            p.ReadByte();          // nShootRange0a
+            bulletSlot = p.ReadShort(); // ProperBulletPosition (USE-inventory bullet slot)
+            p.ReadShort();              // pnCashItemPos (cash-bullet slot)
+            p.ReadByte();               // nShootRange0a
         }
 
         var targets = new List<AttackTarget>(mobCount);
@@ -109,6 +113,7 @@ public static class AttackParser
             SkillId = skillId,
             HitKey = hitKey,
             BuffKey = buffKey,
+            BulletSlot = bulletSlot,
             AttackActionKey = attackActionKey,
             AttackSpeed = attackSpeed,
             Targets = targets,

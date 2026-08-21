@@ -10,6 +10,9 @@ public sealed record QuestItemEntry(int ItemId, int Count, int? Prop = null);
 /// <summary>A quest mob-kill requirement (<c>id</c>/<c>count</c>).</summary>
 public sealed record QuestMobEntry(int MobId, int Count);
 
+/// <summary>A prerequisite quest (<c>id</c> must be at <c>State</c>: 1 = started, 2 = completed).</summary>
+public sealed record QuestPrereq(int QuestId, int State);
+
 /// <summary>One side of a quest's <c>Check.img</c> node (0 = start, 1 = complete).</summary>
 public sealed class QuestCheck
 {
@@ -27,6 +30,12 @@ public sealed class QuestCheck
 
     /// <summary>Script name (wz <c>startscript</c>/<c>endscript</c>) when this side is script-driven.</summary>
     public string Script { get; init; } = string.Empty;
+
+    /// <summary>Prerequisite quests (start side).</summary>
+    public IReadOnlyList<QuestPrereq> Quests { get; init; } = Array.Empty<QuestPrereq>();
+
+    /// <summary>Eligible job ids (start side); empty = any job.</summary>
+    public IReadOnlyList<int> Jobs { get; init; } = Array.Empty<int>();
 }
 
 /// <summary>One side of a quest's <c>Act.img</c> node (0 = on start, 1 = on completion).</summary>
@@ -120,6 +129,8 @@ public sealed class WzQuestProvider : IQuestProvider
             Mobs = ParseList(node.Child("mob"), row => new QuestMobEntry(row.GetInt("id"), row.GetInt("count"))),
             Items = ParseItems(node.Child("item")),
             Script = node.GetString("startscript", node.GetString("endscript", string.Empty)),
+            Quests = ParseList(node.Child("quest"), row => new QuestPrereq(row.GetInt("id"), row.GetInt("state", 2))),
+            Jobs = ParseJobs(node.Child("job")),
         };
     }
 
@@ -144,6 +155,21 @@ public sealed class WzQuestProvider : IQuestProvider
             row.GetInt("id"),
             row.GetInt("count"),
             row.Child("prop") is null ? null : row.GetInt("prop")));
+
+    /// <summary>Reads a job-id list (int leaves named "0","1",…) in numeric order.</summary>
+    private static IReadOnlyList<int> ParseJobs(WzData? list)
+    {
+        if (list is null || list.Children.Count == 0)
+        {
+            return Array.Empty<int>();
+        }
+
+        return list.Children.Values
+            .Where(c => int.TryParse(c.Name, out _))
+            .OrderBy(c => int.Parse(c.Name))
+            .Select(c => c.AsInt())
+            .ToList();
+    }
 
     /// <summary>Reads a wz list node ("0","1",…) in numeric order.</summary>
     private static IReadOnlyList<T> ParseList<T>(WzData? list, Func<WzData, T> map)

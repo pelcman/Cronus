@@ -197,6 +197,14 @@ public class NpcScriptEngineTests
         public bool isQuestDone(int questId) => Completed.Contains(questId);
         public void startQuest(int questId) => Started.Add(questId);
         public void completeQuest(int questId) { Started.Remove(questId); Completed.Add(questId); }
+
+        public List<int> OpenedShops { get; } = new();
+
+        public bool StorageOpened { get; private set; }
+
+        public void openShop(int shopId) => OpenedShops.Add(shopId);
+
+        public void openStorage() => StorageOpened = true;
     }
 
     [Fact]

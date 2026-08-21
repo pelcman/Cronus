@@ -78,4 +78,10 @@ public interface INpcPlayer
 
     /// <summary>Marks a quest as completed (removing it from started).</summary>
     void completeQuest(int questId);
+
+    /// <summary>Opens the NPC shop with the given shop id (no-op when unknown).</summary>
+    void openShop(int shopId);
+
+    /// <summary>Opens the player's account storage (the trunk).</summary>
+    void openStorage();
 }

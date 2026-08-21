@@ -119,6 +119,7 @@ public class SkillBuffTests
         {
             AccountId = 1, WorldId = 0, Name = "Warrior", MapId = 100000000, Mp = 50, MaxMp = 50,
         });
+        hero.Skills[1001003] = 1; // Iron Body learned (unlearned casts are rejected server-side)
 
         var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
         var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));

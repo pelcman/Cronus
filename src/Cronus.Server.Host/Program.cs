@@ -72,6 +72,7 @@ IItemProvider items = CreateItemProvider();
 IDropProvider drops = CreateDropProvider();
 IShopProvider shops = CreateShopProvider();
 IQuestProvider quests = CreateQuestProvider();
+Rates rates = CreateRates();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
@@ -87,7 +88,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates),
         "channel"),
     keepAlive);
 
@@ -223,6 +224,21 @@ static IDropProvider CreateDropProvider()
     SqlDropProvider provider = SqlDropProvider.LoadFile(dropFile);
     Console.WriteLine($"[drops] loaded drop tables from {dropFile}");
     return provider;
+}
+
+// Server rates from CRONUS_RATE_EXP / CRONUS_RATE_DROP / CRONUS_RATE_MESO (default 1.0 = authentic).
+static Rates CreateRates()
+{
+    static double Rate(string name)
+        => double.TryParse(Environment.GetEnvironmentVariable(name), out double v) && v > 0 ? v : 1.0;
+
+    var rates = new Rates(Rate("CRONUS_RATE_EXP"), Rate("CRONUS_RATE_DROP"), Rate("CRONUS_RATE_MESO"));
+    if (rates != Rates.Default)
+    {
+        Console.WriteLine($"[rates] exp x{rates.Exp}, drop x{rates.Drop}, meso x{rates.Meso}");
+    }
+
+    return rates;
 }
 
 // Quest definitions from the wz tree's Quest/Check.img.xml + Act.img.xml (CRONUS_WZ), else no

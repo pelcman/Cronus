@@ -18,19 +18,25 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly MapleSession _session;
     private readonly ChannelPackets _packets;
     private readonly Func<int, int, ValueTask>? _warp;
+    private readonly Func<int, ValueTask>? _openShop;
+    private readonly Func<ValueTask>? _openStorage;
 
     public ChannelPlayer(
         Character character,
         ICharacterRepository characters,
         MapleSession session,
         ChannelPackets packets,
-        Func<int, int, ValueTask>? warp = null)
+        Func<int, int, ValueTask>? warp = null,
+        Func<int, ValueTask>? openShop = null,
+        Func<ValueTask>? openStorage = null)
     {
         _character = character;
         _characters = characters;
         _session = session;
         _packets = packets;
         _warp = warp;
+        _openShop = openShop;
+        _openStorage = openStorage;
     }
 
     public string getName() => _character.Name;
@@ -153,6 +159,12 @@ public sealed class ChannelPlayer : INpcPlayer
         Send(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordCompleted));
         Send(_packets.UserEffectLocal(ChannelPackets.UserEffectQuestComplete)); // the completion jingle
     }
+
+    public void openShop(int shopId)
+        => _openShop?.Invoke(shopId).AsTask().GetAwaiter().GetResult();
+
+    public void openStorage()
+        => _openStorage?.Invoke().AsTask().GetAwaiter().GetResult();
 
     private void Send(byte[] packet)
         => _session.SendAsync(packet).AsTask().GetAwaiter().GetResult();

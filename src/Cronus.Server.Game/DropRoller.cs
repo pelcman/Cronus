@@ -12,11 +12,11 @@ public static class DropRoller
 {
     /// <summary>
     /// The x/1000 chance a drop entry rolls. Bosses drop unconditionally (<paramref name="forced"/>);
-    /// otherwise the entry drops when <c>roll (0..999) &lt; effective chance</c>. Equip drops get the
-    /// reference's ×10 chance boost (<c>retrieveDrop</c> multiplies EQUIP chance by 10).
+    /// otherwise the entry drops when <c>roll (0..999) &lt; effective chance × rate</c>. Equip drops
+    /// get the reference's ×10 chance boost (<c>retrieveDrop</c> multiplies EQUIP chance by 10).
     /// </summary>
-    public static bool ShouldDrop(DropEntry entry, int roll1000, bool forced = false)
-        => forced || roll1000 < EffectiveChance(entry);
+    public static bool ShouldDrop(DropEntry entry, int roll1000, bool forced = false, double rate = 1.0)
+        => forced || roll1000 < (int)(EffectiveChance(entry) * rate);
 
     /// <summary>The entry's chance after the EQUIP ×10 boost the reference applies at load time.</summary>
     public static int EffectiveChance(DropEntry entry)
