@@ -186,7 +186,7 @@ Each milestone means adding one "working vertical slice".
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated
       instead of emptying out. First use of the "timed world logic on a tick" pattern (CLAUDE.md
-      §2). Fixed 7 s delay for now; wz per-spawn `mobTime` is a follow-up.
+      §2). Uses the map spawn's `mobTime` (>0 = that many seconds, -1 = never/boss, 0 = default 7 s).
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

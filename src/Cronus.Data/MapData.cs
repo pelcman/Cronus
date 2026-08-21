@@ -65,6 +65,12 @@ public sealed class MobSpawn
     /// <summary>Max HP. Real values come from mob wz data; defaulted until that loads.</summary>
     public int MaxHp { get; init; } = 100;
 
+    /// <summary>
+    /// Respawn time in seconds (<c>mobTime</c>): &gt;0 = that delay, -1 = never (one-shot/boss),
+    /// 0 = unset → the server default. Absent in most map entries.
+    /// </summary>
+    public int MobTime { get; init; }
+
     public bool Hidden { get; init; }
 }
 
@@ -159,6 +165,7 @@ public sealed class MapData
                         X = entry.GetInt("x"),
                         Y = entry.GetInt("y"),
                         Foothold = entry.GetInt("fh"),
+                        MobTime = entry.GetInt("mobTime"),
                         Hidden = hidden,
                     });
                 }

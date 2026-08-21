@@ -15,6 +15,22 @@ public sealed class MobRespawnService
     /// </summary>
     public const long DelayMs = 7000;
 
+    /// <summary>
+    /// The <see cref="Environment.TickCount64"/> at which a killed mob should respawn, given its
+    /// map <c>mobTime</c> (seconds): &gt;0 = that delay, -1 = never (returns 0 → no respawn),
+    /// 0/absent = the default <see cref="DelayMs"/>.
+    /// </summary>
+    public static long NextRespawnTick(int mobTimeSeconds)
+    {
+        if (mobTimeSeconds == -1)
+        {
+            return 0; // one-shot / boss: no respawn
+        }
+
+        long delayMs = mobTimeSeconds > 0 ? mobTimeSeconds * 1000L : DelayMs;
+        return Environment.TickCount64 + delayMs;
+    }
+
     private readonly FieldRegistry _fields;
     private readonly ChannelPackets _packets;
     private readonly TimeSpan _interval;

@@ -45,6 +45,9 @@ public sealed class FieldMob
     /// <summary>Experience granted on kill (from mob wz data; 0 if unknown).</summary>
     public int Exp { get; init; }
 
+    /// <summary>Respawn time in seconds from the map spawn: &gt;0 delay, -1 never, 0 = default.</summary>
+    public int MobTime { get; init; }
+
     /// <summary>
     /// Character id of the client simulating this mob's movement, or -1 when uncontrolled.
     /// MapleStory delegates mob AI to one nearby client; the server acks and relays.
@@ -225,6 +228,7 @@ public sealed class Field
                 MaxHp = maxHp,
                 Hp = maxHp,
                 Exp = stats?.Exp ?? 0,
+                MobTime = spawn.MobTime,
             });
         }
 

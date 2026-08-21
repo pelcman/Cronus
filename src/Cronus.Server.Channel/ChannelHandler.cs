@@ -360,7 +360,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             if (mob.IsDead)
             {
                 mob.ControllerId = -1;
-                mob.RespawnAtTick = Environment.TickCount64 + MobRespawnService.DelayMs; // respawn later
+                mob.RespawnAtTick = MobRespawnService.NextRespawnTick(mob.MobTime); // 0 = never (boss)
                 await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
                 await GrantKillExpAsync(session, mob.Exp).ConfigureAwait(false);
                 await DropMesoAsync(mob).ConfigureAwait(false);

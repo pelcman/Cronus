@@ -71,4 +71,42 @@ public class MobRespawnTests
         Assert.False(mob.IsDead);
         Assert.Equal(50, mob.Hp);
     }
+
+    [Fact]
+    public void NextRespawnTick_MinusOne_MeansNever()
+    {
+        Assert.Equal(0, MobRespawnService.NextRespawnTick(-1));
+    }
+
+    [Fact]
+    public void NextRespawnTick_PositiveMobTime_UsesThatDelayInMs()
+    {
+        long before = Environment.TickCount64;
+        long t = MobRespawnService.NextRespawnTick(5);
+        long after = Environment.TickCount64;
+        Assert.InRange(t, before + 5000, after + 5000);
+    }
+
+    [Fact]
+    public void NextRespawnTick_Zero_UsesDefaultDelay()
+    {
+        long before = Environment.TickCount64;
+        long t = MobRespawnService.NextRespawnTick(0);
+        long after = Environment.TickCount64;
+        Assert.InRange(t, before + MobRespawnService.DelayMs, after + MobRespawnService.DelayMs);
+    }
+
+    [Fact]
+    public async Task DoesNotRespawn_ABossWithMobTimeMinusOne()
+    {
+        (FieldRegistry fields, MobRespawnService service) = BuildFieldWithMob();
+        FieldMob mob = Assert.Single(fields.Get(100000000).Mobs);
+        mob.Hp = 0;
+        mob.RespawnAtTick = MobRespawnService.NextRespawnTick(-1); // 0 → never
+        Assert.Equal(0, mob.RespawnAtTick);
+
+        await service.TickAsync(nowTick: long.MaxValue);
+
+        Assert.True(mob.IsDead); // a -1 mobTime mob stays dead (boss / one-shot)
+    }
 }
