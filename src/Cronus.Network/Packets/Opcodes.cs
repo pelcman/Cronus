@@ -44,6 +44,7 @@ public static class ClientOpcode
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
     public const string UserSelectNpc = "CP_UserSelectNpc";
     public const string UserShopRequest = "CP_UserShopRequest";
+    public const string UserTrunkRequest = "CP_UserTrunkRequest";
     public const string UserPortalScriptRequest = "CP_UserPortalScriptRequest";
     public const string UserScriptMessageAnswer = "CP_UserScriptMessageAnswer";
     public const string Whisper = "CP_Whisper";
@@ -99,6 +100,7 @@ public static class ServerOpcode
     public const string TemporaryStatReset = "LP_TemporaryStatReset";
     public const string OpenShopDlg = "LP_OpenShopDlg";
     public const string ShopResult = "LP_ShopResult";
+    public const string TrunkResult = "LP_TrunkResult";
     public const string ForcedStatReset = "LP_ForcedStatReset";
     public const string FuncKeyMappedInit = "LP_FuncKeyMappedInit";
     public const string MacroSysDataInit = "LP_MacroSysDataInit";

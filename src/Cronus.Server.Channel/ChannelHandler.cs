@@ -34,6 +34,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly IItemProvider _items;
     private readonly IDropProvider _dropTable;
     private readonly IShopProvider _shops;
+    private readonly StorageRegistry _storages;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -56,6 +57,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
+    private readonly int _opTrunkRequest;
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
@@ -77,6 +79,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// <summary>The NPC shop the player currently has open, or null; scoped to this session.</summary>
     private Shop? _openShop;
 
+    /// <summary>The account storage the player currently has open, or null; scoped to this session.</summary>
+    private Storage? _openStorage;
+
     /// <summary>Character ids this player has famed this session (a simplified daily limit).</summary>
     private readonly HashSet<int> _famedCharacterIds = new();
 
@@ -95,7 +100,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         PortalScriptEngine? portalScripts = null,
         IItemProvider? items = null,
         IDropProvider? drops = null,
-        IShopProvider? shops = null)
+        IShopProvider? shops = null,
+        StorageRegistry? storages = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -105,6 +111,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _items = items ?? new InMemoryItemProvider(Array.Empty<ConsumeSpec>());
         _dropTable = drops ?? new InMemoryDropProvider(new Dictionary<int, IReadOnlyList<DropEntry>>());
         _shops = shops ?? new InMemoryShopProvider(Array.Empty<Shop>());
+        _storages = storages ?? new StorageRegistry();
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -127,6 +134,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
+        _opTrunkRequest = clientOpcodes.Get(ClientOpcode.UserTrunkRequest);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
@@ -250,6 +258,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opShopRequest)
         {
             await HandleShopRequestAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opTrunkRequest)
+        {
+            await HandleTrunkRequestAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opPortalScript)
         {
@@ -1259,6 +1271,189 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.ShopResult(ShopResultCode.SellSuccess)).ConfigureAwait(false);
     }
 
+    /// <summary>The NPC template shown atop the storage window (the reference's default keeper).</summary>
+    private const int StorageNpcId = 1012003;
+
+    /// <summary>Flat meso fee charged per storage deposit (ports <c>ReqCTrunkDlg</c>'s 100-meso fee).</summary>
+    private const int StorageDepositFee = 100;
+
+    // CP_UserTrunkRequest modes (OpsTrunk, JMS v186).
+    private const byte TrunkReqGetItem = 3;
+    private const byte TrunkReqPutItem = 4;
+    private const byte TrunkReqMoney = 6;
+    private const byte TrunkReqClose = 7;
+
+    /// <summary>Opens the player's account storage: binds it and sends <c>LP_TrunkResult</c> (open).</summary>
+    private async ValueTask OpenStorageAsync(MapleSession session)
+    {
+        Storage storage = _storages.Get(_player!.Character.AccountId);
+        _openStorage = storage;
+        await session.SendAsync(_packets.TrunkOpen(StorageNpcId, storage)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserTrunkRequest</c> — deposit / withdraw / meso / close on the open storage
+    /// (ports <c>ReqCTrunkDlg</c> + <c>TacosStorage</c>, JMS v186). Deposit charges a flat 100-meso
+    /// fee; meso &gt; 0 withdraws, &lt; 0 deposits. Item objects move between inventory and storage so
+    /// equip stats survive the round-trip.
+    /// </summary>
+    private async ValueTask HandleTrunkRequestAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        byte mode = packet.ReadByte();
+        if (mode == TrunkReqClose)
+        {
+            _openStorage = null;
+            return;
+        }
+
+        Storage? storage = _openStorage;
+        if (storage is null)
+        {
+            return; // no storage open — ignore
+        }
+
+        switch (mode)
+        {
+            case TrunkReqPutItem:
+                await HandleTrunkDepositAsync(session, storage, packet).ConfigureAwait(false);
+                break;
+            case TrunkReqGetItem:
+                await HandleTrunkWithdrawAsync(session, storage, packet).ConfigureAwait(false);
+                break;
+            case TrunkReqMoney:
+                await HandleTrunkMoneyAsync(session, storage, packet).ConfigureAwait(false);
+                break;
+        }
+    }
+
+    private async ValueTask HandleTrunkDepositAsync(MapleSession session, Storage storage, PacketReader packet)
+    {
+        // JMS v186 deposit body: [invSlot:2][itemId:4][quantity:2]
+        short slot = packet.ReadShort();
+        int itemId = packet.ReadInt();
+        int qty = packet.ReadShort();
+
+        Character c = _player!.Character;
+        if (c.Meso < StorageDepositFee)
+        {
+            await session.SendAsync(_packets.TrunkError(TrunkOp.PutNoMoney)).ConfigureAwait(false);
+            return;
+        }
+
+        int tab = Inventory.Tab(itemId);
+        InventoryItem? item = Inventory.ItemAt(c, tab, slot);
+        if (item is null || item.ItemId != itemId || qty < 1 || item.Quantity < qty)
+        {
+            await session.SendAsync(_packets.TrunkError(TrunkOp.PutIncorrectRequest)).ConfigureAwait(false);
+            return;
+        }
+
+        if (storage.IsFull)
+        {
+            await session.SendAsync(_packets.TrunkError(TrunkOp.PutNoSpace)).ConfigureAwait(false);
+            return;
+        }
+
+        c.Meso -= StorageDepositFee;
+
+        InventoryChange invChange;
+        if (tab == 1 || qty >= item.Quantity)
+        {
+            // Move the whole item object (equip, or an entire bundle stack) — keeps equip stats.
+            c.EquippedItems.Remove(item);
+            item.Position = 0;
+            storage.Items.Add(item);
+            invChange = new InventoryChange(InvMode.Remove, tab, slot, null, 0);
+        }
+        else
+        {
+            // Split a bundle: reduce the inventory stack, store a new stack.
+            item.Quantity -= (short)qty;
+            storage.Items.Add(new InventoryItem { ItemId = itemId, Quantity = (short)qty, CharacterId = c.Id });
+            invChange = new InventoryChange(InvMode.Update, tab, slot, item, item.Quantity);
+        }
+
+        _characters.Save(c);
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);     // the fee
+        await session.SendAsync(_packets.InventoryOperation(new[] { invChange })).ConfigureAwait(false);
+        await session.SendAsync(_packets.TrunkItemResult(TrunkOp.PutSuccess, storage, tab)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleTrunkWithdrawAsync(MapleSession session, Storage storage, PacketReader packet)
+    {
+        // JMS v186 withdraw body: [invType:1][storageSlot:1]
+        int type = packet.ReadByte();
+        int index = packet.ReadByte();
+
+        Character c = _player!.Character;
+        List<InventoryItem> categoryItems = storage.Items.Where(i => Inventory.Tab(i.ItemId) == type).ToList();
+        if (index < 0 || index >= categoryItems.Count)
+        {
+            await session.SendAsync(_packets.TrunkError(TrunkOp.GetFailInventoryFull)).ConfigureAwait(false);
+            return;
+        }
+
+        InventoryItem item = categoryItems[index];
+        storage.Items.Remove(item);
+        InventoryChange addChange = Inventory.Place(c, item); // preserves equip stats / quantity
+        _characters.Save(c);
+
+        await session.SendAsync(_packets.InventoryOperation(new[] { addChange })).ConfigureAwait(false);
+        await session.SendAsync(_packets.TrunkItemResult(TrunkOp.GetSuccess, storage, type)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleTrunkMoneyAsync(MapleSession session, Storage storage, PacketReader packet)
+    {
+        // JMS v186 meso body: [meso:4 signed] — positive = withdraw, negative = deposit.
+        int meso = packet.ReadInt();
+        Character c = _player!.Character;
+
+        if (meso > 0)
+        {
+            if (storage.Meso < meso)
+            {
+                await ResyncStorageMesoAsync(session, storage).ConfigureAwait(false);
+                return;
+            }
+
+            storage.Meso -= meso;
+            c.Meso = (int)Math.Clamp((long)c.Meso + meso, 0, int.MaxValue);
+        }
+        else if (meso < 0)
+        {
+            int amount = -meso;
+            if (c.Meso < amount)
+            {
+                await ResyncStorageMesoAsync(session, storage).ConfigureAwait(false);
+                return;
+            }
+
+            c.Meso -= amount;
+            storage.Meso = (int)Math.Clamp((long)storage.Meso + amount, 0, int.MaxValue);
+        }
+        else
+        {
+            await session.SendAsync(_packets.TrunkError(TrunkOp.PutIncorrectRequest)).ConfigureAwait(false);
+            return;
+        }
+
+        _characters.Save(c);
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        await session.SendAsync(_packets.TrunkMoneyResult(storage)).ConfigureAwait(false);
+    }
+
+    /// <summary>Re-pushes the player's and storage's meso so a rejected transfer doesn't desync the UI.</summary>
+    private async ValueTask ResyncStorageMesoAsync(MapleSession session, Storage storage)
+    {
+        await session.SendAsync(_packets.StatChanged(_player!.Character, StatFlag.Meso)).ConfigureAwait(false);
+        await session.SendAsync(_packets.TrunkMoneyResult(storage)).ConfigureAwait(false);
+    }
+
     private const int MinFameLevel = 15;
     private const int FameCap = 30000;
 
@@ -1943,6 +2138,10 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
             }
 
+            case "storage":
+                await OpenStorageAsync(session).ConfigureAwait(false);
+                break;
+
             case "warp" when parts.Length >= 2:
             {
                 FieldPlayer? target = _fields.FindPlayerByName(parts[1]);
@@ -1980,7 +2179,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, "
-                    + "/ap <n>, /sp <n>, /fame <n>, /item <id> [qty], /shop <id>, /save, /players, /notice <msg>, /pos, /help")
+                    + "/ap <n>, /sp <n>, /fame <n>, /item <id> [qty], /shop <id>, /storage, /save, /players, /notice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 

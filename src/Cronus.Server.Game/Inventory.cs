@@ -154,6 +154,22 @@ public static class Inventory
         return new InventoryChange(InvMode.Move, tab, src, null, 0, dst);
     }
 
+    /// <summary>
+    /// Places an existing item object (e.g. one withdrawn from storage) into the first free slot of
+    /// its tab, preserving its stats/quantity, and returns the Add change to relay. Unlike
+    /// <see cref="Add"/>, this keeps the same <see cref="InventoryItem"/> instance rather than making
+    /// a fresh one, so an equip's stats survive the round-trip.
+    /// </summary>
+    public static InventoryChange Place(Character c, InventoryItem item)
+    {
+        int tab = Tab(item.ItemId);
+        short slot = NextFreeSlot(c, tab);
+        item.Position = slot;
+        item.CharacterId = c.Id;
+        c.EquippedItems.Add(item);
+        return new InventoryChange(InvMode.Add, tab, slot, item, item.Quantity);
+    }
+
     private static short NextFreeSlot(Character c, int tab)
     {
         var used = c.EquippedItems

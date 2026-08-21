@@ -951,6 +951,86 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_TrunkResult</c> opening the storage window (ports <c>ResCTrunkDlg.TrunkResult</c>
+    /// / <c>SetTrunkDlg</c>, op <c>OpenTrunkDlg</c>=21, JMS v186): the op, the NPC id, then the full
+    /// dump — slot count, the 8-byte DBCHAR mask (all), the stored meso, and each item category
+    /// (count + items).
+    /// </summary>
+    public byte[] TrunkOpen(int npcId, Storage storage)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TrunkResult);
+        w.WriteByte((byte)TrunkOp.OpenTrunkDlg);
+        w.WriteInt(npcId);
+        WriteTrunkItems(w, storage, TrunkMask.All);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_TrunkResult</c> for a deposit/withdraw success (ports the <c>SetGetItems</c>
+    /// "last modified" path): the op then only the affected item category (slot count, mask = that
+    /// category's bit, and its item list).
+    /// </summary>
+    public byte[] TrunkItemResult(TrunkOp op, Storage storage, int tab)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TrunkResult);
+        w.WriteByte((byte)op);
+        WriteTrunkItems(w, storage, TrunkMask.CategoryBit(tab));
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_TrunkResult</c> for a meso change (op <c>MoneySuccess</c>=18): slot count,
+    /// mask = MONEY, and the new stored meso.</summary>
+    public byte[] TrunkMoneyResult(Storage storage)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TrunkResult);
+        w.WriteByte((byte)TrunkOp.MoneySuccess);
+        WriteTrunkItems(w, storage, TrunkMask.Money);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds a bodiless <c>LP_TrunkResult</c> error (e.g. PutNoSpace / PutNoMoney): just the
+    /// op code (ports the <c>default</c> case that emits no body).</summary>
+    public byte[] TrunkError(TrunkOp op)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TrunkResult);
+        w.WriteByte((byte)op);
+        return w.ToArray();
+    }
+
+    private static void WriteTrunkItems(PacketWriter w, Storage storage, long mask)
+    {
+        w.WriteByte((byte)storage.Slots);
+        w.WriteLong(mask);
+        if ((mask & TrunkMask.Money) != 0)
+        {
+            w.WriteInt(storage.Meso);
+        }
+
+        WriteTrunkCategory(w, storage, mask, TrunkMask.Equip, 1);
+        WriteTrunkCategory(w, storage, mask, TrunkMask.Consume, 2);
+        WriteTrunkCategory(w, storage, mask, TrunkMask.Install, 3);
+        WriteTrunkCategory(w, storage, mask, TrunkMask.Etc, 4);
+        WriteTrunkCategory(w, storage, mask, TrunkMask.Cash, 5);
+    }
+
+    private static void WriteTrunkCategory(PacketWriter w, Storage storage, long mask, long bit, int tab)
+    {
+        if ((mask & bit) == 0)
+        {
+            return;
+        }
+
+        List<InventoryItem> items = storage.Items
+            .Where(i => Cronus.Server.Login.ItemEncoder.ItemType(i.ItemId) == tab)
+            .ToList();
+        w.WriteByte((byte)items.Count);
+        foreach (InventoryItem it in items)
+        {
+            Cronus.Server.Login.ItemEncoder.WriteItem(w, it);
+        }
+    }
+
+    /// <summary>
     /// Builds <c>LP_UserAvatarModified</c> (ports <c>ResCUserRemote.UserAvatarModified</c>, JMS v186):
     /// the character id, the avatar-change flag, then the full avatar-look block so an equip change
     /// repaints on other players' screens. Broadcast to the field (not the acting player, who already

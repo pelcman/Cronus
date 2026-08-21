@@ -79,12 +79,13 @@ PortalScriptEngine? portalScripts = CreatePortalScriptEngine();
 // Shared across all connections so messenger/party windows tie players together across fields.
 var messengers = new MessengerRegistry(new ChannelPackets(serverOps, config));
 var parties = new PartyRegistry();
+var storages = new StorageRegistry();
 
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages),
         "channel"),
     keepAlive);
 
