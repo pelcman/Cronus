@@ -193,10 +193,13 @@ Each milestone means adding one "working vertical slice".
       `LP_StatChanged`. Simplified fixed regen for now; MapleStory's level/job scaling and
       sit/rest bonus are follow-ups.
 - [x] **M13: Player takes mob damage** — `CP_UserHit` applies the client-reported hit damage to
-      the player's HP (floored at 1 for now — death/revive is a follow-up) and pushes
-      `LP_StatChanged`; taking a hit resets the regen idle timer. Combat is now two-sided — mobs
-      threaten you, so HP/MP management (M12) matters. Follow-ups: real death→revive, and the
-      hit-mirror so onlookers see the flinch.
+      the player's HP (0 = dead, see M14) and pushes `LP_StatChanged`; taking a hit resets the
+      regen idle timer. Combat is now two-sided — mobs threaten you, so HP/MP management (M12)
+      matters. Follow-up: the hit-mirror so onlookers see the flinch.
+- [x] **M14: Death & revive** — a hit that drops HP to 0 leaves the player dead (the client shows
+      the tombstone); dismissing it sends `CP_UserTransferField`, which the server turns into a
+      revive at the map's return town (`info/returnMap`, `MapData.ReviveMap`; or in place when the
+      map has none) with full HP/MP. Closes the survival loop. Follow-up: death exp/meso penalty.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

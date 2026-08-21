@@ -87,6 +87,12 @@ public sealed class MapData
 
     public IReadOnlyList<MobSpawn> Mobs { get; init; } = Array.Empty<MobSpawn>();
 
+    /// <summary>Town this map returns to on death (<c>info/returnMap</c>); 0/unset = none.</summary>
+    public int ReturnMap { get; init; }
+
+    /// <summary>Where a player revives from this map: the return town, or this map if none.</summary>
+    public int ReviveMap => ReturnMap is > 0 and not NoLink ? ReturnMap : MapId;
+
     /// <summary>The spawn portal (<c>pn == "sp"</c>) or the first portal, or null if none.</summary>
     public PortalData? SpawnPortal =>
         Portals.FirstOrDefault(p => p.Name == "sp") ?? Portals.FirstOrDefault();
@@ -172,6 +178,13 @@ public sealed class MapData
             }
         }
 
-        return new MapData { MapId = mapId, Portals = portals, Npcs = npcs, Mobs = mobs };
+        return new MapData
+        {
+            MapId = mapId,
+            Portals = portals,
+            Npcs = npcs,
+            Mobs = mobs,
+            ReturnMap = mapImg.GetInt("info/returnMap"),
+        };
     }
 }

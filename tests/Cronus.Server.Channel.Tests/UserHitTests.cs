@@ -108,11 +108,106 @@ public class UserHitTests
     }
 
     [Fact]
-    public async Task UserHit_LethalDamage_FloorsAtOneHp()
+    public async Task UserHit_LethalDamage_DropsToZeroHp()
     {
         (short reported, Character hero) = await RunHit(startHp: 50, maxHp: 50, damage: 999);
 
-        Assert.Equal(1, reported); // floored at 1 (no death yet)
-        Assert.Equal(1, hero.Hp);
+        Assert.Equal(0, reported); // 0 HP = dead
+        Assert.Equal(0, hero.Hp);
+    }
+
+    private sealed class DeathReviveClient : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opStat = ServerOps.Get(ServerOpcode.StatChanged);
+        private int _setFields;
+
+        public DeathReviveClient(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource<bool> Revived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = New(session, ClientOpcode.MigrateIn);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField)
+            {
+                _setFields++;
+                if (_setFields == 1)
+                {
+                    // On entry, take a lethal hit.
+                    var hit = New(session, ClientOpcode.UserHit);
+                    hit.WriteInt(0);
+                    hit.WriteByte(0);
+                    hit.WriteByte(0);
+                    hit.WriteInt(9999);
+                    await session.SendAsync(hit.ToArray());
+                }
+                else
+                {
+                    // The second SetField is the revive (map-change branch).
+                    Revived.TrySetResult(true);
+                }
+            }
+            else if (opcode == _opStat)
+            {
+                p.ReadByte();
+                int mask = p.ReadInt();
+                if ((mask & 0x400) != 0 && p.ReadShort() == 0)
+                {
+                    // Dead — dismiss the tombstone by requesting a transfer.
+                    var t = New(session, ClientOpcode.UserTransferFieldRequest);
+                    t.WriteByte(1);
+                    t.WriteInt(-1);
+                    t.WriteString(string.Empty);
+                    t.WriteByte(0);
+                    t.WriteByte(0);
+                    await session.SendAsync(t.ToArray());
+                }
+            }
+        }
+
+        private static PacketWriter New(MapleSession session, string opcodeName)
+            => new(ClientOps.Get(opcodeName), session.Config.PacketHeaderSize, session.Config.CodePage);
+    }
+
+    [Fact]
+    public async Task Dead_Player_Revives_OnTransferRequest_WithFullHp()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Phoenix", MapId = 100000000, Hp = 50, MaxHp = 50, Mp = 0, MaxMp = 20,
+        });
+
+        var client = new DeathReviveClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.Revived.Task.WaitAsync(cts.Token);
+
+        Assert.Equal(50, hero.Hp);   // revived to full HP
+        Assert.Equal(20, hero.Mp);   // and full MP
+        Assert.Equal(100000000, hero.MapId); // no map data → revive in place
     }
 }

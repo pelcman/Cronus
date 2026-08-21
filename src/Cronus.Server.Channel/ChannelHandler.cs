@@ -476,7 +476,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         Character c = _player.Character;
         _player.LastActiveTick = Environment.TickCount64; // taking a hit counts as activity
-        c.Hp = (short)Math.Max(1, c.Hp - damage);          // floor at 1 HP for now (no death yet)
+        c.Hp = (short)Math.Max(0, c.Hp - damage);          // 0 HP = dead (client shows the tombstone)
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Hp)).ConfigureAwait(false);
     }
 
@@ -692,6 +692,14 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
+        // A dead player dismissing the tombstone dialog sends a transfer request; revive them at
+        // this map's return town (or in place) with full HP/MP instead of a normal transfer.
+        if (_player.Character.Hp <= 0)
+        {
+            await ReviveAsync(session).ConfigureAwait(false);
+            return;
+        }
+
         // JMS v186 CP_UserTransferFieldRequest:
         //   [portalCount:1][mapId:4][portalName:str][x:2,y:2 if portal][unk:1][reviveType:1]
         packet.ReadByte();
@@ -732,6 +740,20 @@ public sealed class ChannelHandler : PacketHandlerBase
             ? target?.SpawnPortal
             : target?.FindPortal(targetPortalName) ?? target?.SpawnPortal;
         return spawn?.Id ?? 0;
+    }
+
+    /// <summary>
+    /// Revives a dead player: restores full HP/MP, then transfers to this map's return town (or
+    /// the same map when it has none), which clears the client's death state.
+    /// </summary>
+    private async ValueTask ReviveAsync(MapleSession session)
+    {
+        Character c = _player!.Character;
+        c.Hp = c.MaxHp;
+        c.Mp = c.MaxMp;
+
+        int reviveMap = _maps.GetMap(c.MapId)?.ReviveMap ?? c.MapId;
+        await MovePlayerToMapAsync(session, reviveMap, spawnPortal: 0).ConfigureAwait(false);
     }
 
     /// <summary>
