@@ -34,6 +34,7 @@ when the server restarts (see [SERVER_SETUP.md](SERVER_SETUP.md)).
 | `/save` | Persist your character now |
 | `/players` (alias `/online`) | List players online on this channel |
 | `/guildcreate <name>` | Create a guild (free, works anywhere) with you as master |
+| `/maxskills` | Max every skill your current job can learn |
 | `/notice <msg>` | Blue notice broadcast to your current map |
 | `/pos` | Show your position and map id |
 | `/help` | List the commands |
@@ -125,6 +126,10 @@ This is the private-server shortcut; the client's own creation flow at the Orbis
 Headquarters (map `200000301`) also works and costs the classic 5,000,000 meso. Invite,
 join, leave, expel, ranks, emblem (HQ + 15m meso), and notice are all done through the
 in-game guild window (G key). The guild master leaving disbands the guild.
+
+### `/maxskills`
+Maxes every skill in your current job's learning chain (beginner → 1st job → each advancement up
+to your code) at the wz max level. Handy after `/job` or a fresh advancement.
 
 ### `/notice <msg>`
 Broadcasts `msg` as the blue system notice to everyone **in your current map**.
