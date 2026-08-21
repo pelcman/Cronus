@@ -28,7 +28,7 @@ WarnUnresolved("server", serverOps);
 
 // Use MySQL when a connection string is configured (CRONUS_DB env var), else fall back to the
 // in-memory stores so the server runs with zero external dependencies for local testing.
-(IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo) = CreateRepositories();
+(IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo, IGuildRepository? guildRepo) = CreateRepositories();
 var loginService = new LoginService(accounts, autoRegister: true);
 
 // The login server hands clients to the channel via LP_SelectCharacterResult. The IP it
@@ -85,12 +85,13 @@ var storages = new StorageRegistry(storageRepo);
 var keymaps = new KeymapRegistry(keymapRepo);
 var trades = new TradeRegistry();
 var buffs = new BuffTracker();
+var guilds = new GuildRegistry(guildRepo);
 
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds),
         "channel"),
     keepAlive);
 
@@ -310,29 +311,30 @@ static void WarnUnresolved(string which, OpcodeTable table)
     }
 }
 
-static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?) CreateRepositories()
+static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?) CreateRepositories()
 {
     string? connectionString = Environment.GetEnvironmentVariable("CRONUS_DB");
     if (string.IsNullOrWhiteSpace(connectionString))
     {
         Console.WriteLine("[db] CRONUS_DB not set — using in-memory stores (not persistent).");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null);
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null);
     }
 
     try
     {
         Func<CronusDbContext> factory = MySqlDatabase.CreateFactory(connectionString);
         MySqlDatabase.EnsureCreated(factory);
-        Console.WriteLine("[db] Connected to MySQL; accounts, characters, storage, and keymaps are persistent.");
+        Console.WriteLine("[db] Connected to MySQL; accounts, characters, storage, keymaps, and guilds are persistent.");
         return (
             new DbAccountRepository(factory),
             new DbCharacterRepository(factory),
             new DbStorageRepository(factory),
-            new DbKeymapRepository(factory));
+            new DbKeymapRepository(factory),
+            new DbGuildRepository(factory));
     }
     catch (Exception ex)
     {
         Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory stores.");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null);
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null);
     }
 }

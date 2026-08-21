@@ -29,6 +29,8 @@ public sealed class CronusDbContext : DbContext
 
     public DbSet<KeymapEntity> Keymaps => Set<KeymapEntity>();
 
+    public DbSet<GuildData> Guilds => Set<GuildData>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
@@ -77,6 +79,23 @@ public sealed class CronusDbContext : DbContext
         keymap.ToTable("keymaps");
         keymap.HasKey(k => k.CharacterId);
         keymap.Property(k => k.CharacterId).ValueGeneratedNever();
+
+        var guild = modelBuilder.Entity<GuildData>();
+        guild.ToTable("guilds");
+        guild.HasKey(g => g.Id);
+        guild.Property(g => g.Id).ValueGeneratedOnAdd();
+        guild.Property(g => g.Name).HasMaxLength(45).IsRequired();
+        guild.HasIndex(g => g.Name).IsUnique();
+        guild.Property(g => g.Notice).HasMaxLength(101);
+        // The five rank titles as one JSON text column.
+        guild.Property(g => g.RankTitles).HasConversion(
+            titles => JsonSerializer.Serialize(titles, JsonOptions),
+            json => JsonSerializer.Deserialize<List<string>>(json, JsonOptions) ?? new List<string>(),
+            new ValueComparer<List<string>>(
+                (a, b) => JsonSerializer.Serialize(a, JsonOptions) == JsonSerializer.Serialize(b, JsonOptions),
+                titles => JsonSerializer.Serialize(titles, JsonOptions).GetHashCode(),
+                titles => JsonSerializer.Deserialize<List<string>>(
+                    JsonSerializer.Serialize(titles, JsonOptions), JsonOptions) ?? new List<string>()));
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new();

@@ -40,6 +40,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly Rates _rates;
     private readonly TradeRegistry _trades;
     private readonly BuffTracker _buffs;
+    private readonly GuildRegistry _guilds;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
     private readonly MessengerRegistry _messengers;
@@ -82,6 +83,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opWhisper;
     private readonly int _opMessenger;
     private readonly int _opPartyRequest;
+    private readonly int _opGuildRequest;
+    private readonly int _opGuildDeny;
+    private readonly int _opGroupMessage;
 
     private FieldPlayer? _player;
     private Field? _field;
@@ -117,7 +121,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         IQuestProvider? quests = null,
         Rates? rates = null,
         TradeRegistry? trades = null,
-        BuffTracker? buffs = null)
+        BuffTracker? buffs = null,
+        GuildRegistry? guilds = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -133,6 +138,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _rates = rates ?? Rates.Default;
         _trades = trades ?? new TradeRegistry();
         _buffs = buffs ?? new BuffTracker();
+        _guilds = guilds ?? new GuildRegistry();
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -175,6 +181,9 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opWhisper = clientOpcodes.Get(ClientOpcode.Whisper);
         _opMessenger = clientOpcodes.Get(ClientOpcode.Messenger);
         _opPartyRequest = clientOpcodes.Get(ClientOpcode.PartyRequest);
+        _opGuildRequest = clientOpcodes.Get(ClientOpcode.GuildRequest);
+        _opGuildDeny = clientOpcodes.Get(ClientOpcode.GuildResult);
+        _opGroupMessage = clientOpcodes.Get(ClientOpcode.GroupMessage);
     }
 
     /// <summary>The character bound to this session after a successful migrate-in.</summary>
@@ -314,6 +323,18 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleFriendRequestAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opGuildRequest)
+        {
+            await HandleGuildRequestAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opGuildDeny)
+        {
+            await HandleGuildDenyAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opGroupMessage)
+        {
+            await HandleGroupMessageAsync(packet).ConfigureAwait(false);
+        }
         else if (opcode == _opPortalScript)
         {
             await HandlePortalScriptAsync(session, packet).ConfigureAwait(false);
@@ -348,6 +369,14 @@ public sealed class ChannelHandler : PacketHandlerBase
 
             // Buffs don't survive a logout.
             _buffs.Clear(_player.Character.Id);
+
+            // Guildmates see this player go offline.
+            if (_player.Character.GuildId > 0)
+            {
+                int guildId = _player.Character.GuildId;
+                _guilds.SetOffline(guildId, _player.Character.Id);
+                await BroadcastToGuildAsync(guildId, _packets.GuildMemberOnline(guildId, _player.Character.Id, online: false)).ConfigureAwait(false);
+            }
 
             // Leave any messenger so the other members' windows drop this player.
             Messenger? messenger = _messengers.GetFor(_player.Character.Id);
@@ -443,16 +472,34 @@ public sealed class ChannelHandler : PacketHandlerBase
         Field field = _fields.Get(character.MapId);
         foreach (FieldPlayer other in field.Players)
         {
-            await session.SendAsync(_packets.UserEnterField(other)).ConfigureAwait(false);
+            await session.SendAsync(_packets.UserEnterField(other, GuildOf(other.Character))).ConfigureAwait(false);
         }
 
         field.Enter(player);
         _field = field;
-        await field.BroadcastAsync(_packets.UserEnterField(player), exceptCharacterId: character.Id)
+        await field.BroadcastAsync(_packets.UserEnterField(player, GuildOf(character)), exceptCharacterId: character.Id)
             .ConfigureAwait(false);
 
         await SpawnNpcsAsync(session, field).ConfigureAwait(false);
         await NotifyBuddiesOfPresenceAsync(character.Id, channel: 0).ConfigureAwait(false); // "came online"
+
+        // Guild window data + presence; a guild that no longer exists is scrubbed off the character.
+        if (character.GuildId > 0)
+        {
+            if (_guilds.Get(character.GuildId) is { } guild)
+            {
+                _guilds.SetOnline(guild.Id, player);
+                await session.SendAsync(_packets.GuildInfo(guild, BuildGuildMembers(guild.Id))).ConfigureAwait(false);
+                await BroadcastToGuildAsync(guild.Id, _packets.GuildMemberOnline(guild.Id, character.Id, online: true), exceptCharacterId: character.Id).ConfigureAwait(false);
+                await BroadcastToGuildAsync(guild.Id, _packets.GuildMemberLevelJob(guild.Id, character.Id, character.Level, character.Job), exceptCharacterId: character.Id).ConfigureAwait(false);
+            }
+            else
+            {
+                character.GuildId = 0;
+                character.GuildRank = 0;
+                _characters.Save(character);
+            }
+        }
 
         // Friend requests that arrived while offline pop up now.
         foreach ((int fromId, BuddyEntry entry) in character.Buddies.ToList())
@@ -2652,6 +2699,446 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
     }
 
+    // CP_GuildRequest ops (the reference GuildHandler's raw switch values).
+    private const byte GuildReqCreate = 0x02;
+    private const byte GuildReqInvite = 0x05;
+    private const byte GuildReqJoin = 0x06;
+    private const byte GuildReqLeave = 0x07;
+    private const byte GuildReqExpel = 0x08;
+    private const byte GuildReqRankTitles = 0x0D;
+    private const byte GuildReqRankChange = 0x0E;
+    private const byte GuildReqEmblem = 0x0F;
+    private const byte GuildReqNotice = 0x10;
+
+    /// <summary>The Orbis guild headquarters map, where creation/emblem changes happen.</summary>
+    private const int GuildHqMapId = 200000301;
+    private const int GuildCreateCost = 5_000_000;
+    private const int GuildEmblemCost = 15_000_000;
+
+    /// <summary>
+    /// Handles <c>CP_GuildRequest</c> — the guild window (ports <c>GuildHandler.Guild</c>):
+    /// create (at the HQ, for meso), invite/join/leave/expel, rank titles and ranks, emblem, and
+    /// notice. The leader leaving disbands the guild (same simplification as party leadership).
+    /// </summary>
+    private async ValueTask HandleGuildRequestAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        byte op = packet.ReadByte();
+        switch (op)
+        {
+            case GuildReqCreate:
+            {
+                string name = packet.ReadString();
+                if (c.MapId != GuildHqMapId)
+                {
+                    await session.SendAsync(_packets.BroadcastNotice("ギルドはギルド本部でのみ作成できます。", alert: true)).ConfigureAwait(false);
+                    return;
+                }
+
+                await CreateGuildAsync(session, c, name, cost: GuildCreateCost).ConfigureAwait(false);
+                break;
+            }
+
+            case GuildReqInvite:
+            {
+                if (c.GuildId <= 0 || c.GuildRank > 2) // 1 = master, 2 = jr. master
+                {
+                    return;
+                }
+
+                string name = packet.ReadString();
+                FieldPlayer? target = FindOnlinePlayerByName(name);
+                if (target is null)
+                {
+                    await session.SendAsync(_packets.GuildMessage(ChannelPackets.GuildResTargetOffline)).ConfigureAwait(false);
+                }
+                else if (target.Character.GuildId > 0)
+                {
+                    await session.SendAsync(_packets.GuildMessage(ChannelPackets.GuildResTargetInGuild)).ConfigureAwait(false);
+                }
+                else
+                {
+                    _guilds.Invite(target.Character.Name, c.GuildId);
+                    await TrySendAsync(target, _packets.GuildInvite(c.GuildId, c.Name, c.Level, c.Job)).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case GuildReqJoin:
+            {
+                int guildId = packet.ReadInt();
+                int characterId = packet.ReadInt();
+                if (characterId != c.Id || c.GuildId > 0 || !_guilds.TakeInvite(c.Name, guildId))
+                {
+                    return;
+                }
+
+                GuildData? guild = _guilds.Get(guildId);
+                if (guild is null)
+                {
+                    return;
+                }
+
+                IReadOnlyList<Character> members = _characters.ListByGuild(guildId);
+                if (members.Count >= guild.Capacity)
+                {
+                    await session.SendAsync(_packets.BroadcastNotice("そのギルドは満員です。", alert: true)).ConfigureAwait(false);
+                    return;
+                }
+
+                c.GuildId = guildId;
+                c.GuildRank = 5;
+                _characters.Save(c);
+                _guilds.SetOnline(guildId, _player);
+
+                var row = new ChannelPackets.GuildMemberRow(c.Id, c.Name, c.Job, c.Level, c.GuildRank, Online: true);
+                await BroadcastToGuildAsync(guildId, _packets.GuildNewMember(guildId, row)).ConfigureAwait(false);
+                await session.SendAsync(_packets.GuildInfo(guild, BuildGuildMembers(guildId))).ConfigureAwait(false);
+                break;
+            }
+
+            case GuildReqLeave:
+            {
+                int characterId = packet.ReadInt();
+                string name = packet.ReadString();
+                if (characterId != c.Id || !string.Equals(name, c.Name, StringComparison.Ordinal) || c.GuildId <= 0)
+                {
+                    return;
+                }
+
+                if (_guilds.Get(c.GuildId) is { } guild && guild.LeaderId == c.Id)
+                {
+                    await DisbandGuildAsync(guild).ConfigureAwait(false);
+                }
+                else
+                {
+                    int guildId = c.GuildId;
+                    await BroadcastToGuildAsync(guildId, _packets.GuildMemberLeft(guildId, c.Id, c.Name, expelled: false)).ConfigureAwait(false);
+                    c.GuildId = 0;
+                    c.GuildRank = 0;
+                    _characters.Save(c);
+                    _guilds.SetOffline(guildId, c.Id);
+                    await session.SendAsync(_packets.GuildInfoNone()).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case GuildReqExpel:
+            {
+                int characterId = packet.ReadInt();
+                packet.ReadString(); // the claimed name; the server uses the repo's record
+                if (c.GuildId <= 0 || c.GuildRank > 2)
+                {
+                    return;
+                }
+
+                Character? target = _characters.Find(characterId);
+                if (target is null || target.GuildId != c.GuildId || target.Id == c.Id)
+                {
+                    return;
+                }
+
+                int guildId = c.GuildId;
+                await BroadcastToGuildAsync(guildId, _packets.GuildMemberLeft(guildId, target.Id, target.Name, expelled: true)).ConfigureAwait(false);
+                target.GuildId = 0;
+                target.GuildRank = 0;
+                _characters.Save(target);
+                if (FindOnlinePlayer(target.Id) is { } online)
+                {
+                    await TrySendAsync(online, _packets.GuildInfoNone()).ConfigureAwait(false);
+                }
+
+                _guilds.SetOffline(guildId, target.Id);
+                break;
+            }
+
+            case GuildReqRankTitles:
+            {
+                if (_guilds.Get(c.GuildId) is not { } guild || guild.LeaderId != c.Id)
+                {
+                    return;
+                }
+
+                var titles = new List<string>(5);
+                for (int i = 0; i < 5; i++)
+                {
+                    titles.Add(packet.ReadString());
+                }
+
+                guild.RankTitles = titles;
+                _guilds.Save(guild);
+                await BroadcastToGuildAsync(guild.Id, _packets.GuildRankTitles(guild.Id, titles)).ConfigureAwait(false);
+                break;
+            }
+
+            case GuildReqRankChange:
+            {
+                int characterId = packet.ReadInt();
+                byte newRank = packet.ReadByte();
+
+                // Ports the reference gates: only 2..5 assignable, jr+ may demote/promote, and
+                // ranks 2 and below are the master's alone to grant.
+                if (newRank is <= 1 or > 5 || c.GuildRank > 2 || (newRank <= 2 && c.GuildRank != 1) || c.GuildId <= 0)
+                {
+                    return;
+                }
+
+                Character? target = _characters.Find(characterId);
+                if (target is null || target.GuildId != c.GuildId)
+                {
+                    return;
+                }
+
+                target.GuildRank = newRank;
+                _characters.Save(target);
+                await BroadcastToGuildAsync(c.GuildId, _packets.GuildMemberRankChanged(c.GuildId, target.Id, newRank)).ConfigureAwait(false);
+                break;
+            }
+
+            case GuildReqEmblem:
+            {
+                if (_guilds.Get(c.GuildId) is not { } guild || guild.LeaderId != c.Id || c.MapId != GuildHqMapId)
+                {
+                    return;
+                }
+
+                if (c.Meso < GuildEmblemCost)
+                {
+                    await session.SendAsync(_packets.BroadcastNotice("メルが足りません。", alert: true)).ConfigureAwait(false);
+                    return;
+                }
+
+                guild.LogoBG = packet.ReadShort();
+                guild.LogoBGColor = packet.ReadByte();
+                guild.Logo = packet.ReadShort();
+                guild.LogoColor = packet.ReadByte();
+                _guilds.Save(guild);
+
+                c.Meso -= GuildEmblemCost;
+                _characters.Save(c);
+                await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+                await BroadcastToGuildAsync(guild.Id, _packets.GuildEmblemChanged(guild.Id, guild.LogoBG, guild.LogoBGColor, guild.Logo, guild.LogoColor)).ConfigureAwait(false);
+                break;
+            }
+
+            case GuildReqNotice:
+            {
+                string notice = packet.ReadString();
+                if (notice.Length > 100 || c.GuildId <= 0 || c.GuildRank > 2)
+                {
+                    return;
+                }
+
+                if (_guilds.Get(c.GuildId) is not { } guild)
+                {
+                    return;
+                }
+
+                guild.Notice = notice;
+                _guilds.Save(guild);
+                await BroadcastToGuildAsync(guild.Id, _packets.GuildNotice(guild.Id, notice)).ConfigureAwait(false);
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a guild with this player as leader (rank 1); <paramref name="cost"/> is deducted
+    /// (0 for the free <c>/guildcreate</c> command). Shared by the client's HQ flow and the command.
+    /// </summary>
+    private async ValueTask CreateGuildAsync(MapleSession session, Character c, string name, int cost)
+    {
+        if (c.GuildId > 0 || name.Length is < 1 or > 12)
+        {
+            return;
+        }
+
+        if (_guilds.FindByName(name) is not null)
+        {
+            await session.SendAsync(_packets.GuildMessage(ChannelPackets.GuildResNameInUse)).ConfigureAwait(false);
+            return;
+        }
+
+        if (cost > 0 && c.Meso < cost)
+        {
+            await session.SendAsync(_packets.BroadcastNotice("メルが足りません。", alert: true)).ConfigureAwait(false);
+            return;
+        }
+
+        GuildData guild = _guilds.Create(name, c.Id);
+        c.GuildId = guild.Id;
+        c.GuildRank = 1;
+        if (cost > 0)
+        {
+            c.Meso -= cost;
+        }
+
+        _characters.Save(c);
+        _guilds.SetOnline(guild.Id, _player!);
+
+        if (cost > 0)
+        {
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.GuildInfo(guild, BuildGuildMembers(guild.Id))).ConfigureAwait(false);
+    }
+
+    /// <summary>Disbands a guild: every member (online or not) becomes guildless.</summary>
+    private async ValueTask DisbandGuildAsync(GuildData guild)
+    {
+        // Mutate state first so a member reacting to the packet can't observe the old guild.
+        IReadOnlyCollection<FieldPlayer> online = _guilds.OnlineMembers(guild.Id);
+        foreach (Character member in _characters.ListByGuild(guild.Id))
+        {
+            member.GuildId = 0;
+            member.GuildRank = 0;
+            _characters.Save(member);
+        }
+
+        _guilds.Delete(guild.Id); // also clears the online roster
+
+        foreach (FieldPlayer member in online)
+        {
+            await TrySendAsync(member, _packets.GuildDisband(guild.Id)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_GuildResult</c> — declining a guild invitation (ports
+    /// <c>GuildHandler.DenyGuildRequest</c>): the original inviter is told who declined.
+    /// </summary>
+    private async ValueTask HandleGuildDenyAsync(PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        packet.ReadByte(); // mode
+        string inviterName = packet.ReadString();
+        if (FindOnlinePlayerByName(inviterName) is { } inviter)
+        {
+            await TrySendAsync(inviter, _packets.GuildInviteDenied(_player.Character.Name)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_GroupMessage</c> — friend / party / guild chat (ports
+    /// <c>ReqCUser.OnGroupMessage</c>): relays the line to the group's other online members via
+    /// <c>LP_GroupMessage</c>. Friend chat targets the ids the client listed (gated on the buddy
+    /// list); party and guild membership come from the server's own registries.
+    /// </summary>
+    private async ValueTask HandleGroupMessageAsync(PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        byte chatTarget = packet.ReadByte();
+        int memberCount = packet.ReadByte();
+        var memberIds = new int[memberCount];
+        for (int i = 0; i < memberCount; i++)
+        {
+            memberIds[i] = packet.ReadInt();
+        }
+
+        string text = packet.ReadString();
+
+        switch (chatTarget)
+        {
+            case ChannelPackets.ChatGroupFriend:
+                foreach (int id in memberIds)
+                {
+                    if (id != c.Id
+                        && FindOnlinePlayer(id) is { } friend
+                        && friend.Character.Buddies.TryGetValue(c.Id, out BuddyEntry? entry)
+                        && !entry.Hidden)
+                    {
+                        await TrySendAsync(friend, _packets.GroupMessage(ChannelPackets.ChatGroupFriend, c.Name, text)).ConfigureAwait(false);
+                    }
+                }
+
+                break;
+
+            case ChannelPackets.ChatGroupParty:
+                if (_parties.GetForCharacter(c.Id) is { } party)
+                {
+                    foreach (FieldPlayer member in party.Members)
+                    {
+                        if (member.Character.Id != c.Id)
+                        {
+                            await TrySendAsync(member, _packets.GroupMessage(ChannelPackets.ChatGroupParty, c.Name, text)).ConfigureAwait(false);
+                        }
+                    }
+                }
+
+                break;
+
+            case ChannelPackets.ChatGroupGuild:
+                if (c.GuildId > 0)
+                {
+                    await BroadcastToGuildAsync(c.GuildId, _packets.GroupMessage(ChannelPackets.ChatGroupGuild, c.Name, text), exceptCharacterId: c.Id).ConfigureAwait(false);
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>The wire member table for a guild, derived from the character store.</summary>
+    private List<ChannelPackets.GuildMemberRow> BuildGuildMembers(int guildId)
+    {
+        var rows = new List<ChannelPackets.GuildMemberRow>();
+        foreach (Character m in _characters.ListByGuild(guildId))
+        {
+            rows.Add(new ChannelPackets.GuildMemberRow(
+                m.Id, m.Name, m.Job, m.Level, m.GuildRank, FindOnlinePlayer(m.Id) is not null));
+        }
+
+        return rows;
+    }
+
+    /// <summary>Sends a packet to every online guild member (optionally excluding one).</summary>
+    private async ValueTask BroadcastToGuildAsync(int guildId, byte[] packet, int exceptCharacterId = -1)
+    {
+        foreach (FieldPlayer member in _guilds.OnlineMembers(guildId))
+        {
+            if (member.Character.Id != exceptCharacterId)
+            {
+                await TrySendAsync(member, packet).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>The character's guild, or null when guildless / unknown.</summary>
+    private GuildData? GuildOf(Character c) => c.GuildId > 0 ? _guilds.Get(c.GuildId) : null;
+
+    /// <summary>An online player by name across the channel's fields, or null.</summary>
+    private FieldPlayer? FindOnlinePlayerByName(string name)
+    {
+        foreach (Field field in _fields.Fields)
+        {
+            foreach (FieldPlayer player in field.Players)
+            {
+                if (string.Equals(player.Character.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return player;
+                }
+            }
+        }
+
+        return null;
+    }
+
     // CP_FuncKeyMappedModified modes (OpsFuncKeyMapped, JMS v186).
     private const int FuncKeyKeyModified = 0;
 
@@ -3377,6 +3864,11 @@ public sealed class ChannelHandler : PacketHandlerBase
                 }).ConfigureAwait(false);
                 break;
 
+            case "guildcreate" when parts.Length >= 2:
+                // Free, works anywhere (the client's own flow needs the HQ map and 5m meso).
+                await CreateGuildAsync(session, _player!.Character, parts[1], cost: 0).ConfigureAwait(false);
+                break;
+
             case "str" when parts.Length >= 2 && int.TryParse(parts[1], out int str):
                 await SetStatAsync(session, StatFlag.Str, c => c.Str = (short)Math.Clamp(str, 4, short.MaxValue)).ConfigureAwait(false);
                 break;
@@ -3733,12 +4225,12 @@ public sealed class ChannelHandler : PacketHandlerBase
         Field newField = _fields.Get(targetMapId);
         foreach (FieldPlayer other in newField.Players)
         {
-            await session.SendAsync(_packets.UserEnterField(other)).ConfigureAwait(false);
+            await session.SendAsync(_packets.UserEnterField(other, GuildOf(other.Character))).ConfigureAwait(false);
         }
 
         newField.Enter(player);
         _field = newField;
-        await newField.BroadcastAsync(_packets.UserEnterField(player), exceptCharacterId: player.Character.Id)
+        await newField.BroadcastAsync(_packets.UserEnterField(player, GuildOf(player.Character)), exceptCharacterId: player.Character.Id)
             .ConfigureAwait(false);
 
         await SpawnNpcsAsync(session, newField).ConfigureAwait(false);

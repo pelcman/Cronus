@@ -289,6 +289,31 @@ Each milestone means adding one "working vertical slice".
         persists as a JSON column. Adding is online-only for now (no by-name offline lookup yet);
         equips drop-to-ground also now carries the item instance (M10g follow-up closed). Two-client
         add→accept e2e test.
+  - [x] **M10p: server-side buff expiry** — `BuffTracker` records every `LP_TemporaryStatSet` the
+        handler grants (skill self/party buffs by +skillId, item buffs by −itemId) with its mask
+        word[0] and duration; the 1 s `BuffExpiryService` tick removes lapsed buffs and pushes
+        `LP_TemporaryStatReset` (ports the reference's per-effect `CancelEffectAction` schedule).
+        Re-casts refresh, player cancels remove, logout clears. E2E cast→tick→reset test.
+  - [x] **M10q: quest-script execution** — `CP_UserQuestRequest` actions 4/5 (opening/complete
+        script) run `scripts/quest/{questId}.js` on the Jint engine (ports `TacosScriptQuest`):
+        the script's `start()` / `end()` drives the dialog through the global `qm` (same
+        conversation API as NPC scripts' `cm`) and falls back to the data-driven accept/complete
+        when no script exists. Scripts also gained `player.gainItem/haveItem/itemQuantity` (live
+        `LP_InventoryOperation`); NPC/portal/quest scripts share one `CreateScriptPlayer` surface.
+        Sample script at `scripts/quest/1000.js`.
+  - [x] **M10r: guilds** — `CP_GuildRequest` 0x0084 → `LP_GuildResult` 0x003B (the reference
+        `GuildHandler` raw ops): create (HQ map 200000301 + 5m meso, or the free `/guildcreate`
+        anywhere), invite→accept (pending-invite registry), leave (leader leaving disbands),
+        expel, rank titles (62), member ranks (64), emblem (66; HQ + 15m), notice (68), member
+        online/level updates (61/60), decline relay (`CP_GuildResult` → op 55). The guild info
+        blob ports `getGuildInfo`+`addMemberData` (member rows derived live from the character
+        store via `ICharacterRepository.ListByGuild`). `LP_UserEnterField`'s guild block now
+        carries name+emblem so guilds render under characters. Guild/party/friend chat lands too
+        (`CP_GroupMessage` 0x007C → `LP_GroupMessage` 0x0087, `OpsChatGroup` 0/1/2).
+        `Character.GuildId/GuildRank` columns + a `guilds` table (rank titles as JSON);
+        `GuildRegistry` tracks online members for broadcasts. Byte-layout tests + a two-client
+        create→invite→join→disband e2e. Deferred: alliances, guild BBS, GP updates, capacity
+        growth, the guild-ranking NPC board.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

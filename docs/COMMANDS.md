@@ -33,6 +33,7 @@ when the server restarts (see [SERVER_SETUP.md](SERVER_SETUP.md)).
 | `/storage` | Open your account storage |
 | `/save` | Persist your character now |
 | `/players` (alias `/online`) | List players online on this channel |
+| `/guildcreate <name>` | Create a guild (free, works anywhere) with you as master |
 | `/notice <msg>` | Blue notice broadcast to your current map |
 | `/pos` | Show your position and map id |
 | `/help` | List the commands |
@@ -117,6 +118,13 @@ Persists your character immediately (it also autosaves periodically and on disco
 
 ### `/players` (alias `/online`)
 Lists the names of everyone online on this channel.
+
+### `/guildcreate <name>`
+Creates a guild named `name` with you as its master (rank 1) — free, and usable anywhere.
+This is the private-server shortcut; the client's own creation flow at the Orbis Guild
+Headquarters (map `200000301`) also works and costs the classic 5,000,000 meso. Invite,
+join, leave, expel, ranks, emblem (HQ + 15m meso), and notice are all done through the
+in-game guild window (G key). The guild master leaving disbands the guild.
 
 ### `/notice <msg>`
 Broadcasts `msg` as the blue system notice to everyone **in your current map**.

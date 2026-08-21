@@ -48,6 +48,16 @@ public sealed class DbCharacterRepository : ICharacterRepository
             .FirstOrDefault(c => c.Name.ToLower() == lowered);
     }
 
+    public IReadOnlyList<Character> ListByGuild(int guildId)
+    {
+        using CronusDbContext db = _contextFactory();
+        return db.Characters
+            .Include(c => c.EquippedItems)
+            .Where(c => c.GuildId == guildId)
+            .OrderBy(c => c.Id)
+            .ToList();
+    }
+
     public Character Create(Character character)
     {
         using CronusDbContext db = _contextFactory();

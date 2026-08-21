@@ -56,6 +56,9 @@ public static class ClientOpcode
     public const string PartyRequest = "CP_PartyRequest";
     public const string MiniRoom = "CP_MiniRoom";
     public const string FriendRequest = "CP_FriendRequest";
+    public const string GuildRequest = "CP_GuildRequest";
+    public const string GuildResult = "CP_GuildResult";
+    public const string GroupMessage = "CP_GroupMessage";
 }
 
 /// <summary>
@@ -128,4 +131,6 @@ public static class ServerOpcode
     public const string MobCtrlAck = "LP_MobCtrlAck";
     public const string DropEnterField = "LP_DropEnterField";
     public const string DropLeaveField = "LP_DropLeaveField";
+    public const string GuildResult = "LP_GuildResult";
+    public const string GroupMessage = "LP_GroupMessage";
 }

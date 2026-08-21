@@ -72,6 +72,12 @@ public sealed class Character
 
     /// <summary>Buddy list: friend character id → entry (persisted as a JSON column).</summary>
     public Dictionary<int, BuddyEntry> Buddies { get; set; } = new();
+
+    /// <summary>The guild this character belongs to, or 0.</summary>
+    public int GuildId { get; set; }
+
+    /// <summary>Guild rank 1 (master) … 5 (lowest member); 0 when guildless.</summary>
+    public byte GuildRank { get; set; }
 }
 
 /// <summary>One buddy-list entry. Hidden = a pending incoming request (not yet accepted).</summary>

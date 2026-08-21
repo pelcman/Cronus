@@ -102,3 +102,59 @@ public sealed class DbKeymapRepository : IKeymapRepository
         db.SaveChanges();
     }
 }
+
+/// <summary>EF Core-backed <see cref="IGuildRepository"/> (guild core state; membership lives on characters).</summary>
+public sealed class DbGuildRepository : IGuildRepository
+{
+    private readonly Func<CronusDbContext> _contextFactory;
+
+    public DbGuildRepository(Func<CronusDbContext> contextFactory) => _contextFactory = contextFactory;
+
+    public GuildData? Find(int guildId)
+    {
+        using CronusDbContext db = _contextFactory();
+        return db.Guilds.Find(guildId);
+    }
+
+    public GuildData? FindByName(string name)
+    {
+        using CronusDbContext db = _contextFactory();
+        string lowered = name.ToLowerInvariant();
+        return db.Guilds.FirstOrDefault(g => g.Name.ToLower() == lowered);
+    }
+
+    public IReadOnlyList<GuildData> ListAll()
+    {
+        using CronusDbContext db = _contextFactory();
+        return db.Guilds.OrderBy(g => g.Id).ToList();
+    }
+
+    public GuildData Create(GuildData guild)
+    {
+        using CronusDbContext db = _contextFactory();
+        db.Guilds.Add(guild);
+        db.SaveChanges();
+        return guild;
+    }
+
+    public void Save(GuildData guild)
+    {
+        using CronusDbContext db = _contextFactory();
+        db.Guilds.Update(guild);
+        db.SaveChanges();
+    }
+
+    public bool Delete(int guildId)
+    {
+        using CronusDbContext db = _contextFactory();
+        GuildData? guild = db.Guilds.Find(guildId);
+        if (guild is null)
+        {
+            return false;
+        }
+
+        db.Guilds.Remove(guild);
+        db.SaveChanges();
+        return true;
+    }
+}

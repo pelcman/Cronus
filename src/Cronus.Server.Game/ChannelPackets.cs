@@ -595,6 +595,237 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_GuildResult sub-ops (the reference's raw values in ResCWvsContext's guild builders).
+    public const byte GuildResInvite = 5;
+    public const byte GuildResShowInfo = 26;
+    public const byte GuildResNameInUse = 28;      // genericGuildMessage 0x1c on create failure
+    public const byte GuildResNewMember = 39;
+    public const byte GuildResTargetInGuild = 40;  // 0x28 ALREADY_IN_GUILD
+    public const byte GuildResTargetOffline = 42;  // 0x2a NOT_IN_CHANNEL
+    public const byte GuildResMemberLeft = 44;
+    public const byte GuildResMemberExpelled = 47;
+    public const byte GuildResDisband = 50;
+    public const byte GuildResInviteDenied = 55;
+    public const byte GuildResCapacityChanged = 58;
+    public const byte GuildResMemberLevelJob = 60;
+    public const byte GuildResMemberOnline = 61;
+    public const byte GuildResRankTitles = 62;
+    public const byte GuildResMemberRank = 64;
+    public const byte GuildResEmblem = 66;
+    public const byte GuildResNotice = 68;
+
+    /// <summary>One guild member row for the wire (data derived from the member's character).</summary>
+    public readonly record struct GuildMemberRow(int CharacterId, string Name, int Job, int Level, int Rank, bool Online);
+
+    /// <summary>
+    /// Builds the "you are in this guild" info packet (ports <c>ResCWvsContext.showGuildInfo</c> +
+    /// <c>getGuildInfo</c> + <c>MapleGuild.addMemberData</c>, JMS v186): op 26, an in-guild flag,
+    /// then id/name, the five rank titles, the member table, capacity, emblem, notice, GP, alliance.
+    /// </summary>
+    public byte[] GuildInfo(GuildData guild, IReadOnlyList<GuildMemberRow> members)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResShowInfo);
+        w.WriteByte(1); // bInGuild
+
+        w.WriteInt(guild.Id);
+        w.WriteString(guild.Name);
+        for (int i = 0; i < 5; i++)
+        {
+            w.WriteString(i < guild.RankTitles.Count ? guild.RankTitles[i] : string.Empty);
+        }
+
+        // Member table: count, all ids, then the per-member rows (JMS >= 164 incl. alliance rank).
+        w.WriteByte((byte)members.Count);
+        foreach (GuildMemberRow m in members)
+        {
+            w.WriteInt(m.CharacterId);
+        }
+
+        foreach (GuildMemberRow m in members)
+        {
+            w.WriteFixedString(m.Name, 13);
+            w.WriteInt(m.Job);
+            w.WriteInt(m.Level);
+            w.WriteInt(m.Rank);
+            w.WriteInt(m.Online ? 1 : 0);
+            w.WriteInt(guild.Signature);
+            w.WriteInt(3); // alliance rank (default)
+        }
+
+        w.WriteInt(guild.Capacity);
+        w.WriteShort(guild.LogoBG);
+        w.WriteByte(guild.LogoBGColor);
+        w.WriteShort(guild.Logo);
+        w.WriteByte(guild.LogoColor);
+        w.WriteString(guild.Notice);
+        w.WriteInt(guild.Gp);
+        w.WriteInt(0); // alliance id
+        return w.ToArray();
+    }
+
+    /// <summary>The "not in a guild" info packet (leaving / expelled / guildless entry).</summary>
+    public byte[] GuildInfoNone()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResShowInfo);
+        w.WriteByte(0); // bInGuild = false
+        return w.ToArray();
+    }
+
+    /// <summary>The "join our guild?" popup (ports <c>ResCWvsContext.guildInvite</c>).</summary>
+    public byte[] GuildInvite(int guildId, string fromName, int fromLevel, int fromJob)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResInvite);
+        w.WriteInt(guildId);
+        w.WriteString(fromName);
+        w.WriteInt(fromLevel);
+        w.WriteInt(fromJob);
+        return w.ToArray();
+    }
+
+    /// <summary>A member joined (ports <c>ResCWvsContext.newGuildMember</c>).</summary>
+    public byte[] GuildNewMember(int guildId, GuildMemberRow m)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResNewMember);
+        w.WriteInt(guildId);
+        w.WriteInt(m.CharacterId);
+        w.WriteFixedString(m.Name, 13);
+        w.WriteInt(m.Job);
+        w.WriteInt(m.Level);
+        w.WriteInt(m.Rank);
+        w.WriteInt(m.Online ? 1 : 0);
+        w.WriteInt(1); // signature (reference: constant 1 here)
+        w.WriteInt(3); // alliance rank
+        return w.ToArray();
+    }
+
+    /// <summary>A member left or was expelled (ports <c>ResCWvsContext.memberLeft</c>).</summary>
+    public byte[] GuildMemberLeft(int guildId, int characterId, string name, bool expelled)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(expelled ? GuildResMemberExpelled : GuildResMemberLeft);
+        w.WriteInt(guildId);
+        w.WriteInt(characterId);
+        w.WriteString(name);
+        return w.ToArray();
+    }
+
+    /// <summary>The guild disbanded (ports <c>ResCWvsContext.guildDisband</c>).</summary>
+    public byte[] GuildDisband(int guildId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResDisband);
+        w.WriteInt(guildId);
+        w.WriteByte(1);
+        return w.ToArray();
+    }
+
+    /// <summary>"X has denied your guild invitation" (ports <c>denyGuildInvitation</c>).</summary>
+    public byte[] GuildInviteDenied(string name)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResInviteDenied);
+        w.WriteString(name);
+        return w.ToArray();
+    }
+
+    /// <summary>A member's level/job changed (ports <c>guildMemberLevelJobUpdate</c>).</summary>
+    public byte[] GuildMemberLevelJob(int guildId, int characterId, int level, int job)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResMemberLevelJob);
+        w.WriteInt(guildId);
+        w.WriteInt(characterId);
+        w.WriteInt(level);
+        w.WriteInt(job);
+        return w.ToArray();
+    }
+
+    /// <summary>A member logged in/out (ports <c>guildMemberOnline</c>).</summary>
+    public byte[] GuildMemberOnline(int guildId, int characterId, bool online)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResMemberOnline);
+        w.WriteInt(guildId);
+        w.WriteInt(characterId);
+        w.WriteBool(online);
+        return w.ToArray();
+    }
+
+    /// <summary>The five rank titles changed (ports <c>rankTitleChange</c>).</summary>
+    public byte[] GuildRankTitles(int guildId, IReadOnlyList<string> titles)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResRankTitles);
+        w.WriteInt(guildId);
+        for (int i = 0; i < 5; i++)
+        {
+            w.WriteString(i < titles.Count ? titles[i] : string.Empty);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>A member's rank changed (ports <c>changeRank</c>).</summary>
+    public byte[] GuildMemberRankChanged(int guildId, int characterId, byte rank)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResMemberRank);
+        w.WriteInt(guildId);
+        w.WriteInt(characterId);
+        w.WriteByte(rank);
+        return w.ToArray();
+    }
+
+    /// <summary>The guild emblem changed (ports <c>guildEmblemChange</c>).</summary>
+    public byte[] GuildEmblemChanged(int guildId, short bg, byte bgColor, short logo, byte logoColor)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResEmblem);
+        w.WriteInt(guildId);
+        w.WriteShort(bg);
+        w.WriteByte(bgColor);
+        w.WriteShort(logo);
+        w.WriteByte(logoColor);
+        return w.ToArray();
+    }
+
+    /// <summary>The guild notice changed (ports <c>guildNotice</c>).</summary>
+    public byte[] GuildNotice(int guildId, string notice)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(GuildResNotice);
+        w.WriteInt(guildId);
+        w.WriteString(notice);
+        return w.ToArray();
+    }
+
+    /// <summary>A bodiless guild result (the generic error notices).</summary>
+    public byte[] GuildMessage(byte code)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GuildResult);
+        w.WriteByte(code);
+        return w.ToArray();
+    }
+
+    // LP_GroupMessage chat targets (OpsChatGroup).
+    public const byte ChatGroupFriend = 0;
+    public const byte ChatGroupParty = 1;
+    public const byte ChatGroupGuild = 2;
+
+    /// <summary>A friend/party/guild chat line (ports <c>ResCField.GroupMessage</c>).</summary>
+    public byte[] GroupMessage(byte chatTarget, string fromName, string text)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GroupMessage);
+        w.WriteByte(chatTarget);
+        w.WriteString(fromName);
+        w.WriteString(text);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_FamilyInfoResult</c> for a character with no family (the fixed default the
     /// reference emits on entry: all zero except the pedigree-generation default byte). The large
@@ -641,9 +872,10 @@ public sealed class ChannelPackets
 
     /// <summary>
     /// Builds <c>LP_UserEnterField</c> announcing a remote player (ports
-    /// <c>DataCUserRemote.Init</c>, JMS v186 path: &gt;= 164, &lt; 187, no guild/buffs/pets).
+    /// <c>DataCUserRemote.Init</c>, JMS v186 path: &gt;= 164, &lt; 187, no buffs/pets). The guild
+    /// block renders the guild name + mark under the character.
     /// </summary>
-    public byte[] UserEnterField(FieldPlayer player)
+    public byte[] UserEnterField(FieldPlayer player, GuildData? guild = null)
     {
         Character c = player.Character;
         PacketWriter w = NewPacket(ServerOpcode.UserEnterField);
@@ -651,12 +883,12 @@ public sealed class ChannelPackets
         w.WriteInt(c.Id);
         w.WriteByte(c.Level);            // JMS >= 164
         w.WriteString(c.Name);
-        // Empty guild block.
-        w.WriteString(string.Empty);
-        w.WriteShort(0);
-        w.WriteByte(0);
-        w.WriteShort(0);
-        w.WriteByte(0);
+        // Guild block (empty strings/zeros when guildless).
+        w.WriteString(guild?.Name ?? string.Empty);
+        w.WriteShort(guild?.LogoBG ?? 0);
+        w.WriteByte(guild?.LogoBGColor ?? 0);
+        w.WriteShort(guild?.Logo ?? 0);
+        w.WriteByte(guild?.LogoColor ?? 0);
         w.WriteLong(0);                  // buff mask (JMS >= 164)
         w.WriteLong(0);                  // buff mask
         w.WriteByte(0);                  // energy charge

@@ -16,6 +16,9 @@ public interface ICharacterRepository
     /// <summary>A character by name (case-insensitive), online or not; null when unknown.</summary>
     Character? FindByName(string name);
 
+    /// <summary>All characters in a guild (online or not), ordered by id.</summary>
+    IReadOnlyList<Character> ListByGuild(int guildId);
+
     Character Create(Character character);
 
     /// <summary>Persists changes to an existing character.</summary>
@@ -45,6 +48,9 @@ public sealed class InMemoryCharacterRepository : ICharacterRepository
 
     public Character? FindByName(string name)
         => _characters.Values.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    public IReadOnlyList<Character> ListByGuild(int guildId)
+        => _characters.Values.Where(c => c.GuildId == guildId).OrderBy(c => c.Id).ToList();
 
     public Character Create(Character character)
     {

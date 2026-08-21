@@ -85,4 +85,38 @@ public class DbGameStateRepositoryTests
     {
         Assert.Null(new DbKeymapRepository(InMemoryFactory()).Find(999));
     }
+
+    [Fact]
+    public void Guild_RoundTrips_TitlesEmblemAndNotice()
+    {
+        var repo = new DbGuildRepository(InMemoryFactory());
+
+        GuildData created = repo.Create(new GuildData
+        {
+            Name = "Cronus",
+            LeaderId = 7,
+            Notice = "Welcome!",
+            LogoBG = 1001,
+            LogoBGColor = 2,
+            Logo = 4005,
+            LogoColor = 3,
+        });
+        Assert.True(created.Id > 0);
+
+        created.RankTitles = new List<string> { "王", "副官", "兵", "兵", "新入り" };
+        repo.Save(created);
+
+        GuildData? loaded = repo.Find(created.Id);
+        Assert.NotNull(loaded);
+        Assert.Equal("Cronus", loaded!.Name);
+        Assert.Equal(7, loaded.LeaderId);
+        Assert.Equal("Welcome!", loaded.Notice);
+        Assert.Equal(1001, loaded.LogoBG);
+        Assert.Equal(4005, loaded.Logo);
+        Assert.Equal(new[] { "王", "副官", "兵", "兵", "新入り" }, loaded.RankTitles);
+
+        Assert.NotNull(repo.FindByName("cronus")); // case-insensitive
+        Assert.True(repo.Delete(created.Id));
+        Assert.Null(repo.Find(created.Id));
+    }
 }
