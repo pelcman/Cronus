@@ -26,6 +26,9 @@
     <None Include="..\..\data\opcodes\*.properties" Link="opcodes\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\scripts\npc\*.js" Link="scripts\npc\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

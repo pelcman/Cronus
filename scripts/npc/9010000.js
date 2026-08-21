@@ -5,7 +5,12 @@
 //   cm.askMenu(text)  -> selected index (use #Ln#label#l markup in text)
 //   cm.askText(text)  -> string
 //   cm.dispose()      -> end the conversation
-//   player.getName() / getLevel() / getMapId() / getMeso() / gainMeso(n)
+//   player.getName/getLevel/getMapId/getMeso/getExp/getHp/getMaxHp
+//   player.getGender/getJob/getStr/getDex/getInt/getLuk/getFame/getAp/getSp
+//   player.gainMeso(n) / gainExp(n) / gainAp(n) / gainSp(n) / gainFame(n)
+//   player.heal() / setJob(job) / warp(mapId[, portal])
+//   player.hasQuest(id) / isQuestDone(id) / startQuest(id) / completeQuest(id)
+// See 9000021.js (travel/heal) and 1012100.js (job instructor) for more.
 
 function start() {
     var choice = cm.askMenu(

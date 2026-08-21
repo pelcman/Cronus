@@ -356,6 +356,11 @@ Each milestone means adding one "working vertical slice".
       persists and pushes `LP_StatChanged`, the same verified pattern as `gainMeso`/`gainExp`/`heal`.
       This is what job-instructor, stat-reset, and fame NPCs are built from. End-to-end tested (a script
       setting job 200 + AP/SP/fame lands on the character).
+- [x] **M40: Example NPC scripts** — shipped runnable starter content under `scripts/npc/` that shows
+      the API off: `9010000.js` (menu + `gainMeso`), `9000021.js` (travel/heal via `heal`/`warp`), and
+      `1012100.js` (a first-job instructor using `getJob`/`getLevel`/`setJob`/`gainSp`). The shipped
+      scripts are loaded and run in a test (a level-5 beginner gets "come back at level 10"), so a typo
+      or bad API call in them is caught in CI. A concrete starting point for a deployment's NPCs.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
