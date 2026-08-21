@@ -231,6 +231,19 @@ Each milestone means adding one "working vertical slice".
         (`Inventory.Place`) so equip stats survive. `StorageRegistry` keyed by account id (in-memory;
         DB persistence via a `storages`/trunk-items table is a follow-up). `/storage` opens it;
         NPC-script `sendStorage` is a follow-up. Deposit→withdraw round-trip test + packet goldens.
+  - [x] **M10j: persistent key settings** — the function-key map persists per character instead of
+        resetting each entry (`CP_FuncKeyMappedModified` 0x008E → `LP_FuncKeyMappedInit` 0x017C, 94
+        positional `[type:1][action:4]` slots, seeded from the reference's 42-entry default). Ports
+        `ResCFuncKeyMappedMan`+`TacosKeyLayout`. `KeymapRegistry` keyed by character (in-memory; a
+        keymap DB table is a follow-up). Rebind-persists test + 94-slot golden.
+  - [x] **M10k: buff skills** — casting a self-buff skill applies its temporary stat buff
+        (`CP_UserSkillUseRequest` 0x0058 → `LP_SkillUseResult` 0x0023 + `LP_TemporaryStatSet` with
+        reason = +skillId, `time`×1000 from wz), ports `ReqCUser.OnUserSkillUseRequest`+`TacosBuff`.
+        `ISkillProvider.GetSkillEffect` loads the per-level effect; `SkillBuff.FromEffect` maps generic
+        stats (reusing the item-buff bits) + signature buffs (Magic Guard/Dark Sight/Booster/Power
+        Guard/Hyper Body via `x`/`y`). Deducts `mpCon` (`LP_StatChanged` MP); cancel clears the mask.
+        Deferred: server-side skill-ownership validation, party buffs, attack-skill effects, buff-expiry
+        tick. Cast-applies-buff test + FromEffect goldens.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
