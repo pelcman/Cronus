@@ -281,6 +281,15 @@ Each milestone means adding one "working vertical slice".
         slotMax (+mastery ×10) at `round(unitPrice × missing)` (`WzData.GetDouble`,
         `IItemProvider.GetUnitPrice`).
 
+  - [x] **M10o: buddy list** — friends work (`CP_FriendRequest` 0x0088 → `LP_FriendResult` 0x0039,
+        `OpsFriend` values): add (target gets a hidden pending entry + the invite popup), accept
+        (both sides turn visible), delete/decline, reload; the list block ports `CFriend::Reset`
+        (`[id:4][name:13][hidden:1][channel:4][tag:17]` + in-shop ints). Login/logout pushes
+        `FriendRes_Notify` channel updates to everyone listing the player. `Character.Buddies`
+        persists as a JSON column. Adding is online-only for now (no by-name offline lookup yet);
+        equips drop-to-ground also now carries the item instance (M10g follow-up closed). Two-client
+        add→accept e2e test.
+
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated

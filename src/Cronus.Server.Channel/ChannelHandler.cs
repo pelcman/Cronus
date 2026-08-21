@@ -65,6 +65,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opFuncKeyMapped;
     private readonly int _opQuestRequest;
     private readonly int _opMiniRoom;
+    private readonly int _opFriend;
     private readonly int _opGivePopularity;
     private readonly int _opCharacterInfo;
     private readonly int _opSkillUp;
@@ -155,6 +156,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opFuncKeyMapped = clientOpcodes.Get(ClientOpcode.FuncKeyMappedModified);
         _opQuestRequest = clientOpcodes.Get(ClientOpcode.UserQuestRequest);
         _opMiniRoom = clientOpcodes.Get(ClientOpcode.MiniRoom);
+        _opFriend = clientOpcodes.Get(ClientOpcode.FriendRequest);
         _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opCharacterInfo = clientOpcodes.Get(ClientOpcode.UserCharacterInfoRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
@@ -305,6 +307,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleMiniRoomAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opFriend)
+        {
+            await HandleFriendRequestAsync(session, packet).ConfigureAwait(false);
+        }
         else if (opcode == _opPortalScript)
         {
             await HandlePortalScriptAsync(session, packet).ConfigureAwait(false);
@@ -333,6 +339,9 @@ public sealed class ChannelHandler : PacketHandlerBase
             {
                 await CancelTradeAsync(trade).ConfigureAwait(false);
             }
+
+            // Buddies see this player go offline.
+            await NotifyBuddiesOfPresenceAsync(_player.Character.Id, channel: -1).ConfigureAwait(false);
 
             // Leave any messenger so the other members' windows drop this player.
             Messenger? messenger = _messengers.GetFor(_player.Character.Id);
@@ -420,7 +429,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.PetConsumeCureItemInit()).ConfigureAwait(false);
         await session.SendAsync(_packets.FuncKeyMappedInit(_keymaps.Get(character.Id))).ConfigureAwait(false);
         await session.SendAsync(_packets.MacroSysDataInit()).ConfigureAwait(false);
-        await session.SendAsync(_packets.FriendListInit()).ConfigureAwait(false);
+        await session.SendAsync(BuildBuddyList(character, ChannelPackets.FriendLoadDone)).ConfigureAwait(false);
         await session.SendAsync(_packets.FamilyInfoResult()).ConfigureAwait(false);
         await session.SendAsync(_packets.BroadcastSlideClear()).ConfigureAwait(false);
 
@@ -437,6 +446,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             .ConfigureAwait(false);
 
         await SpawnNpcsAsync(session, field).ConfigureAwait(false);
+        await NotifyBuddiesOfPresenceAsync(character.Id, channel: 0).ConfigureAwait(false); // "came online"
     }
 
     private async ValueTask SpawnNpcsAsync(MapleSession session, Field field)
@@ -2402,6 +2412,174 @@ public sealed class ChannelHandler : PacketHandlerBase
             }
 
             await TrySendAsync(side.Player, _packets.TradeLeave(side.Slot, ChannelPackets.TradeMsgCancelled)).ConfigureAwait(false);
+        }
+    }
+
+    // CP_FriendRequest flags (OpsFriend).
+    private const byte FriendReqLoad = 0;
+    private const byte FriendReqSet = 1;
+    private const byte FriendReqAccept = 2;
+    private const byte FriendReqDelete = 3;
+
+    /// <summary>Max buddy-list size (the pre-BB default capacity).</summary>
+    private const int BuddyCapacity = 20;
+
+    /// <summary>
+    /// Handles <c>CP_FriendRequest</c> — the buddy list (ports <c>ReqSub_FriendRequest</c>): add a
+    /// friend (they get a hidden pending entry + the invite popup), accept (the hidden entry turns
+    /// visible on both sides), delete/decline, and reload. Adding is online-only for now (there is
+    /// no by-name character lookup for offline players yet).
+    /// </summary>
+    private async ValueTask HandleFriendRequestAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        byte flag = packet.ReadByte();
+        switch (flag)
+        {
+            case FriendReqLoad:
+                await SendBuddyListAsync(session, c, ChannelPackets.FriendLoadDone).ConfigureAwait(false);
+                break;
+
+            case FriendReqSet:
+            {
+                string name = packet.ReadString();
+                string tag = packet.Remaining > 0 ? packet.ReadString() : string.Empty;
+                if (tag.Length == 0)
+                {
+                    tag = ChannelPackets.DefaultBuddyTag;
+                }
+
+                if (c.Buddies.Count >= BuddyCapacity)
+                {
+                    await session.SendAsync(_packets.BuddyMessage(ChannelPackets.FriendSetFullMe)).ConfigureAwait(false);
+                    return;
+                }
+
+                FieldPlayer? target = _fields.FindPlayerByName(name);
+                if (target is null || target.Character.Id == c.Id)
+                {
+                    await session.SendAsync(_packets.BuddyMessage(ChannelPackets.FriendSetUnknownUser)).ConfigureAwait(false);
+                    return;
+                }
+
+                Character t = target.Character;
+                if (c.Buddies.ContainsKey(t.Id))
+                {
+                    await session.SendAsync(_packets.BuddyMessage(ChannelPackets.FriendSetAlready)).ConfigureAwait(false);
+                    return;
+                }
+
+                if (t.Buddies.Count >= BuddyCapacity)
+                {
+                    await session.SendAsync(_packets.BuddyMessage(ChannelPackets.FriendSetFullOther)).ConfigureAwait(false);
+                    return;
+                }
+
+                // The target gets a hidden pending entry + the invite popup; the asker's entry is live.
+                t.Buddies[c.Id] = new BuddyEntry(c.Name, ChannelPackets.DefaultBuddyTag, Hidden: true);
+                _characters.Save(t);
+                await TrySendAsync(target, BuildBuddyList(t, ChannelPackets.FriendSetDone)).ConfigureAwait(false);
+                await TrySendAsync(target, _packets.BuddyInvite(c.Id, c.Name, c.Level, c.Job)).ConfigureAwait(false);
+
+                c.Buddies[t.Id] = new BuddyEntry(t.Name, tag, Hidden: false);
+                _characters.Save(c);
+                await SendBuddyListAsync(session, c, ChannelPackets.FriendSetDone).ConfigureAwait(false);
+                break;
+            }
+
+            case FriendReqAccept:
+            {
+                int friendId = packet.ReadInt();
+                if (!c.Buddies.TryGetValue(friendId, out BuddyEntry? pending) || !pending.Hidden)
+                {
+                    return;
+                }
+
+                c.Buddies[friendId] = pending with { Hidden = false };
+                _characters.Save(c);
+                await SendBuddyListAsync(session, c, ChannelPackets.FriendSetDone).ConfigureAwait(false);
+
+                if (FindOnlinePlayer(friendId) is { } friend)
+                {
+                    await TrySendAsync(friend, BuildBuddyList(friend.Character, ChannelPackets.FriendSetDone)).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case FriendReqDelete:
+            {
+                int friendId = packet.ReadInt();
+                if (!c.Buddies.Remove(friendId))
+                {
+                    return;
+                }
+
+                _characters.Save(c);
+                await SendBuddyListAsync(session, c, ChannelPackets.FriendDeleteDone).ConfigureAwait(false);
+
+                // The other side's entry stays but now shows this player as offline.
+                if (FindOnlinePlayer(friendId) is { } friend && friend.Character.Buddies.ContainsKey(c.Id))
+                {
+                    await TrySendAsync(friend, _packets.BuddyChannelUpdate(c.Id, -1)).ConfigureAwait(false);
+                }
+
+                break;
+            }
+        }
+    }
+
+    /// <summary>An online player by character id across the channel's fields, or null.</summary>
+    private FieldPlayer? FindOnlinePlayer(int characterId)
+    {
+        foreach (Field field in _fields.Fields)
+        {
+            foreach (FieldPlayer player in field.Players)
+            {
+                if (player.Character.Id == characterId)
+                {
+                    return player;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private byte[] BuildBuddyList(Character c, byte flag)
+    {
+        var rows = new List<ChannelPackets.BuddyRow>(c.Buddies.Count);
+        foreach ((int id, BuddyEntry entry) in c.Buddies)
+        {
+            int channel = FindOnlinePlayer(id) is null ? -1 : 0;
+            rows.Add(new ChannelPackets.BuddyRow(id, entry.Name, entry.Tag, entry.Hidden, channel));
+        }
+
+        return _packets.BuddyListResult(flag, rows);
+    }
+
+    private async ValueTask SendBuddyListAsync(MapleSession session, Character c, byte flag)
+        => await session.SendAsync(BuildBuddyList(c, flag)).ConfigureAwait(false);
+
+    /// <summary>Tells everyone who lists this player as a buddy that their channel changed.</summary>
+    private async ValueTask NotifyBuddiesOfPresenceAsync(int characterId, int channel)
+    {
+        foreach (Field field in _fields.Fields)
+        {
+            foreach (FieldPlayer player in field.Players)
+            {
+                if (player.Character.Id != characterId
+                    && player.Character.Buddies.TryGetValue(characterId, out BuddyEntry? entry)
+                    && !entry.Hidden)
+                {
+                    await TrySendAsync(player, _packets.BuddyChannelUpdate(characterId, channel)).ConfigureAwait(false);
+                }
+            }
         }
     }
 

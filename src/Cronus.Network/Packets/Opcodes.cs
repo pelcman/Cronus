@@ -55,6 +55,7 @@ public static class ClientOpcode
     public const string Messenger = "CP_Messenger";
     public const string PartyRequest = "CP_PartyRequest";
     public const string MiniRoom = "CP_MiniRoom";
+    public const string FriendRequest = "CP_FriendRequest";
 }
 
 /// <summary>

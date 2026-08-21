@@ -511,6 +511,90 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_FriendResult flags (OpsFriend, fixed declaration values).
+    public const byte FriendLoadDone = 7;
+    public const byte FriendInvite = 9;
+    public const byte FriendSetDone = 10;
+    public const byte FriendSetFullMe = 11;
+    public const byte FriendSetFullOther = 12;
+    public const byte FriendSetAlready = 13;
+    public const byte FriendSetUnknownUser = 15;
+    public const byte FriendDeleteDone = 18;
+    public const byte FriendNotify = 20;
+
+    /// <summary>One buddy row for the wire: id, entry data, and the channel (-1 = offline, 0-based online).</summary>
+    public readonly record struct BuddyRow(int CharacterId, string Name, string Tag, bool Hidden, int Channel);
+
+    /// <summary>
+    /// Builds a buddy-list result (ports <c>CWvsContext.CFriend::Reset</c>): the flag (load / set /
+    /// delete done), the count, per friend <c>[id:4][name:13][hidden:1][channel:4][tag:17]</c>, then
+    /// a 4-byte in-shop marker per friend.
+    /// </summary>
+    public byte[] BuddyListResult(byte flag, IReadOnlyList<BuddyRow> buddies)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FriendResult);
+        w.WriteByte(flag);
+        w.WriteByte((byte)buddies.Count);
+        foreach (BuddyRow row in buddies)
+        {
+            w.WriteInt(row.CharacterId);
+            w.WriteFixedString(row.Name, 13);
+            w.WriteBool(row.Hidden);
+            w.WriteInt(row.Channel);
+            w.WriteFixedString(row.Tag, 17);
+        }
+
+        foreach (BuddyRow _ in buddies)
+        {
+            w.WriteInt(0); // in cash-shop marker
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>The default JMS buddy tag ("マイ友未指定").</summary>
+    public const string DefaultBuddyTag = "マイ友未指定";
+
+    /// <summary>
+    /// Builds the "X wants to be your friend" popup (ports the <c>FriendRes_Invite</c> body):
+    /// id/name/level/job, then the 39-byte CFriend::Insert row and a trailing 1.
+    /// </summary>
+    public byte[] BuddyInvite(int fromId, string fromName, int level, int job)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FriendResult);
+        w.WriteByte(FriendInvite);
+        w.WriteInt(fromId);
+        w.WriteString(fromName);
+        w.WriteInt(level);
+        w.WriteInt(job);
+        w.WriteInt(fromId);
+        w.WriteFixedString(fromName, 13);
+        w.WriteByte(0);
+        w.WriteInt(-1); // channel (shown offline in the popup row)
+        w.WriteFixedString(DefaultBuddyTag, 17);
+        w.WriteByte(1);
+        return w.ToArray();
+    }
+
+    /// <summary>A bodiless buddy result (the full/unknown-user/already-set notices).</summary>
+    public byte[] BuddyMessage(byte flag)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FriendResult);
+        w.WriteByte(flag);
+        return w.ToArray();
+    }
+
+    /// <summary>A friend's channel changed (login/logout) — ports <c>FriendRes_Notify</c>.</summary>
+    public byte[] BuddyChannelUpdate(int friendId, int channel)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FriendResult);
+        w.WriteByte(FriendNotify);
+        w.WriteInt(friendId);
+        w.WriteByte(0);
+        w.WriteInt(channel);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_FamilyInfoResult</c> for a character with no family (the fixed default the
     /// reference emits on entry: all zero except the pedigree-generation default byte). The large

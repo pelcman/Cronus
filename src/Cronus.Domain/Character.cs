@@ -69,4 +69,10 @@ public sealed class Character
 
     /// <summary>Learned skills: skill id → level. In-memory (EF-ignored) for now.</summary>
     public Dictionary<int, int> Skills { get; set; } = new();
+
+    /// <summary>Buddy list: friend character id → entry (persisted as a JSON column).</summary>
+    public Dictionary<int, BuddyEntry> Buddies { get; set; } = new();
 }
+
+/// <summary>One buddy-list entry. Hidden = a pending incoming request (not yet accepted).</summary>
+public sealed record BuddyEntry(string Name, string Tag, bool Hidden);
