@@ -202,6 +202,17 @@ public class NpcScriptEngineTests
 
         public bool StorageOpened { get; private set; }
 
+        public Dictionary<int, int> Items { get; } = new();
+
+        public void gainItem(int itemId, int quantity)
+        {
+            Items[itemId] = Math.Max(0, Items.GetValueOrDefault(itemId) + quantity);
+        }
+
+        public bool haveItem(int itemId) => itemQuantity(itemId) > 0;
+
+        public int itemQuantity(int itemId) => Items.GetValueOrDefault(itemId);
+
         public void openShop(int shopId) => OpenedShops.Add(shopId);
 
         public void openStorage() => StorageOpened = true;
@@ -314,6 +325,90 @@ public class NpcScriptEngineTests
         Assert.Equal("Healed to 100, exp 600", ok.Text);
         Assert.Equal(100, player.Hp);
         Assert.Equal(600, player.Exp);
+    }
+
+    [Fact]
+    public void QuestScript_Start_BindsQmAndRunsStart()
+    {
+        const int questId = 2000;
+        const string script = """
+            function start() {
+                if (qm.askYesNo("Help me?")) {
+                    player.startQuest(2000);
+                    qm.sendOk("Thank you!");
+                }
+            }
+            function end() {
+                qm.sendOk("never used here");
+            }
+            """;
+
+        var engine = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string>()),
+            questScripts: new DictionaryNpcScriptSource(new Dictionary<int, string> { [questId] = script }));
+        var dialog = new RecordingDialog();
+        var player = new FakePlayer();
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation qm = engine.StartQuest(questId, npcId: 9010000, dialog, player)!;
+
+        Prompt yesno = dialog.Take(cts.Token);
+        Assert.Equal(2, yesno.MessageType);
+        qm.Advance(messageType: 2, action: 1, selection: -1, text: string.Empty); // "Yes"
+
+        Prompt ok = dialog.Take(cts.Token);
+        Assert.Equal("Thank you!", ok.Text);
+        Assert.Contains(questId, player.Started);
+    }
+
+    [Fact]
+    public void QuestScript_Ending_RunsEndFunction()
+    {
+        const int questId = 2001;
+        const string script = """
+            function start() {
+                qm.sendOk("start branch");
+            }
+            function end() {
+                if (player.haveItem(4000000)) {
+                    player.gainItem(4000000, -10);
+                    player.completeQuest(2001);
+                    qm.sendOk("Done!");
+                }
+            }
+            """;
+
+        var engine = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string>()),
+            questScripts: new DictionaryNpcScriptSource(new Dictionary<int, string> { [questId] = script }));
+        var dialog = new RecordingDialog();
+        var player = new FakePlayer();
+        player.Items[4000000] = 10;
+        player.Started.Add(questId);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        engine.StartQuest(questId, npcId: 9010000, dialog, player, ending: true);
+
+        Prompt ok = dialog.Take(cts.Token);
+        Assert.Equal("Done!", ok.Text);
+        Assert.Contains(questId, player.Completed);
+        Assert.Equal(0, player.itemQuantity(4000000));
+    }
+
+    [Fact]
+    public void QuestScript_Unknown_ReturnsNull()
+    {
+        var engine = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string>()),
+            questScripts: new DictionaryNpcScriptSource(new Dictionary<int, string>()));
+        Assert.Null(engine.StartQuest(999, 9010000, new RecordingDialog(), null));
+    }
+
+    [Fact]
+    public void QuestScript_NoQuestSource_ReturnsNull()
+    {
+        var engine = new NpcScriptEngine(new DictionaryNpcScriptSource(new Dictionary<int, string>()));
+        Assert.Null(engine.StartQuest(999, 9010000, new RecordingDialog(), null));
     }
 
     private static void WaitUntilEnded(NpcConversation cm, CancellationToken ct)

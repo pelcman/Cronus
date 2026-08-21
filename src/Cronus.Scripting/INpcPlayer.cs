@@ -79,6 +79,15 @@ public interface INpcPlayer
     /// <summary>Marks a quest as completed (removing it from started).</summary>
     void completeQuest(int questId);
 
+    /// <summary>Gives (or, if negative, takes) items, with a live inventory update.</summary>
+    void gainItem(int itemId, int quantity);
+
+    /// <summary>True if the player carries at least one of the item.</summary>
+    bool haveItem(int itemId);
+
+    /// <summary>How many of the item the player carries across all stacks.</summary>
+    int itemQuantity(int itemId);
+
     /// <summary>Opens the NPC shop with the given shop id (no-op when unknown).</summary>
     void openShop(int shopId);
 

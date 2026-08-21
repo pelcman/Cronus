@@ -20,6 +20,8 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<int, int, ValueTask>? _warp;
     private readonly Func<int, ValueTask>? _openShop;
     private readonly Func<ValueTask>? _openStorage;
+    private readonly Func<int, int, ValueTask>? _gainItem;
+    private readonly Func<int, int>? _itemCount;
 
     public ChannelPlayer(
         Character character,
@@ -28,7 +30,9 @@ public sealed class ChannelPlayer : INpcPlayer
         ChannelPackets packets,
         Func<int, int, ValueTask>? warp = null,
         Func<int, ValueTask>? openShop = null,
-        Func<ValueTask>? openStorage = null)
+        Func<ValueTask>? openStorage = null,
+        Func<int, int, ValueTask>? gainItem = null,
+        Func<int, int>? itemCount = null)
     {
         _character = character;
         _characters = characters;
@@ -37,6 +41,8 @@ public sealed class ChannelPlayer : INpcPlayer
         _warp = warp;
         _openShop = openShop;
         _openStorage = openStorage;
+        _gainItem = gainItem;
+        _itemCount = itemCount;
     }
 
     public string getName() => _character.Name;
@@ -159,6 +165,13 @@ public sealed class ChannelPlayer : INpcPlayer
         Send(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordCompleted));
         Send(_packets.UserEffectLocal(ChannelPackets.UserEffectQuestComplete)); // the completion jingle
     }
+
+    public void gainItem(int itemId, int quantity)
+        => _gainItem?.Invoke(itemId, quantity).AsTask().GetAwaiter().GetResult();
+
+    public bool haveItem(int itemId) => itemQuantity(itemId) > 0;
+
+    public int itemQuantity(int itemId) => _itemCount?.Invoke(itemId) ?? 0;
 
     public void openShop(int shopId)
         => _openShop?.Invoke(shopId).AsTask().GetAwaiter().GetResult();

@@ -284,8 +284,9 @@ static NpcScriptEngine? CreateNpcScriptEngine()
     }
 
     string npcDir = Path.Combine(scriptRoot, "npc");
-    Console.WriteLine($"[npc] Loading NPC scripts on demand from {npcDir}");
-    return new NpcScriptEngine(new FolderNpcScriptSource(npcDir));
+    string questDir = Path.Combine(scriptRoot, "quest");
+    Console.WriteLine($"[npc] Loading NPC scripts on demand from {npcDir} (quest scripts from {questDir})");
+    return new NpcScriptEngine(new FolderNpcScriptSource(npcDir), new FolderNpcScriptSource(questDir));
 }
 
 static PortalScriptEngine? CreatePortalScriptEngine()

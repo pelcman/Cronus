@@ -1761,8 +1761,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// client's quest dialog (ports <c>ReqCUser.OnUserQuestRequest</c> + <c>MapleQuest</c>).
     /// Accept gates on the start check's level, seeds the mob-kill progress, and applies the start
     /// acts; complete verifies the end check (kills + items), applies the rewards (exp / meso /
-    /// fame / items, negative counts taken away), and plays the completion effect. Lost-item and
-    /// script-quest actions aren't modelled yet.
+    /// fame / items, negative counts taken away), and plays the completion effect. Script-driven
+    /// quests run <c>scripts/quest/{questId}.js</c> (<c>start()</c> / <c>end()</c> with the global
+    /// <c>qm</c>); lost-item recovery isn't modelled yet.
     /// </summary>
     private async ValueTask HandleQuestRequestAsync(MapleSession session, PacketReader packet)
     {
@@ -1778,19 +1779,39 @@ public sealed class ChannelHandler : PacketHandlerBase
         switch (action)
         {
             case QuestReqAccept:
-            case QuestReqOpeningScript: // script-driven starts fall back to a plain accept until quest scripts land
             {
                 int npcId = packet.ReadInt();
                 await AcceptQuestAsync(session, c, questId, npcId).ConfigureAwait(false);
                 break;
             }
 
-            case QuestReqComplete:
-            case QuestReqCompleteScript: // script-driven ends fall back to a plain complete
+            case QuestReqOpeningScript: // scripts/quest/{questId}.js start(); plain accept if none
             {
                 int npcId = packet.ReadInt();
-                int selection = action == QuestReqComplete && packet.Remaining >= 4 ? packet.ReadInt() : -1;
+                if (!TryStartQuestScript(session, questId, npcId, ending: false))
+                {
+                    await AcceptQuestAsync(session, c, questId, npcId).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case QuestReqComplete:
+            {
+                int npcId = packet.ReadInt();
+                int selection = packet.Remaining >= 4 ? packet.ReadInt() : -1;
                 await CompleteQuestAsync(session, c, questId, npcId, selection).ConfigureAwait(false);
+                break;
+            }
+
+            case QuestReqCompleteScript: // scripts/quest/{questId}.js end(); plain complete if none
+            {
+                int npcId = packet.ReadInt();
+                if (!TryStartQuestScript(session, questId, npcId, ending: true))
+                {
+                    await CompleteQuestAsync(session, c, questId, npcId).ConfigureAwait(false);
+                }
+
                 break;
             }
 
@@ -1803,6 +1824,29 @@ public sealed class ChannelHandler : PacketHandlerBase
 
                 break;
         }
+    }
+
+    /// <summary>
+    /// Runs a quest's script (ports <c>TacosScriptQuest.startQuest/endQuest</c>): the script drives
+    /// the dialog through <c>qm</c> and grants/verifies through <c>player</c>. False when the quest
+    /// has no script (caller falls back to the data-driven path) or a conversation is already open.
+    /// </summary>
+    private bool TryStartQuestScript(MapleSession session, int questId, int npcId, bool ending)
+    {
+        if (_npcScripts is null || _conversation is { IsEnded: false })
+        {
+            return false;
+        }
+
+        var dialog = new ChannelNpcDialog(session, _packets);
+        NpcConversation? conversation = _npcScripts.StartQuest(questId, npcId, dialog, CreateScriptPlayer(session), ending);
+        if (conversation is null)
+        {
+            return false;
+        }
+
+        _conversation = conversation;
+        return true;
     }
 
     private async ValueTask AcceptQuestAsync(MapleSession session, Character c, int questId, int npcId)
@@ -3488,12 +3532,47 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         var dialog = new ChannelNpcDialog(session, _packets);
-        var player = new ChannelPlayer(
-            _player.Character, _characters, session, _packets,
-            warp: (map, portal) => MovePlayerToMapAsync(session, map, portal),
-            openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
-            openStorage: () => OpenStorageAsync(session));
-        _conversation = _npcScripts.Start(templateId, dialog, player);
+        _conversation = _npcScripts.Start(templateId, dialog, CreateScriptPlayer(session));
+    }
+
+    /// <summary>The <c>player</c> object handed to NPC / quest / portal scripts.</summary>
+    private ChannelPlayer CreateScriptPlayer(MapleSession session) => new(
+        _player!.Character, _characters, session, _packets,
+        warp: (map, portal) => MovePlayerToMapAsync(session, map, portal),
+        openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
+        openStorage: () => OpenStorageAsync(session),
+        gainItem: (itemId, quantity) => ScriptGainItemAsync(session, itemId, quantity),
+        itemCount: itemId => CountInventoryItem(_player!.Character, itemId));
+
+    /// <summary>
+    /// Gives (positive) or takes (negative) items on behalf of a script, pushing the live
+    /// inventory update (the script-side equivalent of a quest act's item list).
+    /// </summary>
+    private async ValueTask ScriptGainItemAsync(MapleSession session, int itemId, int quantity)
+    {
+        if (_player is null || quantity == 0)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        List<InventoryChange> changes;
+        if (quantity > 0)
+        {
+            int slotMax = _items.GetConsume(itemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+            changes = Inventory.Add(c, itemId, quantity, slotMax);
+            PopulateEquipStats(changes); // a granted equip gets its wz base stats
+        }
+        else
+        {
+            changes = RemoveInventoryQuantity(c, itemId, -quantity);
+        }
+
+        if (changes.Count > 0)
+        {
+            _characters.Save(c);
+            await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -3519,11 +3598,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        var scriptPlayer = new ChannelPlayer(
-            _player.Character, _characters, session, _packets,
-            warp: (map, spawn) => MovePlayerToMapAsync(session, map, spawn),
-            openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
-            openStorage: () => OpenStorageAsync(session));
+        ChannelPlayer scriptPlayer = CreateScriptPlayer(session);
         await Task.Run(() => _portalScripts.Run(portal.Script, scriptPlayer)).ConfigureAwait(false);
     }
 
