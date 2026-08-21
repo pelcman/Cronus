@@ -379,6 +379,184 @@ public class CombatTests
         Assert.Equal(2, attacker.Level);
     }
 
+    /// <summary>Alice: creates a party, invites a partner, then kills a mob once both are set.</summary>
+    private sealed class PartyKiller : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly string _partnerName;
+        private readonly int[] _damages;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opParty = ServerOps.Get(ServerOpcode.PartyResult);
+        private readonly int _opMobEnter = ServerOps.Get(ServerOpcode.MobEnterField);
+        private int _mobOid = -1;
+        private bool _joined;
+        private bool _invited;
+        private bool _attacked;
+
+        public PartyKiller(int characterId, string partnerName, int[] damages)
+        {
+            _characterId = characterId;
+            _partnerName = partnerName;
+            _damages = damages;
+        }
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField)
+            {
+                await session.SendAsync(Party(session, w => w.WriteByte(1))); // create party
+            }
+            else if (opcode == _opMobEnter)
+            {
+                _mobOid = p.ReadInt();
+                await MaybeAttack(session);
+            }
+            else if (opcode == _opParty)
+            {
+                int op = p.ReadByte();
+                if (op == 8 && !_invited) // CreateDone -> invite the partner
+                {
+                    _invited = true;
+                    await session.SendAsync(Party(session, w => { w.WriteByte(4); w.WriteString(_partnerName); }));
+                }
+                else if (op == 15) // partner joined
+                {
+                    _joined = true;
+                    await MaybeAttack(session);
+                }
+            }
+        }
+
+        private async ValueTask MaybeAttack(MapleSession session)
+        {
+            if (_joined && _mobOid >= 0 && !_attacked)
+            {
+                _attacked = true;
+                await session.SendAsync(BuildMeleeAttack(session, _mobOid, _damages));
+            }
+        }
+
+        private static byte[] Party(MapleSession session, Action<PacketWriter> body)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.PartyRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+            body(w);
+            return w.ToArray();
+        }
+    }
+
+    /// <summary>Bob: joins the party on invite and records exp granted to him.</summary>
+    private sealed class PartyPartner : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opParty = ServerOps.Get(ServerOpcode.PartyResult);
+        private readonly int _opStat = ServerOps.Get(ServerOpcode.StatChanged);
+
+        public PartyPartner(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource<int> ExpGained { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opParty)
+            {
+                int op = p.ReadByte();
+                if (op == 4) // invite popup -> join
+                {
+                    int partyId = p.ReadInt();
+                    var w = new PacketWriter(ClientOps.Get(ClientOpcode.PartyRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                    w.WriteByte(3);
+                    w.WriteInt(partyId);
+                    await session.SendAsync(w.ToArray());
+                }
+            }
+            else if (opcode == _opStat)
+            {
+                p.ReadByte();          // unlock
+                int mask = p.ReadInt();
+                if (mask == 0)
+                {
+                    return;
+                }
+
+                int value = p.ReadInt();
+                if ((mask & 0x10000) != 0) // Exp
+                {
+                    ExpGained.TrySetResult(value);
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PartyKill_SharesExp_WithSameMapMembers()
+    {
+        var repo = new InMemoryCharacterRepository();
+        // Level 20 so 300 exp doesn't trigger a level-up (threshold 20216), keeping exact exp assertable.
+        Character alice = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Alice", MapId = 100000000, Level = 20 });
+        Character bob = repo.Create(new Character { AccountId = 2, WorldId = 0, Name = "Bob", MapId = 100000000, Level = 20 });
+
+        var map = new MapData
+        {
+            MapId = 100000000,
+            Portals = Array.Empty<PortalData>(),
+            Mobs = new[] { new MobSpawn { TemplateId = 100100, X = 0, Y = 0, MaxHp = 50 } },
+        };
+        var mobData = new InMemoryMobProvider(new[] { new MobData { TemplateId = 100100, MaxHp = 50, Exp = 300 } });
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }), mobData);
+        var parties = new PartyRegistry();
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        // Bob online first so the invite finds him.
+        var partner = new PartyPartner(bob.Id);
+        var partnerHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, channelId: 0, parties: parties);
+        var b2s = new Pipe();
+        var s2b = new Pipe();
+        await using var bServer = new MapleSession(b2s.Reader, s2b.Writer, ServerConfig.Jms186, SessionRole.Server, partnerHandler);
+        await using var bClient = new MapleSession(s2b.Reader, b2s.Writer, ServerConfig.Jms186, SessionRole.Client, partner);
+        _ = bServer.RunAsync(cts.Token);
+        _ = bClient.RunAsync(cts.Token);
+
+        // Alice creates the party, invites Bob, and kills the mob once he's joined.
+        var killer = new PartyKiller(alice.Id, "Bob", new[] { 40, 40 });
+        var killerHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, channelId: 0, parties: parties);
+        var a2s = new Pipe();
+        var s2a = new Pipe();
+        await using var aServer = new MapleSession(a2s.Reader, s2a.Writer, ServerConfig.Jms186, SessionRole.Server, killerHandler);
+        await using var aClient = new MapleSession(s2a.Reader, a2s.Writer, ServerConfig.Jms186, SessionRole.Client, killer);
+        _ = aServer.RunAsync(cts.Token);
+        _ = aClient.RunAsync(cts.Token);
+
+        int bobExp = await partner.ExpGained.Task.WaitAsync(cts.Token);
+
+        // 300 exp, 2 same-map members: killer x2/(3) = 200, partner x0.3/(3) = 30.
+        Assert.Equal(30, bobExp);
+        Assert.Equal(30, bob.Exp);
+        Assert.Equal(200, alice.Exp);
+    }
+
     [Fact]
     public void ParseMelee_ReadsTargetsAndDamages()
     {

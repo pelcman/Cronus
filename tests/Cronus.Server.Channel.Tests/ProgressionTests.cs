@@ -83,4 +83,30 @@ public class ProgressionTests
         Assert.Equal((StatFlag)0, changed);
         Assert.Equal(0, c.Exp);
     }
+
+    [Fact]
+    public void PartyExpShare_SoloGetsFullExp()
+    {
+        // A party of one (or the no-party path) still yields the full base exp to the killer.
+        Assert.Equal(1000, CharacterProgression.PartyExpShare(1000, sameMapMemberCount: 1, isKiller: true));
+    }
+
+    [Fact]
+    public void PartyExpShare_KillerGetsMoreThanPartner()
+    {
+        // Two members: pool = 1000/3 ≈ 333.33; killer x2 ≈ 667, partner x0.3 ≈ 100.
+        int killer = CharacterProgression.PartyExpShare(1000, sameMapMemberCount: 2, isKiller: true);
+        int partner = CharacterProgression.PartyExpShare(1000, sameMapMemberCount: 2, isKiller: false);
+
+        Assert.Equal(667, killer);
+        Assert.Equal(100, partner);
+        Assert.True(killer > partner);
+    }
+
+    [Fact]
+    public void PartyExpShare_ZeroOrInvalid_GivesNothing()
+    {
+        Assert.Equal(0, CharacterProgression.PartyExpShare(0, 2, isKiller: true));
+        Assert.Equal(0, CharacterProgression.PartyExpShare(1000, 0, isKiller: true));
+    }
 }

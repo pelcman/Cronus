@@ -54,6 +54,26 @@ public static class CharacterProgression
         return StatFlag.Exp;
     }
 
+    /// <summary>
+    /// The exp a single same-map party member receives from a kill worth <paramref name="baseExp"/>.
+    /// A simplified port of MapleStory's party split: the pool is <c>baseExp / (members + 1)</c>, the
+    /// killer takes weight 2.0 and every other member 0.3. Solo (a party of one, or no party →
+    /// <paramref name="sameMapMemberCount"/> == 1) yields the full <paramref name="baseExp"/> to the
+    /// killer, so grouping trades a slice of your exp for giving partners a share. Level/range
+    /// modifiers and the class/premium bonuses are not modelled (server is authoritative on exp).
+    /// </summary>
+    public static int PartyExpShare(int baseExp, int sameMapMemberCount, bool isKiller)
+    {
+        if (baseExp <= 0 || sameMapMemberCount < 1)
+        {
+            return 0;
+        }
+
+        double fraction = (double)baseExp / (sameMapMemberCount + 1);
+        double weight = isKiller ? 2.0 : 0.3;
+        return (int)Math.Round(fraction * weight, MidpointRounding.AwayFromZero);
+    }
+
     private static void LevelUp(Character c)
     {
         c.Level++;

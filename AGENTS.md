@@ -248,9 +248,16 @@ Each milestone means adding one "working vertical slice".
       (`addPartyStatus`: ids, 13-byte names, jobs, levels, wire channels, leader, map ids, door
       blocks) is reproduced exactly and pinned with a golden-byte test (322-byte block, channel is
       1-based like the reference). End-to-end tested (create → invite → join → leave). Parties are
-      in-memory / online-only. Follow-ups (M23): exp sharing among same-map members, party HP bars
-      (`LP_UserHP` / `receivePartyMemberHP`), and leader reassignment on disconnect instead of
-      disband.
+      in-memory / online-only. Follow-ups: party HP bars (`LP_UserHP` / `receivePartyMemberHP`) and
+      leader reassignment on disconnect instead of disband.
+- [x] **M23: Party exp sharing** — a kill now splits exp among the killer's party members on the
+      same map instead of going wholly to the killer. `CharacterProgression.PartyExpShare` ports a
+      simplified `MapleMonster.killedMob` split: pool = `baseExp / (members + 1)`, killer weight 2.0,
+      others 0.3 — so a solo/no-party kill still yields full exp, and grouping trades a slice for
+      giving partners a share. `GrantKillExpAsync` distributes to each same-map member (each gets
+      their own `LP_StatChanged` and level-up effect). Exp is server-authoritative so no new packet /
+      byte risk. Level/range and class/premium bonuses are not modelled. End-to-end tested (300-exp
+      mob → killer 200, partner 30). Follow-up: party HP bars.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

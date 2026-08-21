@@ -430,7 +430,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                 mob.ControllerId = -1;
                 mob.RespawnAtTick = MobRespawnService.NextRespawnTick(mob.MobTime); // 0 = never (boss)
                 await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
-                await GrantKillExpAsync(session, mob.Exp).ConfigureAwait(false);
+                await GrantKillExpAsync(mob.Exp).ConfigureAwait(false);
                 await DropMesoAsync(mob).ConfigureAwait(false);
             }
         }
@@ -607,17 +607,42 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
     }
 
-    private async ValueTask GrantKillExpAsync(MapleSession session, int exp)
+    private async ValueTask GrantKillExpAsync(int exp)
     {
         if (exp <= 0 || _player is null)
         {
             return;
         }
 
-        Character c = _player.Character;
+        Party? party = _parties.GetForCharacter(_player.Character.Id);
+        if (party is null)
+        {
+            await GrantExpToAsync(_player, exp).ConfigureAwait(false); // solo: full exp
+            return;
+        }
+
+        // Split among party members on the same map; the killer gets the largest share.
+        int killerId = _player.Character.Id;
+        int killerMap = _player.Character.MapId;
+        List<FieldPlayer> sameMap = party.Members.Where(m => m.Character.MapId == killerMap).ToList();
+
+        foreach (FieldPlayer member in sameMap)
+        {
+            int share = CharacterProgression.PartyExpShare(exp, sameMap.Count, isKiller: member.Character.Id == killerId);
+            if (share > 0)
+            {
+                await GrantExpToAsync(member, share).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>Adds exp to one player (processing level-ups) and pushes the stat + level-up effect.</summary>
+    private async ValueTask GrantExpToAsync(FieldPlayer recipient, int exp)
+    {
+        Character c = recipient.Character;
         StatFlag changed = CharacterProgression.GainExp(c, exp); // processes level-ups
         _characters.Save(c);
-        await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
+        await TrySendAsync(recipient, _packets.StatChanged(c, changed)).ConfigureAwait(false);
 
         // A level-up plays a show effect: the local client triggers its own from the stat change,
         // so only the remote animation (for onlookers in the field) needs broadcasting.
