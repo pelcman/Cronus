@@ -99,9 +99,11 @@ public static class CharacterDataEncoder
     }
 
     /// <summary>
-    /// Writes InventoryInfo(datamask = -1) (JMS v186 layout): the equipped items followed by
-    /// empty inventory tabs. Slot-section terminators are 2 bytes for equip-typed sections,
-    /// 1 byte for the rest.
+    /// Writes InventoryInfo(datamask = -1) (JMS v186 layout, ports <c>DataCharacterData.InventoryInfo</c>):
+    /// equipped items, then each inventory tab's items (EQUIP / USE / SETUP / ETC / CASH), each section
+    /// closed by its terminator (2 bytes for equip-typed sections, 1 byte for the bundle tabs). Items
+    /// are keyed by slot: negative positions are equipped, positive positions live in a tab chosen by
+    /// the item id's type digit.
     /// </summary>
     private static void WriteInventoryInfo(PacketWriter w, Character c)
     {
@@ -124,15 +126,31 @@ public static class CharacterDataEncoder
             ItemEncoder.WriteItem(w, item);
         }
 
-        w.WriteShort(0);   // end of equipped items
-        w.WriteShort(0);   // end of equipped avatars (none)
-        w.WriteShort(0);   // end of equip inventory (none)
-        w.WriteShort(0);   // end of JMS >= 180 (-1000..) block (none)
+        w.WriteShort(0);              // end of equipped items
+        w.WriteShort(0);              // end of equipped avatars (none)
 
-        // [0x08/0x10/0x20/0x40] USE, SETUP, ETC, CASH — empty, 1-byte terminators.
-        for (int i = 0; i < 4; i++)
+        WriteTab(w, c, type: 1);      // EQUIP tab (un-equipped equips, positive slots)
+        w.WriteShort(0);              // end of equip inventory
+
+        w.WriteShort(0);              // end of JMS >= 180 (-1000..) block (none)
+
+        // [0x08/0x10/0x20/0x40] USE, SETUP, ETC, CASH — each a run of items then a 1-byte terminator.
+        for (int type = 2; type <= 5; type++)
         {
+            WriteTab(w, c, type);
             w.WriteByte(0);
+        }
+    }
+
+    /// <summary>Writes the items in one inventory tab: positive slots whose id-type matches, by slot.</summary>
+    private static void WriteTab(PacketWriter w, Character c, int type)
+    {
+        foreach (InventoryItem item in c.EquippedItems
+                     .Where(i => i.Position > 0 && ItemEncoder.ItemType(i.ItemId) == type)
+                     .OrderBy(i => i.Position))
+        {
+            ItemEncoder.WriteSlot(w, item);
+            ItemEncoder.WriteItem(w, item);
         }
     }
 }

@@ -1419,6 +1419,25 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await ReplyAsync(session, "saved").ConfigureAwait(false);
                 break;
 
+            case "item" when parts.Length >= 2 && int.TryParse(parts[1], out int itemId):
+            {
+                int qty = parts.Length >= 3 && int.TryParse(parts[2], out int q) ? q : 1;
+                Character ic = _player!.Character;
+                int type = Cronus.Server.Login.ItemEncoder.ItemType(itemId);
+                short slot = NextFreeInventorySlot(ic, type);
+                ic.EquippedItems.Add(new InventoryItem
+                {
+                    ItemId = itemId,
+                    Position = slot,
+                    Quantity = (short)Math.Clamp(qty, 1, short.MaxValue),
+                    CharacterId = ic.Id,
+                });
+                _characters.Save(ic);
+                await ReplyAsync(session, $"added {itemId} x{qty} to tab {type} slot {slot} — relog to see it")
+                    .ConfigureAwait(false);
+                break;
+            }
+
             case "warp" when parts.Length >= 2:
             {
                 FieldPlayer? target = _fields.FindPlayerByName(parts[1]);
@@ -1456,7 +1475,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
             case "help":
                 await ReplyAsync(session, "commands: !map <id>, !warp <name>, !meso <n>, !heal, !job <n>, "
-                    + "!ap <n>, !sp <n>, !fame <n>, !save, !players, !notice <msg>, !pos, !help")
+                    + "!ap <n>, !sp <n>, !fame <n>, !item <id> [qty], !save, !players, !notice <msg>, !pos, !help")
                     .ConfigureAwait(false);
                 break;
 
@@ -1464,6 +1483,23 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await ReplyAsync(session, $"unknown command: {parts[0]}").ConfigureAwait(false);
                 break;
         }
+    }
+
+    /// <summary>Lowest unused positive slot for an item tab (by id-type), for the <c>!item</c> command.</summary>
+    private static short NextFreeInventorySlot(Character c, int type)
+    {
+        var used = c.EquippedItems
+            .Where(i => i.Position > 0 && Cronus.Server.Login.ItemEncoder.ItemType(i.ItemId) == type)
+            .Select(i => (int)i.Position)
+            .ToHashSet();
+
+        short slot = 1;
+        while (used.Contains(slot))
+        {
+            slot++;
+        }
+
+        return slot;
     }
 
     /// <summary>Applies a stat mutation to the caller, persists it, and pushes the changed stat.</summary>
