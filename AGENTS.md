@@ -199,7 +199,9 @@ Each milestone means adding one "working vertical slice".
 - [x] **M14: Death & revive** — a hit that drops HP to 0 leaves the player dead (the client shows
       the tombstone); dismissing it sends `CP_UserTransferField`, which the server turns into a
       revive at the map's return town (`info/returnMap`, `MapData.ReviveMap`; or in place when the
-      map has none) with full HP/MP. Closes the survival loop. Follow-up: death exp/meso penalty.
+      map has none) with full HP/MP. Closes the survival loop. Dying also costs exp
+      (`CharacterProgression.ApplyDeathPenalty`: −10% of accumulated exp, no level-down; sent in
+      the death `LP_StatChanged`). Follow-ups: level/map-scaled loss + town exemption.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

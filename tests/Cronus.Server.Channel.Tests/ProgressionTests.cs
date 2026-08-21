@@ -60,4 +60,27 @@ public class ProgressionTests
         Assert.Equal(0, c.Sp); // beginners get no SP
         Assert.Equal(5, c.Ap);
     }
+
+    [Fact]
+    public void ApplyDeathPenalty_LosesATenthOfExp()
+    {
+        var c = new Character { Name = "N", Level = 5, Exp = 1000 };
+
+        StatFlag changed = CharacterProgression.ApplyDeathPenalty(c);
+
+        Assert.Equal(StatFlag.Exp, changed);
+        Assert.Equal(900, c.Exp);  // -10%
+        Assert.Equal(5, c.Level);  // no level-down
+    }
+
+    [Fact]
+    public void ApplyDeathPenalty_WithNoExp_ChangesNothing()
+    {
+        var c = new Character { Name = "N", Level = 1, Exp = 0 };
+
+        StatFlag changed = CharacterProgression.ApplyDeathPenalty(c);
+
+        Assert.Equal((StatFlag)0, changed);
+        Assert.Equal(0, c.Exp);
+    }
 }

@@ -477,7 +477,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         Character c = _player.Character;
         _player.LastActiveTick = Environment.TickCount64; // taking a hit counts as activity
         c.Hp = (short)Math.Max(0, c.Hp - damage);          // 0 HP = dead (client shows the tombstone)
-        await session.SendAsync(_packets.StatChanged(c, StatFlag.Hp)).ConfigureAwait(false);
+
+        StatFlag changed = StatFlag.Hp;
+        if (c.Hp == 0)
+        {
+            changed |= CharacterProgression.ApplyDeathPenalty(c); // dying costs some exp
+        }
+
+        await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleSkillUpAsync(MapleSession session, PacketReader packet)

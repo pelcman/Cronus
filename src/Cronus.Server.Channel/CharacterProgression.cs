@@ -38,6 +38,22 @@ public static class CharacterProgression
         return changed;
     }
 
+    /// <summary>
+    /// Applies the on-death exp penalty: loses a tenth of the accumulated (current-level) exp, no
+    /// level-down. Returns <see cref="StatFlag.Exp"/> if it changed, or 0 when there was none to
+    /// lose. Simplified — MapleStory scales the loss by level and exempts towns.
+    /// </summary>
+    public static StatFlag ApplyDeathPenalty(Character c)
+    {
+        if (c.Exp <= 0)
+        {
+            return 0;
+        }
+
+        c.Exp -= c.Exp / 10;
+        return StatFlag.Exp;
+    }
+
     private static void LevelUp(Character c)
     {
         c.Level++;
