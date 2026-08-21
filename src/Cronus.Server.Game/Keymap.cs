@@ -1,10 +1,7 @@
 using System.Collections.Concurrent;
+using Cronus.Domain;
 
 namespace Cronus.Server.Game;
-
-/// <summary>One key binding: a category <see cref="Type"/> (0 none, 1 skill, 4/5/6 UI functions) and
-/// its <see cref="Action"/> (a skill id for type 1, otherwise a client function index).</summary>
-public readonly record struct KeyBinding(byte Type, int Action);
 
 /// <summary>
 /// A character's function-key map (ports <c>TacosKeyLayout</c>): key index → binding. JMS v186 uses a
@@ -59,12 +56,38 @@ public sealed class Keymap
 
         return new Keymap(bindings);
     }
+
+    /// <summary>Rebuilds a keymap from persisted bindings.</summary>
+    public static Keymap FromBindings(IReadOnlyDictionary<int, KeyBinding> bindings)
+        => new(new Dictionary<int, KeyBinding>(bindings));
+
+    /// <summary>A copy of the current bindings, for persistence.</summary>
+    public IReadOnlyDictionary<int, KeyBinding> Snapshot() => new Dictionary<int, KeyBinding>(_bindings);
 }
 
-/// <summary>Per-character key layouts, created (from the default) on demand.</summary>
+/// <summary>
+/// Per-character key layouts, created on demand — from the repository when one is configured and a
+/// saved layout exists, else from the default. <see cref="Save"/> persists a character's layout
+/// (no-op without a repository).
+/// </summary>
 public sealed class KeymapRegistry
 {
+    private readonly IKeymapRepository? _repository;
     private readonly ConcurrentDictionary<int, Keymap> _byCharacter = new();
 
-    public Keymap Get(int characterId) => _byCharacter.GetOrAdd(characterId, _ => Keymap.CreateDefault());
+    public KeymapRegistry(IKeymapRepository? repository = null) => _repository = repository;
+
+    public Keymap Get(int characterId) => _byCharacter.GetOrAdd(characterId, Load);
+
+    private Keymap Load(int characterId)
+        => _repository?.Find(characterId) is { } saved ? Keymap.FromBindings(saved) : Keymap.CreateDefault();
+
+    /// <summary>Persists a character's layout after a rebind.</summary>
+    public void Save(int characterId)
+    {
+        if (_repository is not null && _byCharacter.TryGetValue(characterId, out Keymap? keymap))
+        {
+            _repository.Save(characterId, keymap.Snapshot());
+        }
+    }
 }

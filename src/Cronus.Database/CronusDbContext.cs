@@ -25,6 +25,10 @@ public sealed class CronusDbContext : DbContext
 
     public DbSet<InventoryItem> Items => Set<InventoryItem>();
 
+    public DbSet<StorageEntity> Storages => Set<StorageEntity>();
+
+    public DbSet<KeymapEntity> Keymaps => Set<KeymapEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
@@ -60,6 +64,18 @@ public sealed class CronusDbContext : DbContext
         item.Property(i => i.Id).ValueGeneratedOnAdd();
         item.HasIndex(i => i.CharacterId);
         item.Property(i => i.Owner).HasMaxLength(13);
+
+        // Account storage and per-character key layouts: one row each, contents as JSON
+        // (the same small-map pattern as the character's JSON columns above).
+        var storage = modelBuilder.Entity<StorageEntity>();
+        storage.ToTable("storages");
+        storage.HasKey(s => s.AccountId);
+        storage.Property(s => s.AccountId).ValueGeneratedNever();
+
+        var keymap = modelBuilder.Entity<KeymapEntity>();
+        keymap.ToTable("keymaps");
+        keymap.HasKey(k => k.CharacterId);
+        keymap.Property(k => k.CharacterId).ValueGeneratedNever();
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new();

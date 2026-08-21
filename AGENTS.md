@@ -228,14 +228,17 @@ Each milestone means adding one "working vertical slice".
         `LP_TrunkResult` 0x015A), ports `ReqCTrunkDlg`+`TacosStorage`: open (op 21, full dump with the
         8-byte DBCHAR mask + per-category items), deposit (flat 100-meso fee), withdraw, meso
         (>0 withdraw / <0 deposit), close. Item objects move between inventory and storage
-        (`Inventory.Place`) so equip stats survive. `StorageRegistry` keyed by account id (in-memory;
-        DB persistence via a `storages`/trunk-items table is a follow-up). `/storage` opens it;
-        NPC-script `sendStorage` is a follow-up. Deposit→withdraw round-trip test + packet goldens.
+        (`Inventory.Place`) so equip stats survive. `StorageRegistry` keyed by account id, persisted
+        via `IStorageRepository` → the `storages` table (items as JSON) when `CRONUS_DB` is set.
+        `/storage` opens it; NPC-script `sendStorage` is a follow-up. Deposit→withdraw round-trip
+        test + packet goldens + repo round-trips.
   - [x] **M10j: persistent key settings** — the function-key map persists per character instead of
         resetting each entry (`CP_FuncKeyMappedModified` 0x008E → `LP_FuncKeyMappedInit` 0x017C, 94
         positional `[type:1][action:4]` slots, seeded from the reference's 42-entry default). Ports
-        `ResCFuncKeyMappedMan`+`TacosKeyLayout`. `KeymapRegistry` keyed by character (in-memory; a
-        keymap DB table is a follow-up). Rebind-persists test + 94-slot golden.
+        `ResCFuncKeyMappedMan`+`TacosKeyLayout`. `KeymapRegistry` keyed by character, persisted via
+        `IKeymapRepository` → the `keymaps` table (bindings as JSON) when `CRONUS_DB` is set.
+        Rebind-persists test + 94-slot golden + repo round-trips. *(Schema note: `EnsureCreated`
+        doesn't migrate — an existing DB needs a recreate to gain the `storages`/`keymaps` tables.)*
   - [x] **M10k: buff skills** — casting a self-buff skill applies its temporary stat buff
         (`CP_UserSkillUseRequest` 0x0058 → `LP_SkillUseResult` 0x0023 + `LP_TemporaryStatSet` with
         reason = +skillId, `time`×1000 from wz), ports `ReqCUser.OnUserSkillUseRequest`+`TacosBuff`.

@@ -1514,6 +1514,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         _characters.Save(c);
+        _storages.Save(c.AccountId);
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);     // the fee
         await session.SendAsync(_packets.InventoryOperation(new[] { invChange })).ConfigureAwait(false);
         await session.SendAsync(_packets.TrunkItemResult(TrunkOp.PutSuccess, storage, tab)).ConfigureAwait(false);
@@ -1537,6 +1538,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         storage.Items.Remove(item);
         InventoryChange addChange = Inventory.Place(c, item); // preserves equip stats / quantity
         _characters.Save(c);
+        _storages.Save(c.AccountId);
 
         await session.SendAsync(_packets.InventoryOperation(new[] { addChange })).ConfigureAwait(false);
         await session.SendAsync(_packets.TrunkItemResult(TrunkOp.GetSuccess, storage, type)).ConfigureAwait(false);
@@ -1578,6 +1580,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         _characters.Save(c);
+        _storages.Save(c.AccountId);
         await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
         await session.SendAsync(_packets.TrunkMoneyResult(storage)).ConfigureAwait(false);
     }
@@ -1627,6 +1630,8 @@ public sealed class ChannelHandler : PacketHandlerBase
                 keymap.Remove(key);
             }
         }
+
+        _keymaps.Save(_player.Character.Id);
     }
 
     private const int MinFameLevel = 15;

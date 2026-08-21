@@ -28,7 +28,7 @@ WarnUnresolved("server", serverOps);
 
 // Use MySQL when a connection string is configured (CRONUS_DB env var), else fall back to the
 // in-memory stores so the server runs with zero external dependencies for local testing.
-(IAccountRepository accounts, ICharacterRepository characters) = CreateRepositories();
+(IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo) = CreateRepositories();
 var loginService = new LoginService(accounts, autoRegister: true);
 
 // The login server hands clients to the channel via LP_SelectCharacterResult. The IP it
@@ -79,8 +79,8 @@ PortalScriptEngine? portalScripts = CreatePortalScriptEngine();
 // Shared across all connections so messenger/party windows tie players together across fields.
 var messengers = new MessengerRegistry(new ChannelPackets(serverOps, config));
 var parties = new PartyRegistry();
-var storages = new StorageRegistry();
-var keymaps = new KeymapRegistry();
+var storages = new StorageRegistry(storageRepo);
+var keymaps = new KeymapRegistry(keymapRepo);
 
 var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
@@ -275,25 +275,29 @@ static void WarnUnresolved(string which, OpcodeTable table)
     }
 }
 
-static (IAccountRepository, ICharacterRepository) CreateRepositories()
+static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?) CreateRepositories()
 {
     string? connectionString = Environment.GetEnvironmentVariable("CRONUS_DB");
     if (string.IsNullOrWhiteSpace(connectionString))
     {
         Console.WriteLine("[db] CRONUS_DB not set — using in-memory stores (not persistent).");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository());
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null);
     }
 
     try
     {
         Func<CronusDbContext> factory = MySqlDatabase.CreateFactory(connectionString);
         MySqlDatabase.EnsureCreated(factory);
-        Console.WriteLine("[db] Connected to MySQL; accounts and characters are persistent.");
-        return (new DbAccountRepository(factory), new DbCharacterRepository(factory));
+        Console.WriteLine("[db] Connected to MySQL; accounts, characters, storage, and keymaps are persistent.");
+        return (
+            new DbAccountRepository(factory),
+            new DbCharacterRepository(factory),
+            new DbStorageRepository(factory),
+            new DbKeymapRepository(factory));
     }
     catch (Exception ex)
     {
         Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory stores.");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository());
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null);
     }
 }

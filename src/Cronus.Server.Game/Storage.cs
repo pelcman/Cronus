@@ -24,12 +24,40 @@ public sealed class Storage
     public bool IsFull => Items.Count >= Slots;
 }
 
-/// <summary>Account-scoped storages, created on demand (shared across all sessions).</summary>
+/// <summary>
+/// Account-scoped storages, created on demand (shared across all sessions) — loaded from the
+/// repository when one is configured and a saved snapshot exists. <see cref="Save"/> persists an
+/// account's storage after a change (no-op without a repository).
+/// </summary>
 public sealed class StorageRegistry
 {
+    private readonly IStorageRepository? _repository;
     private readonly ConcurrentDictionary<int, Storage> _byAccount = new();
 
-    public Storage Get(int accountId) => _byAccount.GetOrAdd(accountId, _ => new Storage());
+    public StorageRegistry(IStorageRepository? repository = null) => _repository = repository;
+
+    public Storage Get(int accountId) => _byAccount.GetOrAdd(accountId, Load);
+
+    private Storage Load(int accountId)
+    {
+        if (_repository?.Find(accountId) is not { } saved)
+        {
+            return new Storage();
+        }
+
+        var storage = new Storage { Meso = saved.Meso, Slots = saved.Slots };
+        storage.Items.AddRange(saved.Items);
+        return storage;
+    }
+
+    /// <summary>Persists an account's storage after a deposit/withdraw/meso change.</summary>
+    public void Save(int accountId)
+    {
+        if (_repository is not null && _byAccount.TryGetValue(accountId, out Storage? storage))
+        {
+            _repository.Save(accountId, new StorageData(storage.Meso, storage.Slots, storage.Items.ToList()));
+        }
+    }
 }
 
 /// <summary><c>LP_TrunkResult</c> operation / result codes (JMS v186 wire values, <c>OpsTrunk.init</c>).</summary>
