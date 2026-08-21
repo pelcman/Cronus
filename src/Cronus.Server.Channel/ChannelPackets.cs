@@ -395,6 +395,134 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>Builds <c>LP_ForcedStatReset</c> (empty) — clears temporary forced stats on entry.</summary>
+    public byte[] ForcedStatReset()
+        => NewPacket(ServerOpcode.ForcedStatReset).ToArray();
+
+    /// <summary>
+    /// Builds <c>LP_FuncKeyMappedInit</c> with the default key layout (ports
+    /// <c>ResCFuncKeyMappedMan.FuncKeyMappedInit</c>, JMS v186: 94 slots of [type:1][action:4]).
+    /// The client needs its key map to enter the field.
+    /// </summary>
+    public byte[] FuncKeyMappedInit()
+    {
+        const int keyMapSize = 94; // JMS pre-Big-Bang
+        PacketWriter w = NewPacket(ServerOpcode.FuncKeyMappedInit);
+        w.WriteByte(0); // not a reset: the full layout follows
+
+        foreach ((byte type, int action) in DefaultKeyMap(keyMapSize))
+        {
+            w.WriteByte(type);
+            w.WriteInt(action);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_MacroSysDataInit</c> with no macros.</summary>
+    public byte[] MacroSysDataInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MacroSysDataInit);
+        w.WriteByte(0); // macro count
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_PetConsumeItemInit</c> (pet auto-HP-potion item id, 0 = none). Part of the
+    /// JMS v186 OnMigrateIn sequence; the client expects the three pet-consume-init packets.
+    /// </summary>
+    public byte[] PetConsumeItemInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetConsumeItemInit);
+        w.WriteInt(0); // no auto-consume item
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_PetConsumeMPItemInit</c> (pet auto-MP-potion item id, 0 = none).</summary>
+    public byte[] PetConsumeMpItemInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetConsumeMpItemInit);
+        w.WriteInt(0);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_JMS_PetConsumeCureItemInit</c> (pet auto-cure item id, 0 = none).</summary>
+    public byte[] PetConsumeCureItemInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetConsumeCureItemInit);
+        w.WriteInt(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_FriendResult</c> initialising an empty buddy list on entry (ports
+    /// <c>ResCWvsContext.FriendResult</c>, JMS v186: FriendRes_LoadFriend = 7, count 0).
+    /// </summary>
+    public byte[] FriendListInit()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FriendResult);
+        w.WriteByte(7); // FriendRes_LoadFriend / LoadFriendDone
+        w.WriteByte(0); // friend count
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_FamilyInfoResult</c> for a character with no family (the fixed default the
+    /// reference emits on entry: all zero except the pedigree-generation default byte). The large
+    /// static <c>LP_FamilyPrivilegeList</c> (0x006C, a version-constant reunion-privilege table)
+    /// is not yet ported — the family UI is non-core and this does not affect field entry.
+    /// </summary>
+    public byte[] FamilyInfoResult()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FamilyInfoResult);
+        w.WriteInt(0);      // dwFamilyID
+        w.WriteInt(0);      // reputation etc.
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteByte(2);     // pedigree-generation default (matches reference)
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteInt(0);
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the empty <c>LP_BroadcastMsg</c> slide the client expects at the end of the
+    /// OnMigrateIn sequence (BM_SLIDE = 4, disabled → no marquee text).
+    /// </summary>
+    public byte[] BroadcastSlideClear()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.BroadcastMsg);
+        w.WriteByte(4); // BM_SLIDE
+        w.WriteByte(0); // disabled (no text follows)
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// The classic MapleStory default key bindings (type 4 = skill/action for most). Keys not
+    /// listed are unbound (type 0). Returns exactly <paramref name="size"/> slots.
+    /// </summary>
+    private static IEnumerable<(byte Type, int Action)> DefaultKeyMap(int size)
+    {
+        // key index -> (type, action). Type 4 = command/skill, 6 = menu, 5 = item, 8 = face.
+        var map = new Dictionary<int, (byte, int)>
+        {
+            [2] = (4, 10), [3] = (4, 12), [4] = (4, 13), [5] = (4, 18), [6] = (4, 24), [7] = (4, 21),
+            [16] = (4, 8), [17] = (4, 5), [18] = (4, 0), [19] = (4, 4), [23] = (4, 1), [25] = (4, 19),
+            [26] = (4, 14), [27] = (4, 15), [29] = (5, 52), [31] = (6, 2), [33] = (6, 3), [34] = (6, 4),
+            [35] = (6, 5), [37] = (6, 6), [38] = (6, 22), [39] = (6, 7), [40] = (4, 20), [41] = (6, 8),
+            [43] = (4, 9), [44] = (5, 50), [45] = (5, 51), [46] = (4, 11), [48] = (4, 3), [50] = (4, 16),
+            [56] = (4, 2), [57] = (4, 17), [59] = (6, 25), [60] = (5, 53), [61] = (6, 54), [62] = (6, 100),
+            [63] = (6, 101), [64] = (6, 102), [65] = (6, 103), [66] = (6, 104), [67] = (6, 105),
+        };
+
+        for (int i = 0; i < size; i++)
+        {
+            yield return map.TryGetValue(i, out (byte, int) b) ? b : ((byte)0, 0);
+        }
+    }
+
     /// <summary>Builds <c>LP_AliveReq</c> (keep-alive ping).</summary>
     public byte[] AliveReq()
     {

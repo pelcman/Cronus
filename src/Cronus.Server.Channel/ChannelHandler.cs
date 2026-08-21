@@ -197,6 +197,22 @@ public sealed class ChannelHandler : PacketHandlerBase
         (int, int, int) seeds = (RandomSeed(), RandomSeed(), RandomSeed());
         await session.SendAsync(_packets.SetFieldEnterGame(character, _channelId, seeds)).ConfigureAwait(false);
 
+        // Post-SetField initialization the JMS v186 client expects to finish entering the field.
+        // Byte-for-byte order captured from the reference server's ResCClientSocket.OnMigrateIn:
+        // StatChanged -> ForcedStatReset -> pet-consume ×3 -> key map -> macros -> buddy list ->
+        // family info -> broadcast slide. (LP_FamilyPrivilegeList, a large version-constant table,
+        // is intentionally not sent yet - see ChannelPackets.FamilyInfoResult.)
+        await session.SendAsync(_packets.StatChanged(character, (StatFlag)0)).ConfigureAwait(false);
+        await session.SendAsync(_packets.ForcedStatReset()).ConfigureAwait(false);
+        await session.SendAsync(_packets.PetConsumeItemInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.PetConsumeMpItemInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.PetConsumeCureItemInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.FuncKeyMappedInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.MacroSysDataInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.FriendListInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.FamilyInfoResult()).ConfigureAwait(false);
+        await session.SendAsync(_packets.BroadcastSlideClear()).ConfigureAwait(false);
+
         // Join the field: tell the newcomer about everyone already there, and vice versa.
         Field field = _fields.Get(character.MapId);
         foreach (FieldPlayer other in field.Players)

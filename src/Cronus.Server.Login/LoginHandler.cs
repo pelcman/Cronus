@@ -25,6 +25,7 @@ public sealed class LoginHandler : PacketHandlerBase
     private readonly int _startMapId;
 
     private readonly int _opCheckPassword;
+    private readonly int _opGetMapLogin;
     private readonly int _opWorldInfoRequest;
     private readonly int _opSelectWorld;
     private readonly int _opViewAllChar;
@@ -53,6 +54,7 @@ public sealed class LoginHandler : PacketHandlerBase
         _startMapId = startMapId;
 
         _opCheckPassword = clientOpcodes.Get(ClientOpcode.CheckPassword);
+        _opGetMapLogin = clientOpcodes.Get(ClientOpcode.JmsGetMapLogin);
         _opWorldInfoRequest = clientOpcodes.Get(ClientOpcode.WorldInfoRequest);
         _opSelectWorld = clientOpcodes.Get(ClientOpcode.SelectWorld);
         _opViewAllChar = clientOpcodes.Get(ClientOpcode.ViewAllChar);
@@ -67,6 +69,11 @@ public sealed class LoginHandler : PacketHandlerBase
         if (opcode == _opCheckPassword)
         {
             await HandleCheckPasswordAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opGetMapLogin)
+        {
+            // The JMS login screen is a rendered map; the client asks which one to show.
+            await session.SendAsync(_packets.SetMapLogin()).ConfigureAwait(false);
         }
         else if (opcode == _opWorldInfoRequest)
         {
@@ -106,14 +113,22 @@ public sealed class LoginHandler : PacketHandlerBase
 
         LoginService.Outcome outcome = _loginService.Authenticate(mapleId, password);
 
-        if (outcome is { Result: LoginResult.Success, Account: { } account })
+        byte[] response = outcome is { Result: LoginResult.Success, Account: { } account }
+            ? _packets.CheckPasswordSuccess(account)
+            : _packets.CheckPasswordFailure(outcome.Result);
+
+        if (outcome.Account is not null)
         {
-            session.UserData = new LoginState { Account = account };
-            await session.SendAsync(_packets.CheckPasswordSuccess(account)).ConfigureAwait(false);
+            session.UserData = new LoginState { Account = outcome.Account };
         }
-        else
+
+        await session.SendAsync(response).ConfigureAwait(false);
+
+        // JMS v186 pushes the world list immediately after a successful login (registerClient ->
+        // OnWorldInfoRequest); the client waits for it rather than requesting it.
+        if (outcome.Result == LoginResult.Success)
         {
-            await session.SendAsync(_packets.CheckPasswordFailure(outcome.Result)).ConfigureAwait(false);
+            await HandleWorldInfoRequestAsync(session).ConfigureAwait(false);
         }
     }
 

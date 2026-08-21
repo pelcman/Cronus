@@ -96,6 +96,52 @@ public class LoginFlowTests
         Assert.Equal("newuser01", reader.ReadString());
     }
 
+    private sealed class MapLoginClient : PacketHandlerBase
+    {
+        private readonly TaskCompletionSource<string> _mapName;
+
+        public MapLoginClient(TaskCompletionSource<string> mapName) => _mapName = mapName;
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.JmsGetMapLogin), session.Config.PacketHeaderSize, session.Config.CodePage);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader packet)
+        {
+            if (opcode == ServerOps.Get(ServerOpcode.JmsSetMapLogin))
+            {
+                _mapName.TrySetResult(packet.ReadString());
+            }
+
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task GetMapLogin_ReturnsLoginMapName()
+    {
+        var config = ServerConfig.Jms186;
+        var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var server = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, config, SessionRole.Server,
+            new LoginHandler(ClientOps, ServerOps, new LoginService(new InMemoryAccountRepository()), config));
+        await using var client = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, config, SessionRole.Client,
+            new MapLoginClient(received));
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = server.RunAsync(cts.Token);
+        _ = client.RunAsync(cts.Token);
+
+        string mapName = await received.Task.WaitAsync(cts.Token);
+        Assert.Equal("MapLogin", mapName);
+    }
+
     [Fact]
     public async Task CheckPassword_WrongPassword_ReturnsFailureResult()
     {

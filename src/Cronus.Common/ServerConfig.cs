@@ -40,7 +40,7 @@ public sealed class ServerConfig
     {
         Region = Region.Jms,
         Version = 186,
-        SubVersion = 0,
+        SubVersion = 1,         // JMS v186.1 client (Hello sends "1" as the sub-version)
         CodePage = CodePage_.Jms(),
         PacketHeaderSize = 2,
         OldIv = false,          // 186 > 141

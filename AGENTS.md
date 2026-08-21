@@ -12,6 +12,25 @@ improvements)**. The two files are complementary — if you find a contradiction
 > Reimplement the core of a JMS v186 private server in C#/.NET, using Riremito/JMSv186
 > (Java) as a side-by-side oracle. Get login working first, then widen in vertical slices.
 
+### Final goal (set 2026-08-21)
+
+> Grow Cronus from a localhost-only test server into one an **in-group** can actually play
+> on: the operator opens a port on a **fixed public IP** and friends connect. Reach a state
+> where **anyone with minimal knowledge can stand the server up by following the docs** —
+> build, configure (host/IP, DB, WZ data), run, open the port, point the client, play.
+
+This reframes the near-term work priorities:
+1. **Deployability** — nothing hardcoded to `localhost`; a small, documented set of config
+   knobs (public host/IP, ports, DB, WZ, start map). *(First step: the channel endpoint the
+   login server hands to the client is configurable via `CRONUS_HOST`, not loopback.)*
+2. **A reproducible setup guide** — `docs/SERVER_SETUP.md`: prerequisites, build, configure,
+   run, firewall/port-forward, connect a client. Written for a non-expert.
+3. **Minimal playability** — the core loop must actually hold up for several players
+   (entry, movement, chat, mobs/drops, maps/portals, a few NPCs, leveling).
+
+Scope note (see CLAUDE.md §8): this stays a **private, in-group** server for research /
+educational / hobby use — not a public or commercial operation.
+
 ---
 
 ## 1. Design Philosophy (summary)
@@ -202,7 +221,9 @@ parity is on the order of half a year.
 - [ ] Stand up a minimal channel server so `LP_SelectCharacterResult` migrate resolves
 - [ ] Replace plaintext password with a real hash (BCrypt); consider async repository APIs
 - [ ] EF Core migrations (replace EnsureCreated); reconcile with JMSv186 `sql/` schema
-- [ ] Verify against a live MySQL server (tests currently use the InMemory provider)
+- [x] Verify against a live MySQL server — `CRONUS_DB` → MySQL 8.4: `EnsureCreated` builds the
+      `accounts`/`characters`/`items` schema and the host logs "Connected to MySQL; …
+      persistent." (2026-08-21). A full write/read-back integration test is still TODO.
 
 ### Improvements / tech debt (ongoing)
 - [ ] **Add golden vectors**: run the Java build, capture handshake→login real bytes with
@@ -252,6 +273,47 @@ Cronus/
 - Upstream is actively developed (last push 2026-08), so consider tracking meaningful spec
   changes.
 - Preserve credits and the license (AGPL-3.0).
+
+## 7.5 Client testing & Riremito tooling
+
+Real-client testing lives **outside** the Cronus repo, under the workspace root
+(`c:\Users\chro\Desktop\MS1PrivSvr\`):
+
+- `Client/MapleStory_v186/` — the real JMS **v186.1** client (`JMS_v186.1_L.exe`,
+  EmuClient/localhost-patched). Complete WZ (2010-09), 4GB flag set. Runs on an NVIDIA
+  GTX 1660 Ti. It has **active anti-cheat** — AhnLab HackShield (`aossdk.dll` +
+  `tricod6_0_maple_md.dll` are **statically imported** by the exe; `v3hunt`/`bz32ex`/
+  `suipre` alongside). The anti-cheat **rejects DLL-injection fixes** (dgVoodoo2's
+  `d3d8.dll` triggered "不正なプログラムが検出されました") and **protects the game process
+  from termination** (Stop-Process/taskkill fail). For this in-group private server the
+  owner authorised removing the anti-cheat. NOTE: the anti-cheat DLLs are statically
+  imported, so removal = stub DLLs or IAT patch, not deletion.
+- `DevTools/` — all working tools + client custom libs (see `DevTools/README.md`):
+  `procmon/`, `iGPUplz/` (built), `dgvoodoo/` (kept but unusable here — anti-cheat),
+  `riremito/` (cloned Riremito repos), and `apply_*/revert_*/capture_*.bat`.
+
+**Riremito's GitHub has a large toolbox for running/verifying these clients — reference it
+whenever stuck; cloning into `DevTools/riremito/` is fine.** Key repos:
+- `iGPUplz` — its JMS186 change (`CWzFileSystem::OpenDelayedArchive`/`OnGetSubItemProp`
+  `6A 01`→`6A 02`, "gfx fix (pre-bb)") is **the confirmed fix** for the game-entry crash
+  (client opens the field's delayed WZ archive on entry; default mode fails here →
+  `STG_E_FILENOTFOUND 0x80030002` → crash). **The iGPUplz NameSpace.dll *proxy* (built from
+  source, `DevTools/riremito/iGPUplz/build.bat`) crashes THIS client at startup in PCOM.DLL**
+  (its LoadLibrary-in-DllMain is incompatible), so instead apply the same change **directly
+  to `NameSpace.dll` on disk** (offsets 0xE923/0xEDC6) via `DevTools/wzpatch_namespace.py
+  apply` — client entering the game confirmed. (Swap a locked NameSpace.dll by renaming it
+  first, then copying — the anti-cheat protects the process from taskkill.)
+- `EmuClient` / `LocalHost` / `RunEmu` / `Taco112` / `Teresa232` — localhost redirectors.
+- `RirePE` — packet editor/logger (differential packet verification vs Cronus).
+- `TeresaBeta` — "Remove BlackCipher/BlackCall" (anti-cheat removal, newer clients).
+- `wz_xml` / `jms_wz` — WZ data as HaRepacker XML (v186 map data was pulled from here).
+- `HaRepackerJ`, `WzMonitor`, `Injector`, `tools` (build deps).
+
+**Key result:** the game-entry crash is **client-side** (DX8/WZ on a modern GPU), not a
+Cronus bug — proven because the reference server with full real WZ crashes the same client
+identically. Server correctness is verified independently (SetField byte-matches the
+reference; entry sequence ported). Details: `Cronus/docs/GAME_ENTRY_DIAGNOSIS.md`,
+root `CLIENT_RENDERING_FIX.md`.
 
 ## 8. Agent Operating Rules
 

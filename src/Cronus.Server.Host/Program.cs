@@ -31,21 +31,36 @@ WarnUnresolved("server", serverOps);
 (IAccountRepository accounts, ICharacterRepository characters) = CreateRepositories();
 var loginService = new LoginService(accounts, autoRegister: true);
 
-// The login server hands clients to the channel via LP_SelectCharacterResult.
-var channelEndpoint = new IPEndPoint(IPAddress.Loopback, channelPort);
+// The login server hands clients to the channel via LP_SelectCharacterResult. The IP it
+// advertises must be one the client can actually reach: loopback for local play, or the
+// server's LAN/public IP (set CRONUS_HOST=<ip-or-hostname>) so friends can connect on a
+// fixed IP. JMS sends the address as 4 bytes, so this resolves to IPv4.
+IPAddress channelHost = ResolveHost(Environment.GetEnvironmentVariable("CRONUS_HOST"), IPAddress.Loopback);
+var channelEndpoint = new IPEndPoint(channelHost, channelPort);
 
 // LP_AliveReq body: the server pings idle clients so they keep the connection open.
 byte[] keepAlive = new PacketWriter(
     serverOps.Get(ServerOpcode.AliveReq), config.PacketHeaderSize, config.CodePage).ToArray();
+
+// Wire diagnostics: log every packet the server sends (opcode + length + hex).
+MapleSession.DebugOnSend = (role, body) =>
+{
+    ReadOnlySpan<byte> b = body.Span;
+    int opcode = b.Length >= 2 ? b[0] | (b[1] << 8) : -1;
+    Console.WriteLine($"[send:{role}] opcode 0x{opcode:X4} ({b.Length} bytes): {Convert.ToHexString(b)}");
+};
+
+int startMap = int.TryParse(Environment.GetEnvironmentVariable("CRONUS_STARTMAP"), out int sm) ? sm : 100000000;
+Console.WriteLine($"[map] new characters start in map {startMap}");
 
 var loginListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, loginPort),
     config,
     () => new LoggingHandler(
         new LoginHandler(clientOps, serverOps, loginService, config,
-            characters: characters, channelEndpoint: channelEndpoint),
+            characters: characters, channelEndpoint: channelEndpoint, startMapId: startMap),
         "login"),
-    keepAlive);
+    keepAlive: null); // keep-alive disabled during login diagnosis
 
 // Map data from a wz_xml tree if CRONUS_WZ points at one, else no static map data (portal-by-
 // name transfers degrade to "disabled portal"; direct map-id jumps still work; no NPCs spawn).
@@ -72,8 +87,12 @@ Console.CancelKeyPress += (_, e) =>
 };
 
 Console.WriteLine($"Cronus — JMS v{config.Version}, region {config.Region}");
-Console.WriteLine($"  login   : 0.0.0.0:{loginPort}");
-Console.WriteLine($"  channel : 0.0.0.0:{channelPort}");
+Console.WriteLine($"  login   : listening on 0.0.0.0:{loginPort}");
+Console.WriteLine($"  channel : listening on 0.0.0.0:{channelPort}, advertised to clients as {channelEndpoint}");
+if (channelHost.Equals(IPAddress.Loopback))
+{
+    Console.WriteLine("  (localhost only — set CRONUS_HOST=<your LAN/public IP> so friends can connect)");
+}
 Console.WriteLine("Accounts auto-register on first login. Press Ctrl+C to stop.");
 
 try
@@ -89,6 +108,38 @@ finally
 }
 
 Console.WriteLine("Stopped.");
+
+// Resolves CRONUS_HOST (an IPv4 literal or a hostname) to the address advertised to clients
+// for the channel connection. Empty/unset or unresolvable → fallback (loopback).
+static IPAddress ResolveHost(string? host, IPAddress fallback)
+{
+    if (string.IsNullOrWhiteSpace(host))
+    {
+        return fallback;
+    }
+
+    if (IPAddress.TryParse(host, out IPAddress? literal))
+    {
+        return literal;
+    }
+
+    try
+    {
+        foreach (IPAddress addr in Dns.GetHostAddresses(host))
+        {
+            if (addr.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            {
+                return addr; // JMS advertises the channel IP as 4 bytes, so prefer IPv4
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[net] could not resolve CRONUS_HOST='{host}' ({ex.Message}); using {fallback}");
+    }
+
+    return fallback;
+}
 
 static IMapProvider CreateMapProvider()
 {

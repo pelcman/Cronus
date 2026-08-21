@@ -128,12 +128,20 @@ public sealed class MapleSession : IAsyncDisposable
     /// Frames, encrypts, and writes one packet body (which already includes its opcode header).
     /// Thread-safe: concurrent sends are serialized.
     /// </summary>
+    /// <summary>
+    /// Optional diagnostic hook invoked with the plaintext body of every outbound packet
+    /// (before framing/encryption). Set by the host for wire logging; null in production.
+    /// </summary>
+    public static Action<SessionRole, ReadOnlyMemory<byte>>? DebugOnSend { get; set; }
+
     public async ValueTask SendAsync(ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default)
     {
         if (_sendCipher is null)
         {
             throw new InvalidOperationException("Cannot send before the handshake completes.");
         }
+
+        DebugOnSend?.Invoke(_role, body);
 
         await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
