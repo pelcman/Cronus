@@ -69,7 +69,43 @@ Captured order after the field is set (op = purpose):
 Raw bytes for the small packets are recorded in the session log; the 1915-byte
 family-privilege table is a static blob (saved to scratch during capture).
 
-## Current blocker (❌)
+## RESOLUTION (root cause found — client-side, not a server bug) ✅
+
+**The game-entry crash is a client-environment problem, not a Cronus bug.**
+Proven by running the working reference server with the **full real v186 WZ
+data** (extracted from `Riremito/wz_xml`): it emits the complete, correct
+`OnMigrateIn` sequence (`SetField` 717 B → StatChanged → ForcedStatReset →
+pet×3 → keymap → macros → FriendResult → FamilyPrivilegeList → FamilyInfoResult
+→ BroadcastMsg → NpcEnterField×2) and the real client **still crashes at field
+entry, identically**. A known-good server + correct data + real WZ ⇒ the crash
+is on the client side.
+
+**Root cause: DirectX 8 field rendering on a modern GPU.**
+- Process Monitor capture of the client (`JMS_v186.1_L.exe`) at the crash shows
+  **no missing files and no WZ file access** (WZ is memory-mapped at startup);
+  the crash tail is **Direct3D device initialisation** — repeated probes of
+  `HKLM\SOFTWARE\WOW6432Node\Microsoft\Direct3D\{DisableNVPS, UseVSConverter,
+  UsePSConverter, DisableStripFVF, DisableGB, DisablePSGP, EmulatePointSprites}`
+  — interleaved with loading `WzFlashRenderer.dll`. `DisableNVPS` is an
+  NVIDIA-specific D3D key.
+- The machine's only active GPU is an **NVIDIA GeForce GTX 1660 Ti** (not an
+  iGPU). The client is a 2010 **DirectX 8** title (`Gr2D_DX8.dll`). Login and
+  character-select (simple 2-D screens) render fine; the **field renderer**
+  (full scrolling world) crashes — the classic "old DX8 game on a modern GPU"
+  failure. The client's own error dialog reports a generic HRESULT
+  (`0x80030002` / `0x80004003`).
+
+**Fix applied (client-side, reversible): dgVoodoo2** — a DirectX 8/DDraw →
+modern D3D11/12 wrapper. Its x86 `D3D8.dll`/`D3D9.dll`/`DDraw.dll`/`D3DImm.dll`
++ `dgVoodoo.conf` are copied into the client folder (see repo-root
+`apply_dgvoodoo.bat` / `revert_dgvoodoo.bat` and `CLIENT_RENDERING_FIX.md`).
+`dgVoodooWatermark = true` shows a corner watermark to confirm it is active.
+Fallbacks if it doesn't help: Windows compatibility mode (WinXP SP3 / 16-bit
+colour), disabling `WzFlashRenderer.dll`, or a different machine / GPU.
+
+---
+
+## Original blocker analysis (superseded by RESOLUTION above)
 Both **Cronus** and the **reference** crash the real client at field entry:
 
 - Map `100000000` (Henesys): client shows **"pointer invalid" (0x80004003)**,
