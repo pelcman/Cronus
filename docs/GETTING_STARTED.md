@@ -1,6 +1,8 @@
 # Getting started: connecting a real JMS v186 client
 
 This walks through running Cronus and connecting an actual JMS v186 client to it, locally.
+To host a server **friends can join over the internet**, see
+[SERVER_SETUP.md](SERVER_SETUP.md).
 
 > ⚠️ Local / research / educational use only. Cronus bundles no client or copyrighted game
 > data. You supply your own JMS v186 client.
@@ -47,11 +49,14 @@ The client must be redirected to `127.0.0.1` and have its version/CRC checks byp
 [EmuClient](https://github.com/Riremito/EmuClient) (verified on JMS v164/165/186/188/194):
 
 1. Get a **JMS v186** client.
-2. Configure EmuClient's `LocalHost.ini` to redirect the login server to `127.0.0.1:8484`
+2. **Apply the WZ patch** to the client's `NameSpace.dll` — without it the client crashes with
+   `0x80030002` when entering a map (a pre-Big-Bang WZ-archive-open bug on modern PCs). Close
+   the client, then `python DevTools\wzpatch_namespace.py apply` (set the client path at the
+   top of the script). Confirmed to fix game entry. Details: root `CLIENT_RENDERING_FIX.md`.
+3. Configure EmuClient's `LocalHost.ini` to redirect the login server to `127.0.0.1:8484`
    (the login port above).
-3. Launch the client through EmuClient (`RunEmu` / `RunEmu64`), which injects the loader that
-   applies the localhost redirect and the MSCRC bypass. For v187 and below, EmuClient's
-   `iGPUplz` helper is recommended for graphics/startup.
+4. Launch the client through EmuClient (`RunEmu` / `RunEmu64`), which injects the loader that
+   applies the localhost redirect and the MSCRC bypass.
 
 ## 3. What should happen
 
@@ -84,7 +89,8 @@ Common first checks:
   layout. Confirm the client is really hitting `127.0.0.1:8484` (EmuClient redirect) and that
   the client is exactly **v186**.
 - **Disconnects on character select** → `LP_SelectWorldResult` / character-list encoding.
-- **Disconnects on entering the game** → the `LP_SetField` CharacterData blob (the largest,
-  most conditional structure).
+- **Client crashes entering the game (`0x80030002`)** → this is the **client-side** WZ-archive
+  bug, not the server. Apply the WZ patch (step 2 above). Cronus' `LP_SetField` CharacterData
+  blob is byte-verified against the reference server, so it is not the cause of this crash.
 - **Idle disconnects** → the server pings every 15s (`LP_AliveReq`); if the client still drops,
   check that pings are being sent/acked in the RirePE log.
