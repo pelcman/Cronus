@@ -67,6 +67,12 @@ public interface INpcPlayer
     /// <summary>Sets the player's job (e.g. a job-advancement NPC) and notifies the client.</summary>
     void setJob(int job);
 
+    /// <summary>Raises max HP by <paramref name="amount"/> (clamped to 1..30000) and heals into it.</summary>
+    void gainMaxHp(int amount);
+
+    /// <summary>Raises max MP by <paramref name="amount"/> (clamped to 1..30000) and refills into it.</summary>
+    void gainMaxMp(int amount);
+
     /// <summary>True if the quest is currently started (in progress).</summary>
     bool hasQuest(int questId);
 

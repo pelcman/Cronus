@@ -190,6 +190,10 @@ public class NpcScriptEngineTests
         public void gainSp(int amount) => Sp = Math.Max(0, Sp + amount);
         public void gainFame(int amount) => Fame = Math.Clamp(Fame + amount, -30000, 30000);
         public void setJob(int job) => Job = job;
+        public int MaxHp = 100;
+        public int MaxMp = 100;
+        public void gainMaxHp(int amount) => MaxHp = Math.Clamp(MaxHp + amount, 1, 30000);
+        public void gainMaxMp(int amount) => MaxMp = Math.Clamp(MaxMp + amount, 1, 30000);
 
         public HashSet<int> Started { get; } = new();
         public HashSet<int> Completed { get; } = new();

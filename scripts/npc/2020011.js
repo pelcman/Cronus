@@ -12,6 +12,7 @@ function start() {
     }
     if (cm.askYesNo("その力、確かに見届けた。3次転職を行うか?")) {
         player.setJob(job + 1);
+        player.gainMaxHp(200);
         player.gainSp(1);
         cm.sendOk("おめでとう!新たな力を存分に振るいなさい。");
     }

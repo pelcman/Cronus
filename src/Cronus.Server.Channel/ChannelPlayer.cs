@@ -146,6 +146,22 @@ public sealed class ChannelPlayer : INpcPlayer
         Send(_packets.StatChanged(_character, StatFlag.Job));
     }
 
+    public void gainMaxHp(int amount)
+    {
+        _character.MaxHp = (short)Math.Clamp(_character.MaxHp + amount, 1, 30000);
+        _character.Hp = _character.MaxHp;
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Hp | StatFlag.MaxHp));
+    }
+
+    public void gainMaxMp(int amount)
+    {
+        _character.MaxMp = (short)Math.Clamp(_character.MaxMp + amount, 1, 30000);
+        _character.Mp = _character.MaxMp;
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Mp | StatFlag.MaxMp));
+    }
+
     public bool hasQuest(int questId) => _character.StartedQuests.ContainsKey(questId);
 
     public bool isQuestDone(int questId) => _character.CompletedQuests.ContainsKey(questId);

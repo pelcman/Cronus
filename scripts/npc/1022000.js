@@ -10,6 +10,7 @@ function start() {
     }
     if (cm.askYesNo("戦士への転職を望むか?")) {
         player.setJob(100);
+        player.gainMaxHp(200);
         player.gainSp(1);
         cm.sendOk("おめでとう!今日からあなたは戦士だ。SPを大切に使いなさい。");
     } else {

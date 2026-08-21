@@ -10,6 +10,7 @@ function start() {
     }
     if (cm.askYesNo("盗賊への転職を望むか?")) {
         player.setJob(400);
+        player.gainMaxHp(100);
         player.gainSp(1);
         cm.sendOk("おめでとう!今日からあなたは盗賊だ。SPを大切に使いなさい。");
     } else {

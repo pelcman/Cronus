@@ -9,6 +9,7 @@ function start() {
         }
         if (cm.askYesNo("海賊への転職を望む?")) {
             player.setJob(500);
+        player.gainMaxHp(150);
             player.gainSp(1);
             cm.sendOk("ようこそ、海賊の世界へ!");
         }
