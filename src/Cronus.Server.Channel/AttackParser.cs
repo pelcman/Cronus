@@ -33,13 +33,31 @@ public sealed class AttackInfo
 }
 
 /// <summary>
-/// Parses <c>CP_UserMeleeAttack</c> for JMS v186 (ports <c>ParseCUser_Attack</c>, melee path,
-/// pre-Big-Bang, JMS &gt;= 186 &amp;&amp; &lt; 187, no skill/keydown specials). The high nibble of
-/// the "hit key" is the target count, the low nibble the hits-per-target.
+/// Parses the JMS v186 attack requests — <c>CP_UserMeleeAttack</c> / <c>CP_UserMagicAttack</c>
+/// (identical layout at v186) and <c>CP_UserShootAttack</c> (melee + three bullet fields) — from
+/// <c>ParseCUser_Attack</c> (pre-Big-Bang, JMS &gt;= 186 &amp;&amp; &lt; 187, no skill/keydown
+/// specials). The high nibble of the "hit key" is the target count, the low nibble the
+/// hits-per-target.
 /// </summary>
 public static class AttackParser
 {
-    public static AttackInfo ParseMelee(PacketReader p)
+    public static AttackInfo ParseMelee(PacketReader p) => Parse(p, isShoot: false);
+
+    /// <summary>
+    /// Parses <c>CP_UserMagicAttack</c>. For JMS v186 the magic layout is byte-identical to melee
+    /// (the magic-specific fields only exist GMS &gt;= 95), so this is an alias for
+    /// <see cref="ParseMelee"/>.
+    /// </summary>
+    public static AttackInfo ParseMagic(PacketReader p) => Parse(p, isShoot: false);
+
+    /// <summary>
+    /// Parses <c>CP_UserShootAttack</c>: identical to melee plus the three bullet fields (bullet
+    /// inventory slot, cash-bullet slot, shoot range) the client writes after dwID, before the
+    /// per-target block (ports the <c>CP_UserShootAttack</c> branch of <c>ParseCUser_Attack</c>).
+    /// </summary>
+    public static AttackInfo ParseShoot(PacketReader p) => Parse(p, isShoot: true);
+
+    private static AttackInfo Parse(PacketReader p, bool isShoot)
     {
         p.ReadByte();              // FieldKey
         p.ReadInt();               // DR dr0
@@ -59,6 +77,13 @@ public static class AttackParser
         int attackSpeed = p.ReadByte();
         p.ReadInt();               // tAttackTime
         p.ReadInt();               // dwID (JMS >= 186)
+
+        if (isShoot)
+        {
+            p.ReadShort();         // ProperBulletPosition (USE-inventory bullet slot)
+            p.ReadShort();         // pnCashItemPos (cash-bullet slot)
+            p.ReadByte();          // nShootRange0a
+        }
 
         var targets = new List<AttackTarget>(mobCount);
         for (int i = 0; i < mobCount; i++)

@@ -323,4 +323,66 @@ public class CombatTests
         Assert.Equal(600, t.TotalDamage);
         Assert.Equal(0, reader.Remaining);
     }
+
+    [Fact]
+    public void ParseShoot_ConsumesBulletFields_AndReadsTargets()
+    {
+        var config = ServerConfig.Jms186;
+        var pw = new PacketWriter(encoding: config.CodePage);
+        pw.WriteByte(0);
+        pw.WriteInt(0); pw.WriteInt(0);
+        pw.WriteByte(0x12);           // damagePerMob=2, mobCount=1
+        pw.WriteInt(0); pw.WriteInt(0);
+        pw.WriteInt(0);               // skill
+        pw.WriteInt(0); pw.WriteInt(0); pw.WriteInt(0);
+        pw.WriteByte(0); pw.WriteShort(0); pw.WriteByte(0); pw.WriteByte(0);
+        pw.WriteInt(0); pw.WriteInt(0); // attack time, dwID
+        pw.WriteShort(5);             // ProperBulletPosition (shoot-only)
+        pw.WriteShort(0);             // pnCashItemPos (shoot-only)
+        pw.WriteByte(1);              // nShootRange0a (shoot-only)
+        pw.WriteInt(4242);            // mob oid
+        pw.WriteBytes(new byte[4]);
+        pw.WriteBytes(new byte[8]);
+        pw.WriteShort(0);
+        pw.WriteInt(150); pw.WriteInt(150); // 2 damages
+        pw.WriteInt(0);               // mob crc
+
+        var reader = new PacketReader(pw.ToArray(), config.CodePage);
+        AttackInfo info = AttackParser.ParseShoot(reader);
+
+        AttackTarget t = Assert.Single(info.Targets);
+        Assert.Equal(4242, t.MobObjectId);
+        Assert.Equal(new[] { 150, 150 }, t.Damages);
+        Assert.Equal(0, reader.Remaining); // the 5 bullet bytes were consumed
+    }
+
+    [Fact]
+    public void ParseMagic_MatchesMeleeLayout_AndReadsSkill()
+    {
+        var config = ServerConfig.Jms186;
+        var pw = new PacketWriter(encoding: config.CodePage);
+        pw.WriteByte(0);
+        pw.WriteInt(0); pw.WriteInt(0);
+        pw.WriteByte(0x11);           // damagePerMob=1, mobCount=1
+        pw.WriteInt(0); pw.WriteInt(0);
+        pw.WriteInt(2001005);         // magic skill id
+        pw.WriteInt(0); pw.WriteInt(0); pw.WriteInt(0);
+        pw.WriteByte(0); pw.WriteShort(0); pw.WriteByte(0); pw.WriteByte(0);
+        pw.WriteInt(0); pw.WriteInt(0);
+        pw.WriteInt(999);             // mob oid
+        pw.WriteBytes(new byte[4]);
+        pw.WriteBytes(new byte[8]);
+        pw.WriteShort(0);
+        pw.WriteInt(500);             // damage
+        pw.WriteInt(0);               // mob crc
+
+        var reader = new PacketReader(pw.ToArray(), config.CodePage);
+        AttackInfo info = AttackParser.ParseMagic(reader);
+
+        AttackTarget t = Assert.Single(info.Targets);
+        Assert.Equal(999, t.MobObjectId);
+        Assert.Equal(500, t.TotalDamage);
+        Assert.Equal(2001005, info.SkillId);
+        Assert.Equal(0, reader.Remaining);
+    }
 }

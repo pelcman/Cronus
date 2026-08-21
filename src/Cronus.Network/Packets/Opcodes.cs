@@ -25,6 +25,8 @@ public static class ClientOpcode
     public const string UserMove = "CP_UserMove";
     public const string UserChat = "CP_UserChat";
     public const string UserMeleeAttack = "CP_UserMeleeAttack";
+    public const string UserShootAttack = "CP_UserShootAttack";
+    public const string UserMagicAttack = "CP_UserMagicAttack";
     public const string DropPickUpRequest = "CP_DropPickUpRequest";
     public const string UserSkillUpRequest = "CP_UserSkillUpRequest";
     public const string MobMove = "CP_MobMove";
@@ -59,6 +61,8 @@ public static class ServerOpcode
     public const string UserChat = "LP_UserChat";
     public const string UserMove = "LP_UserMove";
     public const string UserMeleeAttack = "LP_UserMeleeAttack";
+    public const string UserShootAttack = "LP_UserShootAttack";
+    public const string UserMagicAttack = "LP_UserMagicAttack";
     public const string ScriptMessage = "LP_ScriptMessage";
     public const string StatChanged = "LP_StatChanged";
     public const string ForcedStatReset = "LP_ForcedStatReset";
