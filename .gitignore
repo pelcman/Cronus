@@ -47,3 +47,6 @@ logs/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# WZ data junctions (point into Reference/JMSv186/wz_xml — never commit the tree)
+DevTools/cronus-wz/
