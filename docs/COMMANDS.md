@@ -36,6 +36,7 @@ when the server restarts (see [SERVER_SETUP.md](SERVER_SETUP.md)).
 | `/guildcreate <name>` | Create a guild (free, works anywhere) with you as master |
 | `/maxskills` | Max every skill your current job can learn |
 | `/notice <msg>` | Blue notice broadcast to your current map |
+| `/snotice <msg>` | Blue notice broadcast to the whole server |
 | `/pos` | Show your position and map id |
 | `/help` | List the commands |
 

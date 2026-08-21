@@ -5748,6 +5748,17 @@ public sealed class ChannelHandler : PacketHandlerBase
                     .ConfigureAwait(false);
                 break;
 
+            case "snotice" when parts.Length >= 2:
+            {
+                byte[] notice = _packets.BroadcastNotice(command["snotice ".Length..].Trim());
+                foreach (Field f in _fields.Fields)
+                {
+                    await f.BroadcastAsync(notice).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
             case "heal":
             {
                 Character hc = _player!.Character;
@@ -5939,7 +5950,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
                     + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /save, /players, /notice <msg>, /pos, /help")
+                    + "/item <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 

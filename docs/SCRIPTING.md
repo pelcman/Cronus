@@ -60,6 +60,11 @@ Menu markup: `"#L0#First#l\r\n#L1#Second#l"` renders two clickable choices retur
 
 **Quests:** `hasQuest(id)` · `isQuestDone(id)` · `startQuest(id)` · `completeQuest(id)`
 
+### Reactor scripts (`reactor/{reactorId}.js`)
+
+Runs when a reactor (box, plant, …) breaks, with `player` = the breaker (no dialog, like a
+portal script). Use it for rewards or spawns: see `scripts/reactor/1002008.js`.
+
 ### Quest scripts (`quest/{questId}.js`)
 
 A quest whose wz data declares a script runs `CRONUS_SCRIPTS/quest/{questId}.js` instead of the

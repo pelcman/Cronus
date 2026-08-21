@@ -398,6 +398,12 @@ Each milestone means adding one "working vertical slice".
         parse+`start()` gate over every shipped script; and the two long-standing intermittent
         test failures fixed (a Messenger test start race, and a real buff register-after-send
         ordering bug).
+  - [x] **M10aa: reactors** — map reactor placements (Map.wz `reactor/{n}`), the Reactor.wz
+        state machine (`event/0/state` transitions; a state with no event is terminal),
+        `CP_ReactorHit` → `LP_ReactorChangeState` per stage → break (`LP_ReactorLeaveField`,
+        `reactorTime` respawn on the world tick, `LP_ReactorEnterField` replayed to entrants),
+        and `scripts/reactor/{id}.js` reward hooks with the full script player API. The wz
+        junction gained Reactor.wz. Deferred: touch-reactors and item-drop-triggered reactors.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
