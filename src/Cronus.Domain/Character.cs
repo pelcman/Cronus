@@ -73,6 +73,9 @@ public sealed class Character
     /// <summary>Buddy list: friend character id → entry (persisted as a JSON column).</summary>
     public Dictionary<int, BuddyEntry> Buddies { get; set; } = new();
 
+    /// <summary>Skill macros: slot index (0-4) → macro (persisted as a JSON column).</summary>
+    public Dictionary<int, SkillMacroEntry> SkillMacros { get; set; } = new();
+
     /// <summary>The guild this character belongs to, or 0.</summary>
     public int GuildId { get; set; }
 
@@ -82,3 +85,6 @@ public sealed class Character
 
 /// <summary>One buddy-list entry. Hidden = a pending incoming request (not yet accepted).</summary>
 public sealed record BuddyEntry(string Name, string Tag, bool Hidden);
+
+/// <summary>One skill macro: its name, the shout flag, and up to three skill ids (0 = empty).</summary>
+public sealed record SkillMacroEntry(string Name, byte Shout, int Skill1, int Skill2, int Skill3);

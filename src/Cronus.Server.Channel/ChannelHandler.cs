@@ -64,6 +64,8 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opUseItem;
     private readonly int _opUpgradeItem;
     private readonly int _opPortalScroll;
+    private readonly int _opPortableChair;
+    private readonly int _opMacroModified;
     private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
@@ -170,6 +172,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opUseItem = clientOpcodes.Get(ClientOpcode.UserStatChangeItemUseRequest);
         _opUpgradeItem = clientOpcodes.Get(ClientOpcode.UserUpgradeItemUseRequest);
         _opPortalScroll = clientOpcodes.Get(ClientOpcode.UserPortalScrollUseRequest);
+        _opPortableChair = clientOpcodes.Get(ClientOpcode.UserPortableChairSitRequest);
+        _opMacroModified = clientOpcodes.Get(ClientOpcode.UserMacroSysDataModified);
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
@@ -278,6 +282,14 @@ public sealed class ChannelHandler : PacketHandlerBase
             // Same body as a stat-change item use; the moveTo path warps (ports
             // OnUserPortalScrollUseRequest -> applyReturnScroll).
             await HandleUseItemAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opPortableChair)
+        {
+            await HandlePortableChairAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opMacroModified)
+        {
+            HandleMacroModified(packet);
         }
         else if (opcode == _opChangeSlot)
         {
@@ -507,7 +519,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.PetConsumeMpItemInit()).ConfigureAwait(false);
         await session.SendAsync(_packets.PetConsumeCureItemInit()).ConfigureAwait(false);
         await session.SendAsync(_packets.FuncKeyMappedInit(_keymaps.Get(character.Id))).ConfigureAwait(false);
-        await session.SendAsync(_packets.MacroSysDataInit()).ConfigureAwait(false);
+        await session.SendAsync(_packets.MacroSysDataInit(character.SkillMacros)).ConfigureAwait(false);
         await session.SendAsync(BuildBuddyList(character, ChannelPackets.FriendLoadDone)).ConfigureAwait(false);
         await session.SendAsync(_packets.FamilyInfoResult()).ConfigureAwait(false);
         await session.SendAsync(_packets.BroadcastSlideClear()).ConfigureAwait(false);
@@ -4325,7 +4337,73 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         short seatId = packet.ReadShort(); // JMS v186 CP_UserSitRequest: [seatId:2] (-1 = stand)
         _player.Seated = seatId != -1;
+
+        // Standing up also leaves a portable chair (ports OnUserSitRequest's cancel branch).
+        if (seatId == -1 && _player.PortableChair != 0)
+        {
+            _player.PortableChair = 0;
+            if (_field is not null)
+            {
+                await _field.BroadcastAsync(
+                    _packets.UserSetActivePortableChair(_player.Character.Id, 0),
+                    exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+            }
+        }
+
         await session.SendAsync(_packets.UserSitResult(seatId)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserPortableChairSitRequest</c> — sitting on a portable chair from the SETUP
+    /// tab (ports <c>OnUserPortableChairSitRequest</c>): the map sees the chair; standing (a sit
+    /// request with -1) clears it. Fishing chairs' timed rewards aren't modelled.
+    /// </summary>
+    private async ValueTask HandlePortableChairAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        int itemId = packet.ReadInt();
+        if (CountInventoryItem(_player.Character, itemId) < 1 || itemId / 1000000 != 3)
+        {
+            return; // must own the chair (SETUP item)
+        }
+
+        _player.Seated = true;
+        _player.PortableChair = itemId;
+        await _field.BroadcastAsync(
+            _packets.UserSetActivePortableChair(_player.Character.Id, itemId),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserMacroSysDataModified</c> — the player saved their skill macros (ports
+    /// <c>ReqCFuncKeyMappedMan</c>): [count][name][shout][skill×3] rows persist on the character
+    /// and replay on the next login via <c>LP_MacroSysDataInit</c>.
+    /// </summary>
+    private void HandleMacroModified(PacketReader packet)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        int count = packet.ReadByte();
+        c.SkillMacros.Clear();
+        for (int i = 0; i < count && i < 5; i++)
+        {
+            string name = packet.ReadString();
+            byte shout = packet.ReadByte();
+            int skill1 = packet.ReadInt();
+            int skill2 = packet.ReadInt();
+            int skill3 = packet.ReadInt();
+            c.SkillMacros[i] = new SkillMacroEntry(name, shout, skill1, skill2, skill3);
+        }
+
+        _characters.Save(c);
     }
 
     private async ValueTask HandleUserEmotionAsync(PacketReader packet)

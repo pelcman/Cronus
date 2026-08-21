@@ -464,11 +464,42 @@ public sealed class ChannelPackets
     public byte[] ForcedStatReset()
         => NewPacket(ServerOpcode.ForcedStatReset).ToArray();
 
-    /// <summary>Builds <c>LP_MacroSysDataInit</c> with no macros.</summary>
-    public byte[] MacroSysDataInit()
+    /// <summary>
+    /// Builds <c>LP_MacroSysDataInit</c> with the character's saved skill macros (ports
+    /// <c>ResCFuncKeyMappedMan.getMacros</c>): count, then [name][shout][skill×3] per macro
+    /// in slot order.
+    /// </summary>
+    public byte[] MacroSysDataInit(IReadOnlyDictionary<int, SkillMacroEntry>? macros = null)
     {
         PacketWriter w = NewPacket(ServerOpcode.MacroSysDataInit);
-        w.WriteByte(0); // macro count
+        if (macros is null || macros.Count == 0)
+        {
+            w.WriteByte(0);
+            return w.ToArray();
+        }
+
+        w.WriteByte((byte)macros.Count);
+        foreach (SkillMacroEntry macro in macros.OrderBy(kv => kv.Key).Select(kv => kv.Value))
+        {
+            w.WriteString(macro.Name);
+            w.WriteByte(macro.Shout);
+            w.WriteInt(macro.Skill1);
+            w.WriteInt(macro.Skill2);
+            w.WriteInt(macro.Skill3);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// A player sat on (or left, item 0) a portable chair — shown to the rest of the map (ports
+    /// <c>ResCUserRemote.UserSetActivePortableChair</c>, JMS v186).
+    /// </summary>
+    public byte[] UserSetActivePortableChair(int characterId, int itemId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserSetActivePortableChair);
+        w.WriteInt(characterId);
+        w.WriteInt(itemId);
         return w.ToArray();
     }
 
@@ -918,7 +949,7 @@ public sealed class ChannelPackets
         w.WriteInt(0);
         w.WriteInt(0);
         w.WriteInt(0);                   // active effect item
-        w.WriteInt(0);                   // chair
+        w.WriteInt(player.PortableChair); // chair (seated players show it to newcomers)
         w.WriteShort(player.X);
         w.WriteShort(player.Y);
         w.WriteByte(player.Stance);

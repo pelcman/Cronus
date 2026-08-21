@@ -63,6 +63,8 @@ public static class ClientOpcode
     public const string UserSortItemRequest = "CP_UserSortItemRequest";
     public const string UserUpgradeItemUseRequest = "CP_UserUpgradeItemUseRequest";
     public const string UserPortalScrollUseRequest = "CP_UserPortalScrollUseRequest";
+    public const string UserPortableChairSitRequest = "CP_UserPortableChairSitRequest";
+    public const string UserMacroSysDataModified = "CP_UserMacroSysDataModified";
 }
 
 /// <summary>
@@ -142,4 +144,5 @@ public static class ServerOpcode
     public const string UserMiniRoomBalloon = "LP_UserMiniRoomBalloon";
     public const string UserItemUpgradeEffect = "LP_UserItemUpgradeEffect";
     public const string MobDamaged = "LP_MobDamaged";
+    public const string UserSetActivePortableChair = "LP_UserSetActivePortableChair";
 }

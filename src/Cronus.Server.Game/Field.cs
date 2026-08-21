@@ -173,6 +173,9 @@ public sealed class FieldPlayer
 
     /// <summary>True while the player is sitting on a chair — regen is faster and immediate.</summary>
     public bool Seated { get; set; }
+
+    /// <summary>The portable chair item (301xxxx) the player is sitting on, or 0.</summary>
+    public int PortableChair { get; set; }
 }
 
 /// <summary>
