@@ -1051,6 +1051,55 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_GivePopularityResult ops (ports OpsGivePopularity).
+    private const byte FameSuccess = 0;
+    private const byte FameNotify = 5;
+
+    /// <summary>Op byte of <c>GivePopularityRes_InvalidCharacterID</c> (self / bad target).</summary>
+    public const int FameErrInvalidTarget = 1;
+
+    /// <summary>Op byte of <c>GivePopularityRes_LevelLow</c> (giver below level 15).</summary>
+    public const int FameErrLevelLow = 2;
+
+    /// <summary>Op byte of <c>GivePopularityRes_AlreadyDoneToday</c> (already famed someone today).</summary>
+    public const int FameErrAlreadyToday = 3;
+
+    /// <summary>
+    /// Builds a bare <c>LP_GivePopularityResult</c> (just the op byte) for the error/limit codes.
+    /// </summary>
+    public byte[] GivePopularityError(int op)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GivePopularityResult);
+        w.WriteByte((byte)op);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the giver-side <c>GivePopularityRes_Success</c>: the target's name, the direction
+    /// (1 = up), and the target's new fame (ports <c>ResCWvsContext.GivePopularityResult</c>).
+    /// </summary>
+    public byte[] GivePopularitySuccess(string targetName, bool isUp, int targetFame)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GivePopularityResult);
+        w.WriteByte(FameSuccess);
+        w.WriteString(targetName);
+        w.WriteBool(isUp);
+        w.WriteInt(targetFame);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the target-side <c>GivePopularityRes_Notify</c>: who famed them and the direction.
+    /// </summary>
+    public byte[] GivePopularityNotify(string giverName, bool isUp)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.GivePopularityResult);
+        w.WriteByte(FameNotify);
+        w.WriteString(giverName);
+        w.WriteBool(isUp);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_UserMove</c> relaying a raw CMovePath buffer (ports
     /// <c>ResCUserRemote.UserMove</c>: character id + the path bytes as received).

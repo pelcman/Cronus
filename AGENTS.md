@@ -305,6 +305,13 @@ Each milestone means adding one "working vertical slice".
       non-negative) and that they sum to exactly the remaining AP, applies them, zeroes AP, and one
       `LP_StatChanged` carries all the raised stats. End-to-end tested (STR +3 / DEX +2 empties 5 AP)
       plus total-mismatch / non-base-stat rejects.
+- [x] **M32: Fame / popularity** — `CP_UserGivePopularityRequest` lets a level-15+ player rate another
+      online player's fame up or down (ports `ReqCUser.OnUserGivePopularityRequest`). The target gains
+      or loses a point (clamped ±30000) and both sides are notified (`LP_GivePopularityResult`:
+      Success to the giver with the new fame, Notify to the target, plus the target's `LP_StatChanged`).
+      Guards: level 15 minimum, not self, target must be online on the same map, and one fame per target
+      per session (a simplified stand-in for the once-per-day limit — a persisted fame log would make it
+      real). End-to-end tested (Bob 0→1 fame, both notified, repeat rejected).
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

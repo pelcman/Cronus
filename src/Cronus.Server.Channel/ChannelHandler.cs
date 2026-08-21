@@ -48,6 +48,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opUserHit;
     private readonly int _opDropPickUp;
     private readonly int _opDropMoney;
+    private readonly int _opGivePopularity;
     private readonly int _opSkillUp;
     private readonly int _opAbilityUp;
     private readonly int _opAbilityMassUp;
@@ -62,6 +63,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     private FieldPlayer? _player;
     private Field? _field;
     private NpcConversation? _conversation;
+
+    /// <summary>Character ids this player has famed this session (a simplified daily limit).</summary>
+    private readonly HashSet<int> _famedCharacterIds = new();
 
     public ChannelHandler(
         OpcodeTable clientOpcodes,
@@ -98,6 +102,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opUserHit = clientOpcodes.Get(ClientOpcode.UserHit);
         _opDropPickUp = clientOpcodes.Get(ClientOpcode.DropPickUpRequest);
         _opDropMoney = clientOpcodes.Get(ClientOpcode.UserDropMoneyRequest);
+        _opGivePopularity = clientOpcodes.Get(ClientOpcode.UserGivePopularityRequest);
         _opSkillUp = clientOpcodes.Get(ClientOpcode.UserSkillUpRequest);
         _opAbilityUp = clientOpcodes.Get(ClientOpcode.UserAbilityUpRequest);
         _opAbilityMassUp = clientOpcodes.Get(ClientOpcode.UserAbilityMassUpRequest);
@@ -170,6 +175,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opDropMoney)
         {
             await HandleDropMoneyAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opGivePopularity)
+        {
+            await HandleGivePopularityAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opSkillUp)
         {
@@ -732,6 +741,61 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         FieldDrop drop = _field.AddPlayerMesoDrop(mesos, _player.X, _player.Y, c.Id);
         await _field.BroadcastAsync(_packets.DropEnterFieldMeso(drop)).ConfigureAwait(false);
+    }
+
+    private const int MinFameLevel = 15;
+    private const int FameCap = 30000;
+
+    /// <summary>
+    /// Handles <c>CP_UserGivePopularityRequest</c> — one player rates another's fame up or down
+    /// (ports <c>ReqCUser.OnUserGivePopularityRequest</c>). Requires level 15, a different online
+    /// target on the same map, and that you haven't famed them yet this session (a simplified stand-in
+    /// for the once-per-day limit). On success the target gains/loses a point (clamped to ±30000) and
+    /// both players are notified.
+    /// </summary>
+    private async ValueTask HandleGivePopularityAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        int targetId = packet.ReadInt();
+        bool isUp = packet.ReadByte() != 0;
+
+        if (_player.Character.Level < MinFameLevel)
+        {
+            await session.SendAsync(_packets.GivePopularityError(ChannelPackets.FameErrLevelLow)).ConfigureAwait(false);
+            return;
+        }
+
+        if (targetId == _player.Character.Id)
+        {
+            await session.SendAsync(_packets.GivePopularityError(ChannelPackets.FameErrInvalidTarget)).ConfigureAwait(false);
+            return;
+        }
+
+        FieldPlayer? target = _field.Players.FirstOrDefault(p => p.Character.Id == targetId);
+        if (target is null)
+        {
+            await session.SendAsync(_packets.GivePopularityError(ChannelPackets.FameErrInvalidTarget)).ConfigureAwait(false);
+            return;
+        }
+
+        if (!_famedCharacterIds.Add(targetId))
+        {
+            await session.SendAsync(_packets.GivePopularityError(ChannelPackets.FameErrAlreadyToday)).ConfigureAwait(false);
+            return;
+        }
+
+        Character tc = target.Character;
+        int delta = isUp ? 1 : -1;
+        tc.Fame = (short)Math.Clamp(tc.Fame + delta, -FameCap, FameCap);
+        _characters.Save(tc);
+
+        await session.SendAsync(_packets.GivePopularitySuccess(tc.Name, isUp, tc.Fame)).ConfigureAwait(false);
+        await target.Session.SendAsync(_packets.GivePopularityNotify(_player.Character.Name, isUp)).ConfigureAwait(false);
+        await target.Session.SendAsync(_packets.StatChanged(tc, StatFlag.Fame)).ConfigureAwait(false);
     }
 
     private async ValueTask GrantKillExpAsync(int exp)
