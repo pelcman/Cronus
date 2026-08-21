@@ -124,6 +124,35 @@ public sealed class FieldMob
     }
 }
 
+/// <summary>
+/// A summoned pet following its owner (ports the runtime side of <c>MaplePet</c>): the backing
+/// cash item (whose Pet* fields hold name/level/closeness) plus the live position the pet-move
+/// packets keep fresh.
+/// </summary>
+public sealed class ActivePet
+{
+    public ActivePet(InventoryItem item, short x, short y)
+    {
+        Item = item;
+        X = x;
+        Y = y;
+        UniqueId = item.Id != 0 ? item.Id : item.ItemId;
+    }
+
+    /// <summary>The pet cash item this pet lives on.</summary>
+    public InventoryItem Item { get; }
+
+    public long UniqueId { get; }
+
+    public short X { get; set; }
+
+    public short Y { get; set; }
+
+    public byte Stance { get; set; }
+
+    public short Foothold { get; set; }
+}
+
 /// <summary>A spawned NPC in a field: a runtime object id bound to a wz template + placement.</summary>
 public sealed class FieldNpc
 {
@@ -176,6 +205,9 @@ public sealed class FieldPlayer
 
     /// <summary>The portable chair item (301xxxx) the player is sitting on, or 0.</summary>
     public int PortableChair { get; set; }
+
+    /// <summary>The player's summoned pet, or null (single pet, index 0).</summary>
+    public ActivePet? Pet { get; set; }
 }
 
 /// <summary>

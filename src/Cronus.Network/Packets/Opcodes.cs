@@ -72,6 +72,10 @@ public static class ClientOpcode
     public const string UserTransferChannelRequest = "CP_UserTransferChannelRequest";
     public const string UserMigrateToCashShopRequest = "CP_UserMigrateToCashShopRequest";
     public const string UserConsumeCashItemUseRequest = "CP_UserConsumeCashItemUseRequest";
+    public const string UserActivatePetRequest = "CP_UserActivatePetRequest";
+    public const string PetMove = "CP_PetMove";
+    public const string PetAction = "CP_PetAction";
+    public const string UserPetFoodItemUseRequest = "CP_UserPetFoodItemUseRequest";
 }
 
 /// <summary>
@@ -157,4 +161,8 @@ public static class ServerOpcode
     public const string EmployeeMiniRoomBalloon = "LP_EmployeeMiniRoomBalloon";
     public const string UserSkillPrepare = "LP_UserSkillPrepare";
     public const string TransferChannelReqIgnored = "LP_TransferChannelReqIgnored";
+    public const string PetActivated = "LP_PetActivated";
+    public const string PetTransferField = "LP_PetTransferField";
+    public const string PetMove = "LP_PetMove";
+    public const string PetAction = "LP_PetAction";
 }

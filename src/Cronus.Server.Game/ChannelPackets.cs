@@ -540,6 +540,67 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>The CPet::Init block (ports <c>DataCPet.Init</c>).</summary>
+    private static void WritePetInit(PacketWriter w, ActivePet pet)
+    {
+        w.WriteInt(pet.Item.ItemId);
+        w.WriteString(pet.Item.PetName);
+        w.WriteLong(pet.UniqueId);
+        w.WriteShort(pet.X);
+        w.WriteShort(pet.Y);
+        w.WriteByte(pet.Stance);
+        w.WriteShort(pet.Foothold);
+    }
+
+    /// <summary>
+    /// A pet appears next to its owner (ports <c>ResCUser_Pet.PetActivated</c>, JMS v186:
+    /// spawn = 1 + the CPet init block). <paramref name="transferField"/> uses the
+    /// map-change opcode so the pet follows through portals.
+    /// </summary>
+    public byte[] PetActivated(int characterId, ActivePet pet, bool transferField = false)
+    {
+        PacketWriter w = NewPacket(transferField ? ServerOpcode.PetTransferField : ServerOpcode.PetActivated);
+        w.WriteInt(characterId);
+        w.WriteInt(0); // pet index (single pet)
+        w.WriteByte(1);
+        w.WriteByte(0);
+        WritePetInit(w, pet);
+        return w.ToArray();
+    }
+
+    /// <summary>The pet goes home (ports the despawn branch; msg 0 = no message).</summary>
+    public byte[] PetDeactivated(int characterId, byte message = 0)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetActivated);
+        w.WriteInt(characterId);
+        w.WriteInt(0);
+        w.WriteByte(0);
+        w.WriteByte(message);
+        return w.ToArray();
+    }
+
+    /// <summary>Relays a pet's movement path to onlookers (ports <c>PetMove</c>).</summary>
+    public byte[] PetMove(int characterId, ReadOnlySpan<byte> rawMovePath)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetMove);
+        w.WriteInt(characterId);
+        w.WriteInt(0); // pet index
+        w.WriteBytes(rawMovePath);
+        return w.ToArray();
+    }
+
+    /// <summary>A pet emote / speech bubble (ports <c>PetAction</c>).</summary>
+    public byte[] PetAction(int characterId, byte type, byte action, string message)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PetAction);
+        w.WriteInt(characterId);
+        w.WriteInt(0); // pet index
+        w.WriteByte(type);
+        w.WriteByte(action);
+        w.WriteString(message);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// A player sat on (or left, item 0) a portable chair — shown to the rest of the map (ports
     /// <c>ResCUserRemote.UserSetActivePortableChair</c>, JMS v186).
@@ -1135,7 +1196,14 @@ public sealed class ChannelPackets
         w.WriteShort(player.Y);
         w.WriteByte(player.Stance);
         w.WriteShort(0);                 // foothold
-        w.WriteByte(0);                  // pet count
+        // Pet block: [1][CPet init] per active pet, then the 0 terminator.
+        if (player.Pet is { } pet)
+        {
+            w.WriteByte(1);
+            WritePetInit(w, pet);
+        }
+
+        w.WriteByte(0);                  // pet list terminator
         w.WriteInt(0);                   // mount level
         w.WriteInt(0);                   // mount exp
         w.WriteInt(0);                   // mount fatigue

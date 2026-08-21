@@ -74,6 +74,10 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opTransferChannel;
     private readonly int _opMigrateCashShop;
     private readonly int _opCashItemUse;
+    private readonly int _opActivatePet;
+    private readonly int _opPetMove;
+    private readonly int _opPetAction;
+    private readonly int _opPetFood;
     private readonly int _opCancelBuff;
     private readonly int _opChangeSlot;
     private readonly int _opShopRequest;
@@ -191,6 +195,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opTransferChannel = clientOpcodes.Get(ClientOpcode.UserTransferChannelRequest);
         _opMigrateCashShop = clientOpcodes.Get(ClientOpcode.UserMigrateToCashShopRequest);
         _opCashItemUse = clientOpcodes.Get(ClientOpcode.UserConsumeCashItemUseRequest);
+        _opActivatePet = clientOpcodes.Get(ClientOpcode.UserActivatePetRequest);
+        _opPetMove = clientOpcodes.Get(ClientOpcode.PetMove);
+        _opPetAction = clientOpcodes.Get(ClientOpcode.PetAction);
+        _opPetFood = clientOpcodes.Get(ClientOpcode.UserPetFoodItemUseRequest);
         _opCancelBuff = clientOpcodes.Get(ClientOpcode.UserStatChangeItemCancelRequest);
         _opChangeSlot = clientOpcodes.Get(ClientOpcode.UserChangeSlotPositionRequest);
         _opShopRequest = clientOpcodes.Get(ClientOpcode.UserShopRequest);
@@ -337,6 +345,22 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opCashItemUse)
         {
             await HandleCashItemUseAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opActivatePet)
+        {
+            await HandleActivatePetAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opPetMove)
+        {
+            await HandlePetMoveAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opPetAction)
+        {
+            await HandlePetActionAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opPetFood)
+        {
+            await HandlePetFoodAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opChangeSlot)
         {
@@ -4899,6 +4923,117 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     /// <summary>
+    /// Handles <c>CP_UserActivatePetRequest</c> — summoning / dismissing a pet (ports
+    /// <c>OnUserActivatePetRequest</c> + <c>spawnPet</c>): the pet spawns at the owner and the
+    /// whole map sees it via <c>LP_PetActivated</c>. One pet at a time.
+    /// </summary>
+    private async ValueTask HandleActivatePetAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186: [time:4][cashSlot:2][bossFlag:1]
+        packet.ReadInt();
+        short slot = packet.ReadShort();
+
+        Character c = _player.Character;
+        InventoryItem? item = Inventory.ItemAt(c, 5, slot);
+        if (item is null || !Cronus.Server.Login.ItemEncoder.IsPet(item.ItemId))
+        {
+            return;
+        }
+
+        if (_player.Pet is { } current && current.Item == item)
+        {
+            // Same pet again = dismiss.
+            _player.Pet = null;
+            await _field.BroadcastAsync(_packets.PetDeactivated(c.Id)).ConfigureAwait(false);
+            return;
+        }
+
+        _player.Pet = new ActivePet(item, _player.X, _player.Y);
+        await _field.BroadcastAsync(_packets.PetActivated(c.Id, _player.Pet)).ConfigureAwait(false);
+    }
+
+    /// <summary>Handles <c>CP_PetMove</c> — relays the pet's path to onlookers (ports <c>OnPetMove</c>).</summary>
+    private async ValueTask HandlePetMoveAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null || _player.Pet is not { } pet)
+        {
+            return;
+        }
+
+        packet.ReadInt(); // pet index
+        byte[] path = packet.ReadRemaining();
+        if (path.Length >= 4)
+        {
+            pet.X = (short)(path[0] | (path[1] << 8));
+            pet.Y = (short)(path[2] | (path[3] << 8));
+        }
+
+        await _field.BroadcastAsync(
+            _packets.PetMove(_player.Character.Id, path),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+    }
+
+    /// <summary>Handles <c>CP_PetAction</c> — pet emotes/speech to onlookers (ports <c>OnPetAction</c>).</summary>
+    private async ValueTask HandlePetActionAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null || _player.Pet is null)
+        {
+            return;
+        }
+
+        packet.ReadInt(); // pet index
+        byte type = packet.ReadByte();
+        byte action = packet.ReadByte();
+        string message = packet.ReadString();
+        await _field.BroadcastAsync(
+            _packets.PetAction(_player.Character.Id, type, action, message),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserPetFoodItemUseRequest</c> — feeding the pet (ports <c>OnPetFood</c>,
+    /// simplified): the food is consumed, fullness refills, and closeness grows on the pet item.
+    /// </summary>
+    private async ValueTask HandlePetFoodAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _player.Pet is not { } pet)
+        {
+            return;
+        }
+
+        packet.ReadInt();
+        short slot = packet.ReadShort();
+        int itemId = packet.ReadInt();
+
+        Character c = _player.Character;
+        InventoryItem? food = Inventory.ItemAt(c, 2, slot);
+        if (food is null || food.ItemId != itemId)
+        {
+            return;
+        }
+
+        int incFullness = _items.GetConsume(itemId)?.Hp is > 0 and var inc ? inc : 30; // spec/inc fallback
+        pet.Item.PetFullness = (byte)Math.Min(100, pet.Item.PetFullness + Math.Max(10, incFullness));
+        pet.Item.PetCloseness = (short)Math.Min(30000, pet.Item.PetCloseness + 10);
+
+        var changes = new List<InventoryChange>();
+        if (Inventory.RemoveFromSlot(c, 2, slot, 1) is { } used)
+        {
+            changes.Add(used);
+        }
+
+        // Re-add the pet item in place so the client refreshes closeness/fullness.
+        changes.Add(new InventoryChange(InvMode.Add, 5, pet.Item.Position, pet.Item, 1));
+        _characters.Save(c);
+        await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Handles <c>CP_UserPortableChairSitRequest</c> — sitting on a portable chair from the SETUP
     /// tab (ports <c>OnUserPortableChairSitRequest</c>): the map sees the chair; standing (a sit
     /// request with -1) clears it. Fishing chairs' timed rewards aren't modelled.
@@ -5886,6 +6021,14 @@ public sealed class ChannelHandler : PacketHandlerBase
         _field = newField;
         await newField.BroadcastAsync(_packets.UserEnterField(player, GuildOf(player.Character)), exceptCharacterId: player.Character.Id)
             .ConfigureAwait(false);
+
+        // The pet follows its owner through the portal (ports the transfer-field respawn).
+        if (player.Pet is { } pet)
+        {
+            pet.X = player.X;
+            pet.Y = player.Y;
+            await newField.BroadcastAsync(_packets.PetActivated(player.Character.Id, pet, transferField: true)).ConfigureAwait(false);
+        }
 
         // Open game rooms and shops in the new map show their balloons.
         foreach (MiniGame game in _miniGames.GamesInMap(targetMapId))
