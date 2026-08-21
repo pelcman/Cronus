@@ -976,6 +976,25 @@ public sealed class ChannelPackets
     /// (ports <c>ResCField.FieldEffect</c> + <c>OpsFieldEffect.FieldEffect_MobHPTag</c>): the mob's
     /// object id, current HP, max HP, and the two tag colours from its wz data.
     /// </summary>
+    /// <summary>
+    /// Builds <c>LP_MobDamaged</c> (ports <c>ResCMobPool.MobDamaged</c>): a damage number over the
+    /// mob (negative = a heal, e.g. a mob-skill self-heal), with HP/MaxHP when type != 0.
+    /// </summary>
+    public byte[] MobDamaged(FieldMob mob, int damage, byte type = 0)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MobDamaged);
+        w.WriteInt(mob.ObjectId);
+        w.WriteByte(type);
+        w.WriteInt(damage);
+        if (type != 0)
+        {
+            w.WriteInt(mob.Hp);
+            w.WriteInt(mob.MaxHp);
+        }
+
+        return w.ToArray();
+    }
+
     public byte[] MobHpTag(FieldMob mob)
     {
         const byte fieldEffectMobHpTag = 5;

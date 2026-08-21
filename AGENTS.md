@@ -343,6 +343,16 @@ Each milestone means adding one "working vertical slice".
         `LP_UserItemUpgradeEffect` flash, and an avatar repaint when a worn equip changed. Rules
         unit tests + a scroll-the-worn-sword e2e. Deferred: Vega/tablets/potential (post-BB),
         the Legendary Spirit skill gate for scrolling unequipped items.
+  - [x] **M10v: mob skills (working reference scope)** — the controller's `CP_MobMove`
+        "next attack possible" flag now lets the server pick one of the mob's wz skills (ports
+        `MobUsesSkill`: random pick, `MobSkill.img` cooldown `interval` + HP%% threshold gates,
+        MP cost) and answer it in `LP_MobCtrlAck` so the client animates the cast. Effects match
+        what actually works in the reference: self/area-heal 114 (`LP_MobDamaged` with a negative
+        number) and summon 200 (spawns the skill's mobs at the caster via the new
+        `Field.SpawnMob`, capped by the wz `limit`, handed to the controller). Mob skill lists
+        parse from `Mob/{id}.img` `info/skill`; `MobSkill.img` loads lazily once. The reference's
+        mob stat-buff branch is dead code there (stats map never broadcast) and pre-BB player
+        diseases aren't in it either — both stay deferred rather than invent unverified layouts.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

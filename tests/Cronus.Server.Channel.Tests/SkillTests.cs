@@ -135,6 +135,8 @@ public class SkillTests
         public int GetMaxLevel(int skillId) => max;
 
         public Cronus.Data.SkillEffect? GetSkillEffect(int skillId, int level) => null;
+
+        public Cronus.Data.MobSkillData? GetMobSkill(int skillId, int level) => null;
     }
 
     [Fact]

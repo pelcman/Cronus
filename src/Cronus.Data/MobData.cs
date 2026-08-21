@@ -24,6 +24,9 @@ public sealed class MobData
     /// <summary>Boss HP-gauge background colour (<c>info/hpTagBgcolor</c>); 0 for ordinary mobs.</summary>
     public int TagBgColor { get; init; }
 
+    /// <summary>The mob's castable skills (<c>info/skill/{n}</c>); empty for plain mobs.</summary>
+    public IReadOnlyList<MobSkillEntry> Skills { get; init; } = Array.Empty<MobSkillEntry>();
+
     /// <summary>Parses a Mob <c>.img</c> WZ document's <c>info</c> subtree.</summary>
     public static MobData FromWz(int templateId, WzData mobImg)
     {
@@ -37,9 +40,33 @@ public sealed class MobData
             Level = info?.GetInt("level", 1) ?? 1,
             TagColor = info?.GetInt("hpTagColor") ?? 0,
             TagBgColor = info?.GetInt("hpTagBgcolor") ?? 0,
+            Skills = ParseSkills(info?.Child("skill")),
         };
     }
+
+    private static IReadOnlyList<MobSkillEntry> ParseSkills(WzData? skillDir)
+    {
+        if (skillDir is null)
+        {
+            return Array.Empty<MobSkillEntry>();
+        }
+
+        var skills = new List<MobSkillEntry>();
+        foreach (WzData entry in skillDir.Children.Values)
+        {
+            int skill = entry.GetInt("skill");
+            if (skill > 0)
+            {
+                skills.Add(new MobSkillEntry(skill, Math.Max(1, entry.GetInt("level", 1))));
+            }
+        }
+
+        return skills;
+    }
 }
+
+/// <summary>One castable skill on a mob template (<c>info/skill/{n}</c>: skill + level).</summary>
+public readonly record struct MobSkillEntry(int SkillId, int Level);
 
 /// <summary>Provides <see cref="MobData"/> by template id.</summary>
 public interface IMobProvider

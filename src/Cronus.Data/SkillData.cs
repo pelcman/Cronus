@@ -37,6 +37,32 @@ public sealed record SkillEffect
     public bool HasPartyArea { get; init; }
 }
 
+/// <summary>
+/// A mob skill's per-level data (Skill wz <c>MobSkill.img/{skillId}/level/{level}</c>): the HP%%
+/// threshold below which the mob casts, the cooldown, the MP cost, the skill's <c>x</c>/<c>y</c>
+/// magnitudes, and the summon list for skill 200.
+/// </summary>
+public sealed record MobSkillData
+{
+    public int X { get; init; }
+
+    public int Y { get; init; }
+
+    /// <summary>The mob casts only while its HP%% is at or below this (wz <c>hp</c>; 100 = always).</summary>
+    public int HpThresholdPercent { get; init; } = 100;
+
+    public int MpCon { get; init; }
+
+    /// <summary>Cooldown between casts in ms (wz <c>interval</c> seconds ×1000).</summary>
+    public int IntervalMs { get; init; }
+
+    /// <summary>Summon cap on the field (wz <c>limit</c>, skill 200).</summary>
+    public int Limit { get; init; }
+
+    /// <summary>Mob template ids to summon (skill 200's numeric children).</summary>
+    public IReadOnlyList<int> Summons { get; init; } = Array.Empty<int>();
+}
+
 /// <summary>Provides skill data (max level, and per-level buff effects) from Skill wz.</summary>
 public interface ISkillProvider
 {
@@ -45,6 +71,9 @@ public interface ISkillProvider
 
     /// <summary>The effect of <paramref name="skillId"/> at <paramref name="level"/>, or null if unknown.</summary>
     SkillEffect? GetSkillEffect(int skillId, int level);
+
+    /// <summary>A mob skill's data at a level (<c>MobSkill.img</c>), or null if unknown.</summary>
+    MobSkillData? GetMobSkill(int skillId, int level);
 }
 
 /// <summary>
@@ -57,7 +86,15 @@ public sealed class WzSkillProvider : ISkillProvider
     private readonly string _wzRoot;
     private readonly ConcurrentDictionary<int, int> _cache = new();
 
-    public WzSkillProvider(string wzRoot) => _wzRoot = wzRoot;
+    public WzSkillProvider(string wzRoot)
+    {
+        _wzRoot = wzRoot;
+        _mobSkillImg = new Lazy<WzData?>(() =>
+        {
+            string path = Path.Combine(_wzRoot, "Skill", "MobSkill.img.xml");
+            return File.Exists(path) ? WzData.ParseFile(path) : null;
+        });
+    }
 
     public int GetMaxLevel(int skillId) => _cache.GetOrAdd(skillId, Load);
 
@@ -120,6 +157,48 @@ public sealed class WzSkillProvider : ISkillProvider
         return null;
     }
 
+    private readonly ConcurrentDictionary<long, MobSkillData?> _mobSkillCache = new();
+
+    public MobSkillData? GetMobSkill(int skillId, int level)
+        => _mobSkillCache.GetOrAdd(((long)skillId << 8) | (uint)(byte)level, _ => LoadMobSkill(skillId, level));
+
+    private MobSkillData? LoadMobSkill(int skillId, int level)
+    {
+        if (level < 1)
+        {
+            return null;
+        }
+
+        WzData? lvl = _mobSkillImg.Value?.Child(skillId.ToString())?.Child("level")?.Child(level.ToString());
+        if (lvl is null)
+        {
+            return null;
+        }
+
+        var summons = new List<int>();
+        foreach (WzData child in lvl.Children.Values)
+        {
+            if (int.TryParse(child.Name, out _) && child.AsInt() > 0)
+            {
+                summons.Add(child.AsInt());
+            }
+        }
+
+        return new MobSkillData
+        {
+            X = lvl.GetInt("x"),
+            Y = lvl.GetInt("y"),
+            HpThresholdPercent = lvl.GetInt("hp", 100),
+            MpCon = lvl.GetInt("mpCon"),
+            IntervalMs = lvl.GetInt("interval") * 1000,
+            Limit = lvl.GetInt("limit"),
+            Summons = summons,
+        };
+    }
+
+    /// <summary>MobSkill.img parsed once, lazily (it is one shared document).</summary>
+    private readonly Lazy<WzData?> _mobSkillImg;
+
     /// <summary>
     /// Reads a skill's max level from a parsed Skill <c>.img</c> (<c>skill/{id}/level</c> child
     /// count). Skill node names carry the id (sometimes zero-padded), so match by numeric value.
@@ -157,6 +236,8 @@ public sealed class NullSkillProvider : ISkillProvider
     public int GetMaxLevel(int skillId) => 0;
 
     public SkillEffect? GetSkillEffect(int skillId, int level) => null;
+
+    public MobSkillData? GetMobSkill(int skillId, int level) => null;
 }
 
 /// <summary>An in-memory skill provider for tests / seeded content.</summary>
@@ -164,17 +245,23 @@ public sealed class InMemorySkillProvider : ISkillProvider
 {
     private readonly IReadOnlyDictionary<int, int> _maxLevels;
     private readonly IReadOnlyDictionary<(int SkillId, int Level), SkillEffect> _effects;
+    private readonly IReadOnlyDictionary<(int SkillId, int Level), MobSkillData> _mobSkills;
 
     public InMemorySkillProvider(
         IReadOnlyDictionary<int, int>? maxLevels = null,
-        IReadOnlyDictionary<(int, int), SkillEffect>? effects = null)
+        IReadOnlyDictionary<(int, int), SkillEffect>? effects = null,
+        IReadOnlyDictionary<(int, int), MobSkillData>? mobSkills = null)
     {
         _maxLevels = maxLevels ?? new Dictionary<int, int>();
         _effects = effects ?? new Dictionary<(int, int), SkillEffect>();
+        _mobSkills = mobSkills ?? new Dictionary<(int, int), MobSkillData>();
     }
 
     public int GetMaxLevel(int skillId) => _maxLevels.TryGetValue(skillId, out int m) ? m : 0;
 
     public SkillEffect? GetSkillEffect(int skillId, int level)
         => _effects.TryGetValue((skillId, level), out SkillEffect? e) ? e : null;
+
+    public MobSkillData? GetMobSkill(int skillId, int level)
+        => _mobSkills.TryGetValue((skillId, level), out MobSkillData? m) ? m : null;
 }

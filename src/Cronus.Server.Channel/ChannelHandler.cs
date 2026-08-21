@@ -882,10 +882,89 @@ public sealed class ChannelHandler : PacketHandlerBase
             mob.Y = (short)(movePath[2] | (movePath[3] << 8));
         }
 
-        await session.SendAsync(_packets.MobCtrlAck(mob, moveId, aggro: false)).ConfigureAwait(false);
+        // The controller signalled the mob may act: the server picks a castable skill (ports
+        // MobUsesSkill) and answers it in the ack so the client animates the cast.
+        (byte ackSkill, byte ackLevel) = nextAttackPossible
+            ? await TryCastMobSkillAsync(mob).ConfigureAwait(false)
+            : ((byte)0, (byte)0);
+
+        await session.SendAsync(_packets.MobCtrlAck(mob, moveId, aggro: false, ackSkill, ackLevel)).ConfigureAwait(false);
         await _field.BroadcastAsync(
             _packets.MobMove(mob.ObjectId, nextAttackPossible, left, mobSkill, movePath),
             exceptCharacterId: characterId).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Picks and applies one of the mob's wz skills (ports <c>MobUsesSkill</c> + the working scope
+    /// of <c>MobSkill.applyEffect</c>): a random known skill, gated by its cooldown and the mob's
+    /// HP%% threshold. Self-heal (114) restores HP with a green number; summon (200) spawns the
+    /// skill's mobs at the caster (capped by the wz limit). Returns the skill to ack, or (0,0).
+    /// </summary>
+    private async ValueTask<(byte SkillId, byte Level)> TryCastMobSkillAsync(FieldMob mob)
+    {
+        if (_field is null || _fields.MobProvider?.GetMob(mob.TemplateId) is not { } stats || stats.Skills.Count == 0)
+        {
+            return (0, 0);
+        }
+
+        MobSkillEntry pick = stats.Skills[Random.Shared.Next(stats.Skills.Count)];
+        if (_skills.GetMobSkill(pick.SkillId, pick.Level) is not { } mobSkill)
+        {
+            return (0, 0);
+        }
+
+        long now = Environment.TickCount64;
+        if (mob.LastSkillUse.TryGetValue(pick.SkillId, out long last) && now - last <= mobSkill.IntervalMs)
+        {
+            return (0, 0); // still cooling down
+        }
+
+        if (mob.MaxHp > 0 && mob.Hp * 100L / mob.MaxHp > mobSkill.HpThresholdPercent)
+        {
+            return (0, 0); // not hurt enough to cast
+        }
+
+        mob.LastSkillUse[pick.SkillId] = now;
+        mob.Mp = (short)Math.Max(0, mob.Mp - mobSkill.MpCon);
+
+        switch (pick.SkillId)
+        {
+            case 114: // self-heal: green number + HP back
+            {
+                int healed = mob.Heal(mobSkill.X);
+                if (healed > 0)
+                {
+                    await _field.BroadcastAsync(_packets.MobDamaged(mob, -healed)).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case 200: // summon minions at the caster, up to the wz field cap
+            {
+                int alive = _field.Mobs.Count(m => !m.IsDead);
+                foreach (int summonId in mobSkill.Summons)
+                {
+                    if (mobSkill.Limit > 0 && alive >= mobSkill.Limit)
+                    {
+                        break;
+                    }
+
+                    MobData? summonStats = _fields.MobProvider?.GetMob(summonId);
+                    FieldMob summon = _field.SpawnMob(summonId, summonStats, mob.X, mob.Y, mob.Foothold);
+                    alive++;
+                    await _field.BroadcastAsync(_packets.MobEnterField(summon)).ConfigureAwait(false);
+
+                    // Delegate the new mob's AI to this controller's client.
+                    summon.ControllerId = _player!.Character.Id;
+                    await TrySendAsync(_player, _packets.MobChangeController(summon)).ConfigureAwait(false);
+                }
+
+                break;
+            }
+        }
+
+        return ((byte)pick.SkillId, (byte)pick.Level);
     }
 
     /// <summary>

@@ -97,6 +97,17 @@ public sealed class FieldMob
 
     public bool IsDead => Hp <= 0;
 
+    /// <summary>Per mob-skill cooldown bookkeeping: skill id → tick of the last cast.</summary>
+    public Dictionary<int, long> LastSkillUse { get; } = new();
+
+    /// <summary>Heals up to max (a mob-skill heal); returns the HP actually restored.</summary>
+    public int Heal(int amount)
+    {
+        int restored = Math.Min(Math.Max(0, amount), MaxHp - Hp);
+        Hp += restored;
+        return restored;
+    }
+
     /// <summary>Applies damage, returns the new HP (clamped at 0).</summary>
     public int Damage(int amount)
     {
@@ -184,7 +195,8 @@ public sealed class Field
     {
         MapId = mapId;
         Npcs = BuildNpcs(mapData);
-        Mobs = BuildMobs(mapData, mobs);
+        _mobs = BuildMobs(mapData, mobs);
+        _nextMobOid = MobObjectIdBase + _mobs.Count;
     }
 
     public int MapId { get; }
@@ -192,8 +204,48 @@ public sealed class Field
     /// <summary>NPCs spawned on this field (from wz life data); empty when no map data.</summary>
     public IReadOnlyList<FieldNpc> Npcs { get; }
 
-    /// <summary>Monsters spawned on this field (from wz life data); empty when no map data.</summary>
-    public IReadOnlyList<FieldMob> Mobs { get; }
+    private readonly List<FieldMob> _mobs;
+    private int _nextMobOid;
+
+    /// <summary>Monsters on this field (map spawns + live summons); a stable snapshot.</summary>
+    public IReadOnlyList<FieldMob> Mobs
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _mobs.ToArray();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds a mob at runtime (a mob-skill summon). It never respawns on its own (MobTime -1);
+    /// the caller announces it with <c>LP_MobEnterField</c>.
+    /// </summary>
+    public FieldMob SpawnMob(int templateId, MobData? stats, short x, short y, int foothold)
+    {
+        int maxHp = stats?.MaxHp ?? 100;
+        lock (_gate)
+        {
+            var mob = new FieldMob
+            {
+                ObjectId = _nextMobOid++,
+                TemplateId = templateId,
+                X = x,
+                Y = y,
+                Foothold = foothold,
+                MaxHp = maxHp,
+                Hp = maxHp,
+                Exp = stats?.Exp ?? 0,
+                MobTime = -1,
+                TagColor = stats?.TagColor ?? 0,
+                TagBgColor = stats?.TagBgColor ?? 0,
+            };
+            _mobs.Add(mob);
+            return mob;
+        }
+    }
 
     /// <summary>Finds a spawned NPC by its runtime object id.</summary>
     public FieldNpc? FindNpc(int objectId)
@@ -242,11 +294,11 @@ public sealed class Field
         return due ?? (IReadOnlyList<FieldMob>)Array.Empty<FieldMob>();
     }
 
-    private static IReadOnlyList<FieldMob> BuildMobs(MapData? mapData, IMobProvider? mobProvider)
+    private static List<FieldMob> BuildMobs(MapData? mapData, IMobProvider? mobProvider)
     {
         if (mapData is null || mapData.Mobs.Count == 0)
         {
-            return Array.Empty<FieldMob>();
+            return new List<FieldMob>();
         }
 
         var mobs = new List<FieldMob>(mapData.Mobs.Count);
@@ -515,6 +567,9 @@ public sealed class FieldRegistry
         _maps = maps;
         _mobs = mobs;
     }
+
+    /// <summary>The mob-template source shared by all fields (for summons), or null.</summary>
+    public IMobProvider? MobProvider => _mobs;
 
     public Field Get(int mapId)
     {

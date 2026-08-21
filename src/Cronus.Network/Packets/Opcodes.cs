@@ -141,4 +141,5 @@ public static class ServerOpcode
     public const string SortItemResult = "LP_SortItemResult";
     public const string UserMiniRoomBalloon = "LP_UserMiniRoomBalloon";
     public const string UserItemUpgradeEffect = "LP_UserItemUpgradeEffect";
+    public const string MobDamaged = "LP_MobDamaged";
 }
