@@ -675,9 +675,22 @@ public sealed class ChannelPackets
     }
 
     // LP_Message types for JMS v186 (OpsMessage: no per-region remap applies to 148..193, so the
-    // enum defaults hold — MS_IncEXPMessage = 3, MS_IncMoneyMessage = 6).
+    // enum defaults hold — MS_IncEXPMessage = 3, MS_IncPOPMessage = 5, MS_IncMoneyMessage = 6).
     private const byte MsgIncExp = 3;
+    private const byte MsgIncPop = 5;
     private const byte MsgIncMoney = 6;
+
+    /// <summary>
+    /// Builds the "+N fame" floating message (<c>LP_Message</c> / MS_IncPOPMessage) shown when a
+    /// player's fame changes (ports <c>ResCWvsContext.Message</c>): just the signed delta.
+    /// </summary>
+    public byte[] IncPopMessage(int fameDelta)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Message);
+        w.WriteByte(MsgIncPop);
+        w.WriteInt(fameDelta);
+        return w.ToArray();
+    }
 
     /// <summary>
     /// Builds the "+N exp" floating message (<c>LP_Message</c> / MS_IncEXPMessage) shown on a kill

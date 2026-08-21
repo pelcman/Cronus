@@ -809,6 +809,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.GivePopularitySuccess(tc.Name, isUp, tc.Fame)).ConfigureAwait(false);
         await target.Session.SendAsync(_packets.GivePopularityNotify(_player.Character.Name, isUp)).ConfigureAwait(false);
         await target.Session.SendAsync(_packets.StatChanged(tc, StatFlag.Fame)).ConfigureAwait(false);
+        await target.Session.SendAsync(_packets.IncPopMessage(delta)).ConfigureAwait(false); // "+1 fame"
     }
 
     /// <summary>

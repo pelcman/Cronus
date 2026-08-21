@@ -340,6 +340,9 @@ Each milestone means adding one "working vertical slice".
       none of those yet; the guild "community" is `"-"`, which is what the reference always emits). The
       fixed layout is golden-tested exactly, and it's end-to-end tested (Alice sees Bob's lvl 55 / job
       412 / fame 21). Contained failure mode — it's a separate packet, not the entry blob.
+- [x] **M37: Fame gain message** — completes M32: the target now also sees the "+1 / −1 fame" floating
+      text (`LP_Message` / MS_IncPOPMessage=5, unambiguous for JMS v186) alongside their `LP_StatChanged`.
+      `IncPopMessage(delta)` fires from `HandleGivePopularityAsync`. Encoder unit-tested.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.

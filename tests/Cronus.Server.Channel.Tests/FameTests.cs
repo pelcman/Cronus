@@ -56,6 +56,17 @@ public class FameTests
         Assert.Equal(0, r.Remaining);
     }
 
+    [Fact]
+    public void IncPopMessage_IsTypeAndDelta()
+    {
+        var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
+        var r = new PacketReader(packets.IncPopMessage(1), ServerConfig.Jms186.CodePage);
+        Assert.Equal(ServerOps.Get(ServerOpcode.Message), r.ReadHeader());
+        Assert.Equal(5, r.ReadByte());   // MS_IncPOPMessage
+        Assert.Equal(1, r.ReadInt());    // +1 fame
+        Assert.Equal(0, r.Remaining);
+    }
+
     // ---- end-to-end ----
 
     private static byte[] MigrateIn(MapleSession session, int characterId)
