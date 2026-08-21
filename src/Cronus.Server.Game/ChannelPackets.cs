@@ -860,6 +860,138 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // Entrusted-shop (hired merchant) protocol ops (OpsMiniRoomProtocol.init, JMS v186 values).
+    public const byte EsPutItem = 30;
+    public const byte EsBuyItem = 31;
+    public const byte EsBuyResult = 32;
+    public const byte EsMoveItemToInventory = 35;
+
+    /// <summary>
+    /// The employee NPC appears on the map (ports <c>ResCEmployeePool.EmployeeEnterField</c>):
+    /// owner id, the permit item as the NPC look, position + owner name, then the balloon block.
+    /// </summary>
+    public byte[] EmployeeEnterField(HiredMerchant m)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.EmployeeEnterField);
+        w.WriteInt(m.OwnerId);
+        w.WriteInt(m.ItemId);
+        w.WriteShort(m.X);
+        w.WriteShort(m.Y);
+        w.WriteShort((short)m.Foothold);
+        w.WriteString(m.OwnerName);
+        WriteEmployeeBalloon(w, m);
+        return w.ToArray();
+    }
+
+    /// <summary>The employee NPC packs up (ports <c>EmployeeLeaveField</c>).</summary>
+    public byte[] EmployeeLeaveField(HiredMerchant m)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.EmployeeLeaveField);
+        w.WriteInt(m.OwnerId);
+        return w.ToArray();
+    }
+
+    /// <summary>The employee's balloon refreshes (ports <c>EmployeeMiniRoomBalloon</c>).</summary>
+    public byte[] EmployeeMiniRoomBalloon(HiredMerchant m)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.EmployeeMiniRoomBalloon);
+        w.WriteInt(m.OwnerId);
+        WriteEmployeeBalloon(w, m);
+        return w.ToArray();
+    }
+
+    private static void WriteEmployeeBalloon(PacketWriter w, HiredMerchant m)
+    {
+        w.WriteByte(HiredMerchant.GameType);
+        w.WriteInt(m.ObjectId);              // m_dwMiniRoomSN
+        w.WriteString(m.Description);
+        w.WriteByte((byte)(m.ItemId % 100)); // nSpec (store look)
+        w.WriteByte((byte)m.Size);
+        w.WriteByte(HiredMerchant.MaxVisitors + 1);
+    }
+
+    /// <summary>
+    /// The entrusted-shop room for one viewer (ports <c>getHiredMerch</c>): room type 5, the
+    /// permit as the NPC look, the visitors, the owner's management block (uptime + sold list +
+    /// banked meso) when the owner views it, then the banked meso and the listings.
+    /// </summary>
+    public byte[] HiredMerchantRoom(HiredMerchant m, int viewerSeat, bool firstTime)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(MiniRoomEnterResult);
+        w.WriteByte(HiredMerchant.GameType);
+        w.WriteByte(HiredMerchant.MaxVisitors + 1);
+        w.WriteShort((short)viewerSeat);
+        w.WriteInt(m.ItemId);
+        w.WriteString("雇用商人");
+        for (int i = 0; i < m.Visitors.Length; i++)
+        {
+            if (m.Visitors[i] is { } visitor)
+            {
+                w.WriteByte((byte)(i + 1));
+                Cronus.Server.Login.CharacterEncoder.WriteAvatarLook(w, visitor.Character);
+                w.WriteString(visitor.Character.Name);
+                w.WriteShort(visitor.Character.Job);
+            }
+        }
+
+        w.WriteByte(0xFF);
+        w.WriteShort(0);
+        w.WriteString(m.OwnerName);
+        if (viewerSeat == 0)
+        {
+            w.WriteInt(m.UpTimeSeconds);
+            w.WriteBool(firstTime);
+            w.WriteByte((byte)m.Sold.Count);
+            foreach (SoldRecord sold in m.Sold)
+            {
+                w.WriteInt(sold.ItemId);
+                w.WriteShort(sold.Quantity);
+                w.WriteInt(sold.TotalPrice);
+                w.WriteString(sold.Buyer);
+            }
+
+            w.WriteInt(m.Meso);
+        }
+
+        w.WriteString(m.Description);
+        w.WriteByte(10); // fixed constant in the reference
+        w.WriteInt(m.Meso);
+        w.WriteByte((byte)m.Items.Count);
+        foreach (PlayerShopItem item in m.Items)
+        {
+            w.WriteShort(item.Bundles);
+            w.WriteShort(item.Item.Quantity);
+            w.WriteInt(item.Price);
+            Cronus.Server.Login.ItemEncoder.WriteItem(w, item.Item);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>The merchant's listings refresh (ports <c>shopItemUpdate</c>'s merchant branch:
+    /// the PSP_Refresh op plus a leading int).</summary>
+    public byte[] HiredMerchantItemUpdate(HiredMerchant m)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MiniRoom);
+        w.WriteByte(PsRefresh);
+        w.WriteInt(0); // merchant branch marker
+        w.WriteByte((byte)m.Items.Count);
+        foreach (PlayerShopItem item in m.Items)
+        {
+            w.WriteShort(item.Bundles);
+            w.WriteShort(item.Item.Quantity);
+            w.WriteInt(item.Price);
+            Cronus.Server.Login.ItemEncoder.WriteItem(w, item.Item);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>"The owner is arranging the store" bounce for evicted visitors (ports
+    /// <c>MaintenanceHiredMerchant</c>: leave with reason 17).</summary>
+    public byte[] HiredMerchantMaintenance(byte seat) => MiniRoomClosed(seat, 17);
+
     // LP_GroupMessage chat targets (OpsChatGroup).
     public const byte ChatGroupFriend = 0;
     public const byte ChatGroupParty = 1;

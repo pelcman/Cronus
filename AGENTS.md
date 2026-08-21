@@ -353,6 +353,19 @@ Each milestone means adding one "working vertical slice".
         parse from `Mob/{id}.img` `info/skill`; `MobSkill.img` loads lazily once. The reference's
         mob stat-buff branch is dead code there (stats map never broadcast) and pre-BB player
         diseases aren't in it either — both stay deferred rather than invent unverified layouts.
+  - [x] **M10w: hired merchants (雇用商人)** — MiniRoom type 5 (ports `HiredMerchant` +
+        `ResCEmployeePool`): create with a 503xxxx permit in an FM room → stocking view
+        (`getHiredMerch`, shared ESP/PSP put-item path) → MRP_Balloon puts the employee NPC on
+        the map (`LP_EmployeeEnterField`, balloon block; replayed to map entrants) and it keeps
+        selling with the owner gone or offline. Visitor buys bank the taxed price on the merchant
+        (`EntrustedStoreTax` brackets) and append to the owner's sold list; the merchant-branch
+        listing refresh (PSP_Refresh + leading int) goes room-wide. The owner re-entering kicks
+        browsers ("整理中" leave 17) into a management view (uptime, sold list, banked meso),
+        can reclaim stock (ESP_MoveItemToInventory), and leaving either reopens (stock left) or
+        packs up — remaining stock + banked meso pay out to the owner (online or off) and
+        `LP_EmployeeLeaveField` clears the NPC. In-memory only for now (a restart closes all
+        merchants; the `hiredmerch` table is the follow-up); withdraw-meso/blacklist ops are
+        unhandled in the reference too and stay deferred. Full two-client lifecycle e2e.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

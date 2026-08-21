@@ -145,4 +145,7 @@ public static class ServerOpcode
     public const string UserItemUpgradeEffect = "LP_UserItemUpgradeEffect";
     public const string MobDamaged = "LP_MobDamaged";
     public const string UserSetActivePortableChair = "LP_UserSetActivePortableChair";
+    public const string EmployeeEnterField = "LP_EmployeeEnterField";
+    public const string EmployeeLeaveField = "LP_EmployeeLeaveField";
+    public const string EmployeeMiniRoomBalloon = "LP_EmployeeMiniRoomBalloon";
 }
