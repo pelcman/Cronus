@@ -17,17 +17,20 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly ICharacterRepository _characters;
     private readonly MapleSession _session;
     private readonly ChannelPackets _packets;
+    private readonly Func<int, int, ValueTask>? _warp;
 
     public ChannelPlayer(
         Character character,
         ICharacterRepository characters,
         MapleSession session,
-        ChannelPackets packets)
+        ChannelPackets packets,
+        Func<int, int, ValueTask>? warp = null)
     {
         _character = character;
         _characters = characters;
         _session = session;
         _packets = packets;
+        _warp = warp;
     }
 
     public string getName() => _character.Name;
@@ -65,6 +68,24 @@ public sealed class ChannelPlayer : INpcPlayer
         _character.Mp = _character.MaxMp;
         _characters.Save(_character);
         Send(_packets.StatChanged(_character, StatFlag.Hp | StatFlag.Mp));
+    }
+
+    public void warp(int mapId) => warp(mapId, 0);
+
+    /// <summary>
+    /// Warps the player via the channel's map-transfer path. Runs synchronously on the script
+    /// thread (like <see cref="Send"/>); safe because the client is modal during an NPC dialog, so
+    /// no field-mutating packet is being handled concurrently, and the transfer's own operations are
+    /// individually thread-safe.
+    /// </summary>
+    public void warp(int mapId, int portal)
+    {
+        if (_warp is null)
+        {
+            return;
+        }
+
+        _warp(mapId, portal).AsTask().GetAwaiter().GetResult();
     }
 
     public bool hasQuest(int questId) => _character.StartedQuests.ContainsKey(questId);

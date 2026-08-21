@@ -31,6 +31,12 @@ public interface INpcPlayer
     /// <summary>Restores HP and MP to full and notifies the client.</summary>
     void heal();
 
+    /// <summary>Warps the player to another map's default spawn portal.</summary>
+    void warp(int mapId);
+
+    /// <summary>Warps the player to a specific spawn portal of another map.</summary>
+    void warp(int mapId, int portal);
+
     /// <summary>True if the quest is currently started (in progress).</summary>
     bool hasQuest(int questId);
 

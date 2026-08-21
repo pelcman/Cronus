@@ -175,6 +175,93 @@ public class NpcDialogFlowTests
         Assert.False(ok.Next);
     }
 
+    /// <summary>Enters, selects an NPC, and signals when a second SetField (the warp) arrives.</summary>
+    private sealed class WarpingClient : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _npcId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private int _setFields;
+
+        public WarpingClient(int characterId, int npcId)
+        {
+            _characterId = characterId;
+            _npcId = npcId;
+        }
+
+        public TaskCompletionSource Warped { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode != _opSetField)
+            {
+                return;
+            }
+
+            if (++_setFields == 1)
+            {
+                // First SetField = entry; talk to the NPC (which warps us).
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserSelectNpc), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(_npcId);
+                w.WriteShort(0);
+                w.WriteShort(0);
+                await session.SendAsync(w.ToArray());
+            }
+            else
+            {
+                Warped.TrySetResult(); // second SetField = the map change
+            }
+        }
+    }
+
+    [Fact]
+    public async Task NpcScript_Warp_MovesPlayerToTheMap()
+    {
+        const int npcId = 9010000;
+        const int targetMap = 200000000;
+        const string script = "function start() { player.warp(200000000); }";
+
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Traveler", MapId = 100000000 });
+
+        var maps = new InMemoryMapProvider(new[]
+        {
+            new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() },
+            new MapData { MapId = targetMap, Portals = Array.Empty<PortalData>() },
+        });
+        var fields = new FieldRegistry(maps);
+        var scripts = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+
+        var client = new WarpingClient(hero.Id, npcId);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps, npcScripts: scripts);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.Warped.Task.WaitAsync(cts.Token);
+        Assert.Equal(targetMap, hero.MapId); // the script's player.warp moved the character
+    }
+
     [Fact]
     public async Task NpcSpawnsFromMapData_AndSelectByObjectIdRunsScript()
     {

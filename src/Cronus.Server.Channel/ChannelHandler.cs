@@ -1453,7 +1453,9 @@ public sealed class ChannelHandler : PacketHandlerBase
         int templateId = _field?.FindNpc(objectId)?.TemplateId ?? objectId;
 
         var dialog = new ChannelNpcDialog(session, _packets);
-        var player = new ChannelPlayer(_player.Character, _characters, session, _packets);
+        var player = new ChannelPlayer(
+            _player.Character, _characters, session, _packets,
+            warp: (map, portal) => MovePlayerToMapAsync(session, map, portal));
         _conversation = _npcScripts.Start(templateId, dialog, player);
     }
 

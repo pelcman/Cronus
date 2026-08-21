@@ -343,6 +343,13 @@ Each milestone means adding one "working vertical slice".
 - [x] **M37: Fame gain message** — completes M32: the target now also sees the "+1 / −1 fame" floating
       text (`LP_Message` / MS_IncPOPMessage=5, unambiguous for JMS v186) alongside their `LP_StatChanged`.
       `IncPopMessage(delta)` fires from `HandleGivePopularityAsync`. Encoder unit-tested.
+- [x] **M38: NPC-script warp** — NPC scripts can now move the player: `player.warp(mapId)` /
+      `player.warp(mapId, portal)` on the `INpcPlayer` surface (the field-mutating hook the interface
+      always intended). `ChannelPlayer` runs it through a warp callback the handler wires to
+      `MovePlayerToMapAsync`; it executes synchronously on the script thread (like the other `player`
+      calls) — safe because the client is modal during a dialog, so no field-mutating packet is handled
+      concurrently, and the transfer's operations are individually thread-safe. Unblocks town/dungeon
+      NPCs. End-to-end tested: a `player.warp(...)` script moves the character across the wire.
 
 Reaching a "playable core" (combat, inventory, NPC) is a multi-week effort; full v186
 parity is on the order of half a year.
