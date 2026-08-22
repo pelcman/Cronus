@@ -15,7 +15,13 @@ namespace Cronus.Debug.Bot;
 /// </summary>
 public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
 {
-    private sealed record Pending(int Opcode, TaskCompletionSource<byte[]> Tcs, Func<PacketReader, bool>? Match);
+    private sealed record Pending(int Opcode, TaskCompletionSource<byte[]> Tcs, Func<PacketReader, bool>? Match)
+    {
+        /// <summary>When set, this waiter accepts ANY of these opcodes (Opcode is then unused).</summary>
+        public IReadOnlyCollection<int>? AnyOf { get; init; }
+
+        public bool Accepts(int opcode) => AnyOf is null ? Opcode == opcode : AnyOf.Contains(opcode);
+    }
 
     private readonly ServerConfig _config;
     private readonly List<Pending> _waiters = new();
@@ -181,6 +187,55 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Awaits whichever of <paramref name="serverOpcodes"/> arrives first, as ONE waiter — racing
+    /// two ExpectAsync calls with Task.WhenAny would leave the loser registered, and it would then
+    /// swallow a later packet the caller still needs. Returns the matched opcode name and reader.
+    /// </summary>
+    public async Task<(string Opcode, PacketReader Reader)> ExpectAnyAsync(string[] serverOpcodes, TimeSpan? timeout = null)
+    {
+        var wanted = serverOpcodes.ToDictionary(name => ServerOps.Get(name), name => name);
+        TaskCompletionSource<byte[]> tcs;
+        lock (_gate)
+        {
+            int n = _unclaimed.Count;
+            for (int i = 0; i < n; i++)
+            {
+                if (!_unclaimed.TryDequeue(out (int Opcode, byte[] Packet) buffered))
+                {
+                    break;
+                }
+
+                if (wanted.TryGetValue(buffered.Opcode, out string? hit))
+                {
+                    return (hit, ReaderFor(buffered.Packet));
+                }
+
+                _unclaimed.Enqueue(buffered);
+            }
+
+            tcs = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _waiters.Add(new Pending(0, tcs, null) { AnyOf = wanted.Keys.ToHashSet() });
+        }
+
+        try
+        {
+            byte[] packet = await tcs.Task.WaitAsync(timeout ?? TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+            PacketReader reader = ReaderFor(packet);
+            int opcode = packet[0] | (packet[1] << 8);
+            return (wanted[opcode], reader);
+        }
+        catch (TimeoutException)
+        {
+            lock (_gate)
+            {
+                _waiters.RemoveAll(p => ReferenceEquals(p.Tcs, tcs));
+            }
+
+            throw;
+        }
+    }
+
     private PacketReader ReaderFor(byte[] packet)
     {
         var r = new PacketReader(packet, _config.CodePage);
@@ -203,7 +258,7 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
         {
             for (int i = 0; i < _waiters.Count; i++)
             {
-                if (_waiters[i].Opcode == opcode && (_waiters[i].Match is null || _waiters[i].Match!(ReaderFor(full))))
+                if (_waiters[i].Accepts(opcode) && (_waiters[i].Match is null || _waiters[i].Match!(ReaderFor(full))))
                 {
                     Pending waiter = _waiters[i];
                     _waiters.RemoveAt(i);

@@ -221,6 +221,34 @@ public sealed partial class ChannelHandler
                 break;
             }
 
+            case "dbgshop":
+            {
+                // A debug shop stocking EVERY item in the game at 1 meso, browsed like /beauty:
+                // pick a category, pick a page, and the shop window opens with that page's stock.
+                if (_conversation is { IsEnded: false })
+                {
+                    break; // another dialog is open
+                }
+
+                if (_itemCatalog is null || _itemCatalog.Categories.Count == 0)
+                {
+                    await ReplyAsync(session, "アイテムカタログが未ロードです (CRONUS_WZ)").ConfigureAwait(false);
+                    break;
+                }
+
+                var shopDialog = new ChannelNpcDialog(session, _packets);
+                var shopConvo = new NpcConversation(BeautyNpcId, shopDialog);
+                _conversation = shopConvo;
+                IItemCatalog catalog = _itemCatalog;
+                var shopThread = new Thread(() => RunDebugShopFlow(shopConvo, catalog, session))
+                {
+                    IsBackground = true,
+                    Name = "dbgshop-console",
+                };
+                shopThread.Start();
+                break;
+            }
+
             case "booktest" when parts.Length >= 2:
             {
                 // Live bisect for the card-pickup crash: choose WHICH monster-book packets the
@@ -420,7 +448,7 @@ public sealed partial class ChannelHandler
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
                     + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /gender [m|f], /beauty, /clearinv [tab], /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
+                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /gender [m|f], /beauty, /dbgshop, /clearinv [tab], /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 
@@ -595,6 +623,86 @@ public sealed partial class ChannelHandler
             cm.End();
         }
     }
+
+    /// <summary>Items offered per /dbgshop page (the shop window scrolls, but keep packets sane).</summary>
+    private const int DebugShopPageSize = 200;
+
+    /// <summary>Every /dbgshop item costs this much — cheap enough to buy anything, non-zero so
+    /// the client's own "can I afford it" check behaves normally.</summary>
+    private const int DebugShopPrice = 1;
+
+    /// <summary>
+    /// The /dbgshop conversation: category menu → page menu (categories run to thousands of
+    /// items) → a synthetic shop stocking that page at 1 meso each. Runs on its own thread and
+    /// blocks on the client's answers, like the NPC scripts and /beauty.
+    /// </summary>
+    private void RunDebugShopFlow(NpcConversation cm, IItemCatalog catalog, MapleSession session)
+    {
+        try
+        {
+            IReadOnlyList<ItemCategory> categories = catalog.Categories;
+            var menu = new System.Text.StringBuilder("デバッグショップ（全アイテム " + DebugShopPrice + " メル）\r\nジャンルを選んでください:");
+            for (int i = 0; i < categories.Count; i++)
+            {
+                menu.Append("\r\n#L").Append(i).Append('#')
+                    .Append(categories[i].DisplayName)
+                    .Append(" （").Append(categories[i].ItemIds.Count).Append("種）#l");
+            }
+
+            int pick = cm.askMenu(menu.ToString());
+            if (pick < 0 || pick >= categories.Count)
+            {
+                return;
+            }
+
+            ItemCategory category = categories[pick];
+            int page = 0;
+            int pages = (category.ItemIds.Count + DebugShopPageSize - 1) / DebugShopPageSize;
+            if (pages > 1)
+            {
+                var pageMenu = new System.Text.StringBuilder(category.DisplayName + " — ページを選んでください:");
+                for (int i = 0; i < pages; i++)
+                {
+                    int from = i * DebugShopPageSize + 1;
+                    int to = Math.Min(category.ItemIds.Count, (i + 1) * DebugShopPageSize);
+                    pageMenu.Append("\r\n#L").Append(i).Append('#').Append(from).Append('-').Append(to).Append("番目#l");
+                }
+
+                page = cm.askMenu(pageMenu.ToString());
+                if (page < 0 || page >= pages)
+                {
+                    return;
+                }
+            }
+
+            var stock = category.ItemIds
+                .Skip(page * DebugShopPageSize)
+                .Take(DebugShopPageSize)
+                .Select((id, index) => new ShopItem(id, DebugShopPrice, index, ReqItem: 0, ReqItemQ: 0))
+                .ToList();
+
+            var shop = new Shop { ShopId = DebugShopId, NpcId = BeautyNpcId, Items = stock };
+
+            // The shop window replaces the dialog, so close the conversation first.
+            cm.End();
+            OpenShopAsync(session, shop).AsTask().GetAwaiter().GetResult();
+        }
+        catch (ConversationEndedException)
+        {
+            // The player escaped the dialog — normal end.
+        }
+        catch (Exception)
+        {
+            // Never let a browse bug take the session down; the dialog just closes.
+        }
+        finally
+        {
+            cm.End();
+        }
+    }
+
+    /// <summary>Shop id used for the synthetic /dbgshop stock (never collides with wz shops).</summary>
+    private const int DebugShopId = -1;
 
     /// <summary>Pages <paramref name="candidates"/> through the avatar picker and applies the pick.</summary>
     private static void PickPagedStyle(NpcConversation cm, List<int> candidates, string what, Action<int> apply)

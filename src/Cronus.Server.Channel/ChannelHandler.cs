@@ -53,6 +53,9 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     /// <summary>Valid hair/face/skin ids from game data, for salon scripts; null without wz.</summary>
     private readonly IStyleProvider? _styles;
 
+    /// <summary>Every known item grouped by category (for /dbgshop); null without wz.</summary>
+    private readonly IItemCatalog? _itemCatalog;
+
     /// <summary>Every channel's advertised endpoint (index = channel id); null = single channel.</summary>
     private readonly IReadOnlyList<System.Net.IPEndPoint>? _channelEndpoints;
 
@@ -177,6 +180,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         PortalScriptEngine? reactorScripts = null,
         INpcNameProvider? npcNames = null,
         IStyleProvider? styles = null,
+        IItemCatalog? itemCatalog = null,
         IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
         IReadOnlyList<FieldRegistry>? worldFields = null,
         System.Net.IPEndPoint? cashShopEndpoint = null,
@@ -206,6 +210,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _reactorScripts = reactorScripts;
         _npcNames = npcNames;
         _styles = styles;
+        _itemCatalog = itemCatalog;
         _channelEndpoints = channelEndpoints;
         _worldFields = worldFields;
         _cashShopEndpoint = cashShopEndpoint;

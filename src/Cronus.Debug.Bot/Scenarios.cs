@@ -450,6 +450,69 @@ public sealed class Scenarios
             return "menu -> skin picker -> applied";
         }).ConfigureAwait(false);
 
+        await StepAsync(bot, "cmd:/dbgshop", async () =>
+        {
+            // /dbgshop: category menu -> (page menu) -> a shop stocking that page at 1 meso.
+            await ChatAsync(bot, "/dbgshop").ConfigureAwait(false);
+            PacketReader menu = await bot.ExpectAsync(ServerOpcode.ScriptMessage).ConfigureAwait(false);
+            menu.ReadByte(); menu.ReadInt();
+            if (menu.ReadByte() != 5)
+            {
+                throw new InvalidOperationException("expected the category menu");
+            }
+
+            PacketWriter choose = bot.NewPacket(ClientOpcode.UserScriptMessageAnswer);
+            choose.WriteByte(5);
+            choose.WriteByte(1);
+            choose.WriteInt(0);            // the first category
+            await bot.SendAsync(choose).ConfigureAwait(false);
+
+            // A big category inserts a page menu before the shop opens; answer page 1 if so.
+            for (int hop = 0; hop < 3; hop++)
+            {
+                (string which, PacketReader r) = await bot.ExpectAnyAsync(
+                    new[] { ServerOpcode.OpenShopDlg, ServerOpcode.ScriptMessage }).ConfigureAwait(false);
+
+                if (which == ServerOpcode.ScriptMessage)
+                {
+                    r.ReadByte(); r.ReadInt(); r.ReadByte();
+                    PacketWriter pick = bot.NewPacket(ClientOpcode.UserScriptMessageAnswer);
+                    pick.WriteByte(5);
+                    pick.WriteByte(1);
+                    pick.WriteInt(0);      // first page
+                    await bot.SendAsync(pick).ConfigureAwait(false);
+                    continue;
+                }
+
+                r.ReadInt();               // npc id
+                int count = r.ReadShort();
+                int firstItemId = r.ReadInt();
+                int firstPrice = r.ReadInt();
+                if (firstPrice != 1)
+                {
+                    throw new InvalidOperationException($"debug shop price {firstPrice}, expected 1");
+                }
+
+                // Buy one of the first item for its 1 meso.
+                PacketWriter buy = bot.NewPacket(ClientOpcode.UserShopRequest);
+                buy.WriteByte(0);          // buy
+                buy.WriteShort(0);         // shop slot
+                buy.WriteInt(firstItemId);
+                buy.WriteShort(1);
+                await bot.SendAsync(buy).ConfigureAwait(false);
+                PacketReader result = await bot.ExpectAsync(ServerOpcode.ShopResult).ConfigureAwait(false);
+                int code = result.ReadByte();
+                if (code != 0)
+                {
+                    throw new InvalidOperationException($"buy result {code}");
+                }
+
+                return $"{count} items @1 meso, bought {firstItemId}";
+            }
+
+            throw new InvalidOperationException("the debug shop never opened");
+        }).ConfigureAwait(false);
+
         await StepAsync(bot, "whisper:self-ack", async () =>
         {
             PacketWriter w = bot.NewPacket(ClientOpcode.Whisper);

@@ -38,6 +38,7 @@ when the server restarts (see [SERVER_SETUP.md](SERVER_SETUP.md)).
 | `/questreset <id>` | Clear one quest from your records (started and completed) |
 | `/gender [m\|f]` | Toggle (or set) your character's gender (account gender follows for the cash shop — re-login to see its catalog switch); re-enters the channel to apply the look |
 | `/beauty` | Open the style console: windowed pickers over every hair style / hair color / face / eye color / skin |
+| `/dbgshop` | Open the debug shop: pick a category (hats, weapons, use, etc …), then a page — every item costs 1 meso |
 | `/notice <msg>` | Blue notice broadcast to your current map |
 | `/snotice <msg>` | Blue notice broadcast to the whole server |
 | `/pos` | Show your position and map id |
