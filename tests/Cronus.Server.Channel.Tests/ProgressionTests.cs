@@ -62,26 +62,28 @@ public class ProgressionTests
     }
 
     [Fact]
-    public void ApplyDeathPenalty_LosesATenthOfExp()
+    public void ApplyDeathPenalty_LosesTheReferenceShare()
     {
-        var c = new Character { Name = "N", Level = 5, Exp = 1000 };
+        var c = new Character { Name = "N", Level = 5, Exp = 1000, Job = 100, Luk = 4 };
 
         StatFlag changed = CharacterProgression.ApplyDeathPenalty(c);
 
         Assert.Equal(StatFlag.Exp, changed);
-        Assert.Equal(900, c.Exp);  // -10%
+        int expectedLoss = (int)(ExpTable.ExpForLevel(5) * (0.2 / 4 + 0.05));
+        Assert.Equal(1000 - expectedLoss, c.Exp);
         Assert.Equal(5, c.Level);  // no level-down
     }
 
     [Fact]
-    public void ApplyDeathPenalty_WithNoExp_ChangesNothing()
+    public void ApplyDeathPenalty_BeginnerOrNoExp_ChangesNothing()
     {
-        var c = new Character { Name = "N", Level = 1, Exp = 0 };
+        var beginner = new Character { Name = "N", Level = 5, Exp = 500, Job = 0 };
+        Assert.Equal((StatFlag)0, CharacterProgression.ApplyDeathPenalty(beginner));
+        Assert.Equal(500, beginner.Exp);
 
-        StatFlag changed = CharacterProgression.ApplyDeathPenalty(c);
-
-        Assert.Equal((StatFlag)0, changed);
-        Assert.Equal(0, c.Exp);
+        var broke = new Character { Name = "N", Level = 5, Exp = 0, Job = 100 };
+        Assert.Equal((StatFlag)0, CharacterProgression.ApplyDeathPenalty(broke));
+        Assert.Equal(0, broke.Exp);
     }
 
     [Fact]
@@ -173,6 +175,24 @@ public class ProgressionTests
         CharacterProgression.SpendAbilityPoint(c, StatFlag.MaxMp);
 
         Assert.InRange(c.MaxMp, 68, 70); // magician AP-into-MP: +18..20
+    }
+
+    [Fact]
+    public void DeathExpLoss_FollowsReferenceFormula()
+    {
+        // Beginners lose nothing.
+        Assert.Equal(0, CharacterProgression.DeathExpLoss(new Character { Name = "N", Job = 0, Level = 20 }, inTown: false));
+
+        // In town: 1% of the level requirement.
+        var warrior = new Character { Name = "W", Job = 100, Level = 30, Luk = 4 };
+        Assert.Equal((int)(ExpTable.ExpForLevel(30) * 0.01), CharacterProgression.DeathExpLoss(warrior, inTown: true));
+
+        // In the field: 0.2/LUK + 0.05; archers use 0.08 for the LUK part.
+        Assert.Equal((int)(ExpTable.ExpForLevel(30) * (0.2 / 4 + 0.05)),
+            CharacterProgression.DeathExpLoss(warrior, inTown: false));
+        var archer = new Character { Name = "A", Job = 310, Level = 30, Luk = 10 };
+        Assert.Equal((int)(ExpTable.ExpForLevel(30) * (0.08 / 10 + 0.05)),
+            CharacterProgression.DeathExpLoss(archer, inTown: false));
     }
 
     [Fact]

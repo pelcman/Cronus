@@ -65,18 +65,18 @@ public static class CharacterProgression
     }
 
     /// <summary>
-    /// Applies the on-death exp penalty: loses a tenth of the accumulated (current-level) exp, no
-    /// level-down. Returns <see cref="StatFlag.Exp"/> if it changed, or 0 when there was none to
-    /// lose. Simplified — MapleStory scales the loss by level and exempts towns.
+    /// Applies the on-death exp penalty (see <see cref="DeathExpLoss"/>; no level-down).
+    /// Returns <see cref="StatFlag.Exp"/> if exp changed, or 0.
     /// </summary>
-    public static StatFlag ApplyDeathPenalty(Character c)
+    public static StatFlag ApplyDeathPenalty(Character c, bool inTown = false)
     {
-        if (c.Exp <= 0)
+        int loss = DeathExpLoss(c, inTown);
+        if (loss <= 0 || c.Exp <= 0)
         {
             return 0;
         }
 
-        c.Exp -= c.Exp / 10;
+        c.Exp = Math.Max(0, c.Exp - loss);
         return StatFlag.Exp;
     }
 
@@ -245,6 +245,24 @@ public static class CharacterProgression
         {
             c.Sp = (short)Math.Min(short.MaxValue, c.Sp + SpPerLevel);
         }
+    }
+
+    /// <summary>
+    /// The exp lost on death (ports <c>MapleCharacter.playerDead</c>): a share of the level's
+    /// requirement — 1% in a town, else <c>0.2/LUK + 0.05</c> (archers use 0.08 for the LUK
+    /// part). Beginners lose nothing.
+    /// </summary>
+    public static int DeathExpLoss(Character c, bool inTown)
+    {
+        if (c.Job == 0)
+        {
+            return 0;
+        }
+
+        double rate = inTown
+            ? 0.01
+            : (c.Job / 100 == 3 ? 0.08 : 0.2) / Math.Max((short)1, c.Luk) + 0.05;
+        return (int)Math.Min(int.MaxValue, (long)(ExpTable.ExpForLevel(c.Level) * rate));
     }
 
     /// <summary>The passive's effect at the character's learned level, or null.</summary>

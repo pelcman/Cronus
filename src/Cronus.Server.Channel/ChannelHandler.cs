@@ -1255,7 +1255,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         StatFlag changed = StatFlag.Hp;
         if (c.Hp == 0)
         {
-            changed |= CharacterProgression.ApplyDeathPenalty(c); // dying costs some exp
+            changed |= CharacterProgression.ApplyDeathPenalty(c, _maps.GetMap(c.MapId)?.IsTown == true); // dying costs some exp
         }
 
         await session.SendAsync(_packets.StatChanged(c, changed)).ConfigureAwait(false);
@@ -6749,6 +6749,12 @@ public sealed class ChannelHandler : PacketHandlerBase
         await NotifyPartyOfMyHpAsync(_player!).ConfigureAwait(false); // party sees the revive
     }
 
+    /// <summary>
+    /// The pre-BB death penalty (ports <c>MapleCharacter.playerDead</c>): a share of the level's
+    /// exp requirement — 1% when dying in a town, else <c>0.2/LUK + 0.05</c> (archers use 0.08).
+    /// Beginners lose nothing. The safety-charm absorb is not implemented (no cash shop).
+    /// The updated exp reaches the client with the revive's SetField.
+    /// </summary>
     /// <summary>
     /// Moves the bound player to another map: leave + announce, switch fields, SetField
     /// (map-change branch), then exchange enter-field packets in the new map.

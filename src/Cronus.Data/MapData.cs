@@ -102,6 +102,9 @@ public sealed class MapData
     /// <summary>Natural HP/MP recovery multiplier (wz <c>info/recovery</c>; sauna rooms are 2x+).</summary>
     public double Recovery { get; init; } = 1.0;
 
+    /// <summary>True for town maps (wz <c>info/town</c>) — no mobs, mild death penalty.</summary>
+    public bool IsTown { get; init; }
+
     /// <summary>Where a player revives from this map: the return town, or this map if none.</summary>
     public int ReviveMap => ReturnMap is > 0 and not NoLink ? ReturnMap : MapId;
 
@@ -200,6 +203,7 @@ public sealed class MapData
             Reactors = ParseReactors(mapImg),
             ReturnMap = mapImg.GetInt("info/returnMap"),
             Recovery = mapImg.GetDouble("info/recovery", 1.0),
+            IsTown = mapImg.GetInt("info/town") == 1,
         };
     }
 
