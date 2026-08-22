@@ -43,8 +43,8 @@ public class ProgressionTests
         Assert.True(changed.HasFlag(StatFlag.MaxHp));
         Assert.True(changed.HasFlag(StatFlag.Exp));
 
-        Assert.Equal(50 + (2 * 12), c.MaxHp); // +12 HP per level x2
-        Assert.Equal(5 + (2 * 10), c.MaxMp);  // +10 MP per level x2
+        Assert.InRange(c.MaxHp, 50 + 2 * 24, 50 + 2 * 28); // warrior: +24..28 HP per level
+        Assert.InRange(c.MaxMp, 5 + 2 * 4, 5 + 2 * 6);     // warrior: +4..6 MP per level
         Assert.Equal(c.MaxHp, c.Hp);          // restored
         Assert.Equal(2 * 5, c.Ap);            // +5 AP per level
         Assert.Equal(2 * 3, c.Sp);            // +3 SP per level (job != 0)
@@ -142,15 +142,52 @@ public class ProgressionTests
     }
 
     [Fact]
-    public void SpendAbilityPoint_MaxHp_AddsFlatAmount()
+    public void SpendAbilityPoint_MaxHp_AddsJobScaledAmount()
     {
-        var c = new Character { Name = "N", MaxHp = 100, Ap = 1 };
+        var c = new Character { Name = "N", MaxHp = 100, Ap = 1, Job = 100 }; // warrior
 
         StatFlag changed = CharacterProgression.SpendAbilityPoint(c, StatFlag.MaxHp);
 
         Assert.Equal(StatFlag.MaxHp | StatFlag.Ap, changed);
-        Assert.Equal(115, c.MaxHp); // +15
+        Assert.InRange(c.MaxHp, 120, 125); // warrior AP-into-HP: +20..25
         Assert.Equal(0, c.Ap);
+    }
+
+    [Fact]
+    public void SpendAbilityPoint_MaxHp_WarriorPassive_AddsItsX()
+    {
+        var c = new Character { Name = "N", MaxHp = 100, Ap = 1, Job = 100 };
+        c.Skills[1000001] = 5; // Improved Max HP Increase learned
+
+        CharacterProgression.SpendAbilityPoint(c, StatFlag.MaxHp,
+            id => id == 1000001 ? new Cronus.Data.SkillEffect { X = 10 } : null);
+
+        Assert.InRange(c.MaxHp, 130, 135); // 20..25 + passive x (10)
+    }
+
+    [Fact]
+    public void SpendAbilityPoint_MaxMp_Magician_UsesItsRange()
+    {
+        var c = new Character { Name = "N", MaxMp = 50, Ap = 1, Job = 200 };
+
+        CharacterProgression.SpendAbilityPoint(c, StatFlag.MaxMp);
+
+        Assert.InRange(c.MaxMp, 68, 70); // magician AP-into-MP: +18..20
+    }
+
+    [Fact]
+    public void ForceLevelUps_GrowsLikeRealLevels()
+    {
+        var c = new Character { Name = "N", Level = 1, Job = 200, MaxHp = 50, MaxMp = 5, Int = 20 };
+
+        StatFlag changed = CharacterProgression.ForceLevelUps(c, 10);
+
+        Assert.Equal(11, c.Level);
+        Assert.True(changed.HasFlag(StatFlag.MaxHp));
+        Assert.InRange(c.MaxHp, 50 + 10 * 10, 50 + 10 * 14);      // magician: +10..14 HP
+        Assert.InRange(c.MaxMp, 5 + 10 * (22 + 2), 5 + 10 * (24 + 2)); // +22..24 MP + Int/10 (2)
+        Assert.Equal(50, c.Ap);
+        Assert.Equal(30, c.Sp);
     }
 
     [Fact]

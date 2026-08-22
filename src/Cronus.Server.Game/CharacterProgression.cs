@@ -1,24 +1,33 @@
+using Cronus.Data;
 using Cronus.Domain;
 
 namespace Cronus.Server.Game;
 
 /// <summary>
-/// Applies experience gains and level-ups to a character. HP/MP gains use simple flat per-level
-/// values (the server is authoritative on HP/MP, so exact wz formulas are not required); AP is
-/// granted every level and SP to non-beginner jobs.
+/// Applies experience gains and level-ups to a character (ports <c>MapleCharacter.levelUp</c> and
+/// the HP/MP branches of <c>OnAbilityUpRequestInternal</c>): job-scaled random HP/MP growth, the
+/// Improved-Max-HP/MP passive bonuses, the INT/10 MP bonus, AP every level, and SP for jobs.
 /// </summary>
 public static class CharacterProgression
 {
-    private const int HpPerLevel = 12;
-    private const int MpPerLevel = 10;
     private const int ApPerLevel = 5;
     private const int SpPerLevel = 3;
+    private const int StatMax = 30000;
+
+    // Improving Max HP / MP Increase passives (their x/y feed the growth bonuses).
+    private const int ImprovedHpIncrease = 1000001;   // warrior
+    private const int ImprovedMpIncrease = 2000001;   // magician
+    private const int ImprovedPirateHp = 5100000;     // brawler
+
+    /// <summary>Resolves a learned passive's wz effect, or null (no skill data / not learned).</summary>
+    public delegate SkillEffect? EffectResolver(int skillId);
 
     /// <summary>
     /// Adds <paramref name="amount"/> experience, processing any level-ups. Returns the set of
-    /// stats that changed (for an <c>LP_StatChanged</c>).
+    /// stats that changed (for an <c>LP_StatChanged</c>). <paramref name="effectOf"/> supplies the
+    /// growth passives (Improved Max HP/MP) when available.
     /// </summary>
-    public static StatFlag GainExp(Character c, int amount)
+    public static StatFlag GainExp(Character c, int amount, EffectResolver? effectOf = null)
     {
         StatFlag changed = StatFlag.Exp;
         long exp = (long)c.Exp + Math.Max(0, amount);
@@ -27,7 +36,7 @@ public static class CharacterProgression
         while (needed > 0 && exp >= needed && c.Level < ExpTable.MaxLevel)
         {
             exp -= needed;
-            LevelUp(c);
+            LevelUp(c, effectOf);
             changed |= StatFlag.Level | StatFlag.MaxHp | StatFlag.Hp
                      | StatFlag.MaxMp | StatFlag.Mp | StatFlag.Ap | StatFlag.Sp;
             needed = ExpTable.ExpForLevel(c.Level);
@@ -35,6 +44,23 @@ public static class CharacterProgression
 
         // At the cap, retain the last level's worth of exp rather than overflowing.
         c.Exp = (int)Math.Clamp(exp, 0, int.MaxValue);
+        return changed;
+    }
+
+    /// <summary>
+    /// Grants <paramref name="levels"/> full level-ups with real growth (the raise path of the
+    /// level command), capped at the level cap. Returns the changed stats.
+    /// </summary>
+    public static StatFlag ForceLevelUps(Character c, int levels, EffectResolver? effectOf = null)
+    {
+        StatFlag changed = 0;
+        for (int i = 0; i < levels && c.Level < ExpTable.MaxLevel; i++)
+        {
+            LevelUp(c, effectOf);
+            changed |= StatFlag.Level | StatFlag.MaxHp | StatFlag.Hp
+                     | StatFlag.MaxMp | StatFlag.Mp | StatFlag.Ap | StatFlag.Sp;
+        }
+
         return changed;
     }
 
@@ -75,16 +101,15 @@ public static class CharacterProgression
     }
 
     private const short StatCap = 999;
-    private const int MaxHpPerAp = 15; // simplified flat gain (reference is job-scaled random)
-    private const int MaxMpPerAp = 12;
 
     /// <summary>
     /// Spends one ability point to raise a stat: STR/DEX/INT/LUK by 1 (capped at 999), or MaxHP/MaxMP
-    /// by a flat amount. Returns the changed stats (the raised stat plus <see cref="StatFlag.Ap"/>),
-    /// or 0 if it can't be honored — no AP, a capped base stat, or a non-assignable flag. Ports
-    /// <c>OnAbilityUpRequest</c>; HP/MP gains are simplified flat values (server owns HP/MP).
+    /// by the job-scaled random amount (ports the CS_MHP/CS_MMP branches of
+    /// <c>OnAbilityUpRequestInternal</c>, including the Improved-Max-HP/MP passive bonuses).
+    /// Returns the changed stats (the raised stat plus <see cref="StatFlag.Ap"/>), or 0 if it can't
+    /// be honored — no AP, a capped stat, or a non-assignable flag.
     /// </summary>
-    public static StatFlag SpendAbilityPoint(Character c, StatFlag stat)
+    public static StatFlag SpendAbilityPoint(Character c, StatFlag stat, EffectResolver? effectOf = null)
     {
         if (c.Ap <= 0)
         {
@@ -97,14 +122,39 @@ public static class CharacterProgression
             case StatFlag.Dex when c.Dex < StatCap: c.Dex++; break;
             case StatFlag.Int when c.Int < StatCap: c.Int++; break;
             case StatFlag.Luk when c.Luk < StatCap: c.Luk++; break;
-            case StatFlag.MaxHp: c.MaxHp = (short)Math.Min(short.MaxValue, c.MaxHp + MaxHpPerAp); break;
-            case StatFlag.MaxMp: c.MaxMp = (short)Math.Min(short.MaxValue, c.MaxMp + MaxMpPerAp); break;
-            default: return 0; // capped base stat, or not an AP-assignable flag
+            case StatFlag.MaxHp when c.MaxHp < StatMax:
+                c.MaxHp = (short)Math.Min(StatMax, c.MaxHp + ApHpGain(c, effectOf));
+                break;
+            case StatFlag.MaxMp when c.MaxMp < StatMax:
+                c.MaxMp = (short)Math.Min(StatMax, c.MaxMp + ApMpGain(c, effectOf));
+                break;
+            default: return 0; // capped stat, or not an AP-assignable flag
         }
 
         c.Ap--;
         return stat | StatFlag.Ap;
     }
+
+    /// <summary>HP an AP point buys (job-scaled; ports the CS_MHP table).</summary>
+    private static int ApHpGain(Character c, EffectResolver? effectOf) => c.Job switch
+    {
+        0 => Rand(8, 12),
+        >= 100 and <= 132 => Rand(20, 25) + (Learned(c, ImprovedHpIncrease, effectOf)?.X ?? 0),
+        >= 200 and <= 232 => Rand(10, 20),
+        (>= 300 and <= 322) or (>= 400 and <= 434) => Rand(16, 20),
+        >= 500 and <= 522 => Rand(18, 22) + (Learned(c, ImprovedPirateHp, effectOf)?.Y ?? 0),
+        _ => Rand(50, 100), // GameMaster / unknown
+    };
+
+    /// <summary>MP an AP point buys (job-scaled; ports the CS_MMP table).</summary>
+    private static int ApMpGain(Character c, EffectResolver? effectOf) => c.Job switch
+    {
+        0 => Rand(6, 8),
+        >= 100 and <= 132 => Rand(2, 4),
+        >= 200 and <= 232 => Rand(18, 20) + (Learned(c, ImprovedMpIncrease, effectOf)?.Y ?? 0) * 2,
+        (>= 300 and <= 322) or (>= 400 and <= 434) or (>= 500 and <= 522) => Rand(10, 12),
+        _ => Rand(50, 100),
+    };
 
     /// <summary>
     /// Spends <em>all</em> remaining AP across the given base-stat allocations in one shot (the
@@ -155,11 +205,39 @@ public static class CharacterProgression
         return changed;
     }
 
-    private static void LevelUp(Character c)
+    private static void LevelUp(Character c, EffectResolver? effectOf)
     {
         c.Level++;
-        c.MaxHp = (short)Math.Min(short.MaxValue, c.MaxHp + HpPerLevel);
-        c.MaxMp = (short)Math.Min(short.MaxValue, c.MaxMp + MpPerLevel);
+
+        (int hpLo, int hpHi, int mpLo, int mpHi) = c.Job switch
+        {
+            0 => (12, 16, 10, 12),                                          // Beginner
+            >= 100 and <= 132 => (24, 28, 4, 6),                            // Warrior
+            >= 200 and <= 232 => (10, 14, 22, 24),                          // Magician
+            (>= 300 and <= 322) or (>= 400 and <= 434) => (20, 24, 14, 16), // Bowman / Thief
+            >= 500 and <= 522 => (22, 26, 18, 22),                          // Pirate
+            _ => (50, 100, 50, 100),                                        // GameMaster / unknown
+        };
+
+        int hpGain = Rand(hpLo, hpHi);
+        int mpGain = Rand(mpLo, mpHi);
+
+        // Growth passives: Improved Max HP (warrior x / pirate x) and Improved Max MP (mage x*2).
+        hpGain += c.Job switch
+        {
+            >= 100 and <= 132 => Learned(c, ImprovedHpIncrease, effectOf)?.X ?? 0,
+            >= 500 and <= 522 => Learned(c, ImprovedPirateHp, effectOf)?.X ?? 0,
+            _ => 0,
+        };
+        if (c.Job is >= 200 and <= 232)
+        {
+            mpGain += (Learned(c, ImprovedMpIncrease, effectOf)?.X ?? 0) * 2;
+        }
+
+        mpGain += c.Int / 10; // the INT bonus (reference uses total INT; base INT here)
+
+        c.MaxHp = (short)Math.Min(StatMax, c.MaxHp + hpGain);
+        c.MaxMp = (short)Math.Min(StatMax, c.MaxMp + mpGain);
         c.Hp = c.MaxHp;
         c.Mp = c.MaxMp;
         c.Ap = (short)Math.Min(short.MaxValue, c.Ap + ApPerLevel);
@@ -168,4 +246,10 @@ public static class CharacterProgression
             c.Sp = (short)Math.Min(short.MaxValue, c.Sp + SpPerLevel);
         }
     }
+
+    /// <summary>The passive's effect at the character's learned level, or null.</summary>
+    private static SkillEffect? Learned(Character c, int skillId, EffectResolver? effectOf)
+        => c.Skills.ContainsKey(skillId) ? effectOf?.Invoke(skillId) : null;
+
+    private static int Rand(int lo, int hi) => Random.Shared.Next(lo, hi + 1);
 }

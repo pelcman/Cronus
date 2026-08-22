@@ -89,6 +89,7 @@ Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
 | `CRONUS_HOST` | The IP/hostname advertised to clients (LAN/public play); default localhost |
 | `CRONUS_STARTMAP` | Map new characters start in (default 100000000, Henesys) |
 | `CRONUS_RATE_EXP` / `_DROP` / `_MESO` | Server rate multipliers (default 1.0) |
+| `CRONUS_AUTO_REGISTER` | `0`/`false` = only existing accounts may log in (default: unknown accounts auto-create on first login) |
 
 To connect a real client, point a JMS v186 client at the host via EmuClient's localhost
 redirect. Accounts auto-register on first login. See

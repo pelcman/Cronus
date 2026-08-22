@@ -75,7 +75,9 @@ Sets your job id. Common pre-Big-Bang ids (2nd job = base+10; 3rd/4th job add +1
 | 500 | Pirate | 510 Brawler / 520 Gunslinger |
 
 ### `/level <n>`
-**Sets** your level (1–200) and resets exp to 0 so the bar starts clean. The party window updates.
+Raising your level runs **real level-ups** — HP/MP grow with your job's ranges (growth passives
+included) and AP/SP are granted, exactly like levelling by hunting. Lowering just sets the level
+(stats keep their values). Exp resets to 0 so the bar starts clean; the party window updates.
 
 ### `/hp <n>` · `/mp <n>` · `/maxhp <n>` · `/maxmp <n>`
 **Set** the current or maximum HP/MP. Current values clamp to the max (setting `/hp 0` kills you —

@@ -46,6 +46,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly HiredMerchantRegistry _merchants;
     private readonly IReactorProvider? _reactors;
     private readonly PortalScriptEngine? _reactorScripts;
+    private readonly INpcNameProvider? _npcNames;
     private readonly int _opReactorHit;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
@@ -151,7 +152,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         PlayerShopRegistry? playerShops = null,
         HiredMerchantRegistry? merchants = null,
         IReactorProvider? reactors = null,
-        PortalScriptEngine? reactorScripts = null)
+        PortalScriptEngine? reactorScripts = null,
+        INpcNameProvider? npcNames = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -173,6 +175,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _merchants = merchants ?? new HiredMerchantRegistry();
         _reactors = reactors;
         _reactorScripts = reactorScripts;
+        _npcNames = npcNames;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -1194,7 +1197,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         packet.ReadInt();                          // timestamp
         var stat = (StatFlag)packet.ReadInt();     // CS_* flag == StatFlag bit
 
-        StatFlag changed = CharacterProgression.SpendAbilityPoint(_player.Character, stat);
+        StatFlag changed = CharacterProgression.SpendAbilityPoint(_player.Character, stat, EffectResolverFor(_player.Character));
         if (changed == 0)
         {
             return; // no AP, capped stat, or a non-assignable flag
@@ -4685,6 +4688,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
     }
 
+    /// <summary>Looks up a learned skill's wz effect for the growth passives (HP/MP increase).</summary>
+    private CharacterProgression.EffectResolver EffectResolverFor(Character c)
+        => skillId => c.Skills.TryGetValue(skillId, out int level) ? _skills.GetSkillEffect(skillId, level) : null;
+
     /// <summary>The character's guild, or null when guildless / unknown.</summary>
     private GuildData? GuildOf(Character c) => c.GuildId > 0 ? _guilds.Get(c.GuildId) : null;
 
@@ -4861,7 +4868,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private async ValueTask GrantExpToAsync(FieldPlayer recipient, int exp)
     {
         Character c = recipient.Character;
-        StatFlag changed = CharacterProgression.GainExp(c, exp); // processes level-ups
+        StatFlag changed = CharacterProgression.GainExp(c, exp, EffectResolverFor(c)); // processes level-ups
         _characters.Save(c);
         await TrySendAsync(recipient, _packets.StatChanged(c, changed)).ConfigureAwait(false);
         await TrySendAsync(recipient, _packets.IncExpMessage(exp)).ConfigureAwait(false); // "+N exp"
@@ -5800,11 +5807,27 @@ public sealed class ChannelHandler : PacketHandlerBase
             case "level" when parts.Length >= 2 && int.TryParse(parts[1], out int level):
             {
                 Character lc = _player!.Character;
-                lc.Level = (byte)Math.Clamp(level, 1, 200);
+                int target = Math.Clamp(level, 1, 200);
+                StatFlag levelChanged = StatFlag.Level | StatFlag.Exp;
+                if (target > lc.Level)
+                {
+                    // Raising runs real level-ups so HP/MP/AP/SP grow like normal play.
+                    levelChanged |= CharacterProgression.ForceLevelUps(lc, target - lc.Level, EffectResolverFor(lc));
+                }
+                else
+                {
+                    lc.Level = (byte)target; // lowering just sets the level (stats keep their values)
+                }
+
                 lc.Exp = 0; // reset so the new level's bar starts clean
                 _characters.Save(lc);
-                await session.SendAsync(_packets.StatChanged(lc, StatFlag.Level | StatFlag.Exp)).ConfigureAwait(false);
+                await session.SendAsync(_packets.StatChanged(lc, levelChanged)).ConfigureAwait(false);
                 await RefreshPartyWindowAsync(_player).ConfigureAwait(false); // party window shows levels
+                if (lc.GuildId > 0)
+                {
+                    await BroadcastToGuildAsync(lc.GuildId, _packets.GuildMemberLevelJob(lc.GuildId, lc.Id, lc.Level, lc.Job), exceptCharacterId: lc.Id).ConfigureAwait(false);
+                }
+
                 break;
             }
 
@@ -6050,6 +6073,17 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         var dialog = new ChannelNpcDialog(session, _packets);
         _conversation = _npcScripts.Start(templateId, dialog, CreateScriptPlayer(session));
+        if (_conversation is null)
+        {
+            // No script: a friendly one-liner (with the NPC's real name when String data is
+            // loaded) so every NPC at least responds. The client's dialog-close answer is
+            // ignored by HandleScriptAnswer since no conversation is active.
+            string? npcName = _npcNames?.GetName(templateId);
+            string line = npcName is null
+                ? "……。"
+                : $"こんにちは、{npcName}です。今は特にお話しすることがありません。";
+            dialog.Say(templateId, line, prev: false, next: false);
+        }
     }
 
     /// <summary>The <c>player</c> object handed to NPC / quest / portal scripts.</summary>
@@ -6059,7 +6093,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
         openStorage: () => OpenStorageAsync(session),
         gainItem: (itemId, quantity) => ScriptGainItemAsync(session, itemId, quantity),
-        itemCount: itemId => CountInventoryItem(_player!.Character, itemId));
+        itemCount: itemId => CountInventoryItem(_player!.Character, itemId),
+        effectOf: EffectResolverFor(_player!.Character));
 
     /// <summary>
     /// Gives (positive) or takes (negative) items on behalf of a script, pushing the live

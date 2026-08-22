@@ -29,7 +29,13 @@ WarnUnresolved("server", serverOps);
 // Use MySQL when a connection string is configured (CRONUS_DB env var), else fall back to the
 // in-memory stores so the server runs with zero external dependencies for local testing.
 (IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo, IGuildRepository? guildRepo, IHiredMerchantRepository? merchantRepo) = CreateRepositories();
-var loginService = new LoginService(accounts, autoRegister: true);
+// Accounts auto-register on first login unless CRONUS_AUTO_REGISTER disables it (0/false/off).
+bool autoRegister = Environment.GetEnvironmentVariable("CRONUS_AUTO_REGISTER")?.Trim().ToLowerInvariant()
+    is not ("0" or "false" or "off" or "no");
+Console.WriteLine(autoRegister
+    ? "[login] auto-register ON — unknown accounts are created on first login."
+    : "[login] auto-register OFF — only existing accounts can log in.");
+var loginService = new LoginService(accounts, autoRegister: autoRegister);
 
 // The login server hands clients to the channel via LP_SelectCharacterResult. The IP it
 // advertises must be one the client can actually reach: loopback for local play, or the
@@ -73,6 +79,7 @@ IDropProvider drops = CreateDropProvider();
 IShopProvider shops = CreateShopProvider();
 IQuestProvider quests = CreateQuestProvider();
 IReactorProvider? reactorProvider = CreateReactorProvider();
+INpcNameProvider? npcNames = CreateNpcNameProvider();
 Rates rates = CreateRates();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
@@ -96,7 +103,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames),
         "channel"),
     keepAlive);
 
@@ -293,6 +300,18 @@ static NpcScriptEngine? CreateNpcScriptEngine()
     string questDir = Path.Combine(scriptRoot, "quest");
     Console.WriteLine($"[npc] Loading NPC scripts on demand from {npcDir} (quest scripts from {questDir})");
     return new NpcScriptEngine(new FolderNpcScriptSource(npcDir), new FolderNpcScriptSource(questDir));
+}
+
+static INpcNameProvider? CreateNpcNameProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !File.Exists(Path.Combine(wzRoot, "String", "Npc.img.xml")))
+    {
+        return null;
+    }
+
+    Console.WriteLine("[npc] NPC names loaded from String data (unscripted NPCs greet by name).");
+    return new WzNpcNameProvider(wzRoot);
 }
 
 static IReactorProvider? CreateReactorProvider()

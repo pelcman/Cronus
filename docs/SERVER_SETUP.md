@@ -85,6 +85,7 @@ matters most for remote play is `CRONUS_HOST`.
 | `CRONUS_DROPS` | Path to a `drop_data.sql` dump → mobs drop items/meso from their drop tables. Unset = mobs drop a small placeholder meso pile only. | `drop_data.sql` |
 | `CRONUS_SHOPS` | Path to a `shops`+`shopitems` SQL dump (e.g. `init_data_set.sql`) → vendor NPCs open shops to buy/sell. Unset = shops disabled. | `init_data_set.sql` |
 | `CRONUS_RATE_EXP` / `CRONUS_RATE_DROP` / `CRONUS_RATE_MESO` | Server rate multipliers for kill exp, drop chance, and mob meso. Unset = 1.0 (authentic). | `4` |
+| `CRONUS_AUTO_REGISTER` | `0` / `false` disables account auto-creation, so **only pre-existing accounts can log in** (a simple allow-list for a public IP). Unset/`1` = unknown accounts are created on first login. | `0` |
 | `CRONUS_STARTMAP` | Map new characters spawn in. | `100000000` |
 | *(args)* | `dotnet run --project src/Cronus.Server.Host <loginPort> <channelPort>` overrides the ports. | `8484 7575` |
 

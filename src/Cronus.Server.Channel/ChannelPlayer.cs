@@ -22,6 +22,7 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<ValueTask>? _openStorage;
     private readonly Func<int, int, ValueTask>? _gainItem;
     private readonly Func<int, int>? _itemCount;
+    private readonly CharacterProgression.EffectResolver? _effectOf;
 
     public ChannelPlayer(
         Character character,
@@ -32,7 +33,8 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<int, ValueTask>? openShop = null,
         Func<ValueTask>? openStorage = null,
         Func<int, int, ValueTask>? gainItem = null,
-        Func<int, int>? itemCount = null)
+        Func<int, int>? itemCount = null,
+        CharacterProgression.EffectResolver? effectOf = null)
     {
         _character = character;
         _characters = characters;
@@ -43,6 +45,7 @@ public sealed class ChannelPlayer : INpcPlayer
         _openStorage = openStorage;
         _gainItem = gainItem;
         _itemCount = itemCount;
+        _effectOf = effectOf;
     }
 
     public string getName() => _character.Name;
@@ -87,7 +90,7 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void gainExp(int amount)
     {
-        StatFlag changed = CharacterProgression.GainExp(_character, amount); // processes level-ups
+        StatFlag changed = CharacterProgression.GainExp(_character, amount, _effectOf); // processes level-ups
         _characters.Save(_character);
         Send(_packets.StatChanged(_character, changed));
     }
