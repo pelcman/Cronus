@@ -33,6 +33,9 @@ public sealed class PacketReader
     /// <summary>Total length of the underlying packet.</summary>
     public int Length => _buffer.Length;
 
+    /// <summary>Hex dump of the whole packet, position untouched — wire-diagnostics logging.</summary>
+    public string ToHex() => Convert.ToHexString(_buffer);
+
     /// <summary>
     /// Reads the opcode header (1 or 2 bytes) and returns its numeric value.
     /// </summary>

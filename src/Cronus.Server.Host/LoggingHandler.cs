@@ -30,7 +30,9 @@ public sealed class LoggingHandler : IPacketHandler
     {
         if (_verbose)
         {
-            Log($"recv opcode 0x{opcode:X4} ({packet.Length} bytes)");
+            // Full hex so a crash session can be replayed/diffed from the log alone (the payload
+            // is what identifies WHICH npc/item/quest the client acted on).
+            Log($"recv opcode 0x{opcode:X4} ({packet.Length} bytes): {packet.ToHex()}");
         }
 
         return _inner.OnPacketAsync(session, opcode, packet);
