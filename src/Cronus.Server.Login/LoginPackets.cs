@@ -97,11 +97,17 @@ public sealed class LoginPackets
         return w.ToArray();
     }
 
-    /// <summary>Builds an empty <c>LP_RecommendWorldMessage</c> (no recommendations).</summary>
+    /// <summary>
+    /// Builds <c>LP_RecommendWorldMessage</c> — the world-select "recommended" balloon (ports
+    /// <c>ResCLogin.RecommendWorldMessage</c>: count byte, then per world an int id and the
+    /// message string shown when the world is highlighted).
+    /// </summary>
     public byte[] RecommendWorldMessage()
     {
         PacketWriter w = NewPacket(ServerOpcode.RecommendWorldMessage);
-        w.WriteByte(0); // count
+        w.WriteByte(1);                  // one recommendation
+        w.WriteInt(0);                   // nWorldID
+        w.WriteString("Cronusへようこそ！仲間内プレイ用のJMS v186サーバーです。");
         return w.ToArray();
     }
 

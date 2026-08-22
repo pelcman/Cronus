@@ -16,9 +16,17 @@ using Cronus.Server.Login;
 // Configuration comes from environment variables; a repo-root `.env` file feeds them
 // (Maple2's approach — see .env.example). Real environment variables override the file.
 string? envFile = DotEnv.Load();
+
+// Every console line also lands in logs/cronus-<timestamp>.log (CRONUS_LOG_DIR overrides/disables).
+string? logFile = TeeLog.Attach();
+
 Console.WriteLine(envFile is null
     ? "[env] no .env file found — using process environment only (see .env.example)."
     : $"[env] loaded {envFile}");
+if (logFile is not null)
+{
+    Console.WriteLine($"[log] mirroring console to {logFile}");
+}
 
 CodePage.Register();
 ServerConfig config = ServerConfig.Jms186;
