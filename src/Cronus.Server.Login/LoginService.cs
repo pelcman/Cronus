@@ -47,11 +47,26 @@ public sealed class LoginService
                 return new Outcome(LoginResult.NotRegistered, null);
             }
 
-            account = _accounts.Create(mapleId, password, gender: (byte)(female ? 1 : 0));
+            // New accounts store a BCrypt hash, never the plaintext.
+            account = _accounts.Create(mapleId, PasswordHasher.Hash(password), gender: (byte)(female ? 1 : 0));
         }
-        else if (!string.Equals(account.Password, password, StringComparison.Ordinal))
+        else if (PasswordHasher.IsHashed(account.Password))
         {
-            return new Outcome(LoginResult.IncorrectPassword, null);
+            if (!PasswordHasher.Verify(password, account.Password))
+            {
+                return new Outcome(LoginResult.IncorrectPassword, null);
+            }
+        }
+        else
+        {
+            // Legacy plaintext row: verify as-is, then upgrade it to a hash in place.
+            if (!string.Equals(account.Password, password, StringComparison.Ordinal))
+            {
+                return new Outcome(LoginResult.IncorrectPassword, null);
+            }
+
+            account.Password = PasswordHasher.Hash(password);
+            _accounts.Save(account);
         }
 
         if (female)

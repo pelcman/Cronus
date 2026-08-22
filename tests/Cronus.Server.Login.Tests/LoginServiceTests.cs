@@ -64,4 +64,37 @@ public class LoginServiceTests
 
         Assert.Equal(LoginResult.NotRegistered, outcome.Result);
     }
+
+    [Fact]
+    public void NewAccountStoresABcryptHash_NotThePlaintext()
+    {
+        var repo = new InMemoryAccountRepository();
+        var service = new LoginService(repo);
+
+        service.Authenticate("player01", "secret");
+
+        Account stored = repo.Find("player01")!;
+        Assert.NotEqual("secret", stored.Password);
+        Assert.StartsWith("$2", stored.Password);
+        Assert.True(PasswordHasher.Verify("secret", stored.Password));
+    }
+
+    [Fact]
+    public void LegacyPlaintextAccount_LogsInAndIsUpgradedToAHash()
+    {
+        var repo = new InMemoryAccountRepository();
+        repo.Create("oldtimer", "plainpw", gender: 0); // a pre-hashing row
+
+        var service = new LoginService(repo);
+        LoginService.Outcome outcome = service.Authenticate("oldtimer", "plainpw");
+
+        Assert.Equal(LoginResult.Success, outcome.Result);
+        Account stored = repo.Find("oldtimer")!;
+        Assert.StartsWith("$2", stored.Password);                 // upgraded in place
+        Assert.True(PasswordHasher.Verify("plainpw", stored.Password));
+
+        // And the hashed row still authenticates / still rejects a wrong password.
+        Assert.Equal(LoginResult.Success, service.Authenticate("oldtimer", "plainpw").Result);
+        Assert.Equal(LoginResult.IncorrectPassword, service.Authenticate("oldtimer", "nope").Result);
+    }
 }
