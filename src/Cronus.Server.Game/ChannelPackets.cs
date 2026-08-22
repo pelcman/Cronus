@@ -220,6 +220,53 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_TownPortalCreated</c> — a Mystic Door side appears in the viewer's map
+    /// (ports <c>ResCTownPortalPool.TownPortalCreated</c>).
+    /// </summary>
+    public byte[] TownPortalCreated(int ownerId, short x, short y, bool isTown)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TownPortalCreated);
+        w.WriteBool(isTown);
+        w.WriteInt(ownerId);
+        w.WriteShort(x);
+        w.WriteShort(y);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_TownPortalRemoved</c> (ports <c>TownPortalRemoved</c>).</summary>
+    public byte[] TownPortalRemoved(int ownerId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TownPortalRemoved);
+        w.WriteByte(1);
+        w.WriteInt(ownerId);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_TownPortal</c> — the owner's door info for the world-map/party UI (ports
+    /// <c>ResCTownPortalPool.setMysticDoorInfo</c>). Pass null to clear it.
+    /// </summary>
+    public byte[] MysticDoorInfo(MysticDoor? door)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.TownPortal);
+        if (door is null)
+        {
+            w.WriteInt(999999999);
+            w.WriteInt(999999999);
+        }
+        else
+        {
+            w.WriteInt(door.FieldMapId);
+            w.WriteInt(door.TownMapId);
+            w.WriteInt(door.SkillId);
+            w.WriteShort(door.TownX);
+            w.WriteShort(door.TownY);
+        }
+
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_SummonedHit</c> — a puppet takes a hit (ports <c>SummonedHit</c>).</summary>
     public byte[] SummonedHit(FieldSummon s, byte attackAction, int damage, int mobTemplateIdFrom)
     {

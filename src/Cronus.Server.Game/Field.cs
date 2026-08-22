@@ -274,6 +274,7 @@ public sealed class Field
     private readonly Dictionary<int, FieldPlayer> _players = new();
     private readonly Dictionary<int, FieldDrop> _drops = new();
     private readonly Dictionary<int, FieldSummon> _summons = new();
+    private readonly Dictionary<int, MysticDoor> _doors = new();
     private int _nextDropOid = DropObjectIdBase;
     private int _nextSummonOid = SummonObjectIdBase;
     private readonly object _gate = new();
@@ -631,6 +632,57 @@ public sealed class Field
             foreach (FieldSummon s in expired)
             {
                 _summons.Remove(s.ObjectId);
+            }
+
+            return expired;
+        }
+    }
+
+    /// <summary>The Mystic Doors with a side standing in this map (keyed by owner).</summary>
+    public IReadOnlyList<MysticDoor> Doors
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _doors.Values.ToList();
+            }
+        }
+    }
+
+    public void AddDoor(MysticDoor door)
+    {
+        lock (_gate)
+        {
+            _doors[door.OwnerId] = door;
+        }
+    }
+
+    public MysticDoor? FindDoorByOwner(int ownerId)
+    {
+        lock (_gate)
+        {
+            return _doors.TryGetValue(ownerId, out MysticDoor? d) ? d : null;
+        }
+    }
+
+    public MysticDoor? RemoveDoor(int ownerId)
+    {
+        lock (_gate)
+        {
+            return _doors.Remove(ownerId, out MysticDoor? d) ? d : null;
+        }
+    }
+
+    /// <summary>Removes and returns the doors whose time is up (this map's side).</summary>
+    public IReadOnlyList<MysticDoor> TakeExpiredDoors(DateTime now)
+    {
+        lock (_gate)
+        {
+            var expired = _doors.Values.Where(d => d.ExpiresAt <= now).ToList();
+            foreach (MysticDoor d in expired)
+            {
+                _doors.Remove(d.OwnerId);
             }
 
             return expired;

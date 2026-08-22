@@ -105,6 +105,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opSummonedMove;
     private readonly int _opSummonedAttack;
     private readonly int _opSummonedHit;
+    private readonly int _opEnterTownPortal;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
@@ -239,6 +240,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opSummonedMove = clientOpcodes.Get(ClientOpcode.SummonedMove);
         _opSummonedAttack = clientOpcodes.Get(ClientOpcode.SummonedAttack);
         _opSummonedHit = clientOpcodes.Get(ClientOpcode.SummonedHit);
+        _opEnterTownPortal = clientOpcodes.Get(ClientOpcode.EnterTownPortalRequest);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
@@ -446,6 +448,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleSummonedHitAsync(packet).ConfigureAwait(false);
         }
+        else if (opcode == _opEnterTownPortal)
+        {
+            await HandleEnterTownPortalAsync(session, packet).ConfigureAwait(false);
+        }
         else if (opcode == _opTransferField)
         {
             await HandleTransferFieldAsync(session, packet).ConfigureAwait(false);
@@ -574,11 +580,13 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await LeavePartyAsync(party, _player, byDisconnect: true).ConfigureAwait(false);
             }
 
-            // Their summons vanish with them.
+            // Their summons and door vanish with them.
             foreach (FieldSummon summon in _field.RemoveSummonsOf(_player.Character.Id))
             {
                 await _field.BroadcastAsync(_packets.SummonedLeaveField(summon, animated: false)).ConfigureAwait(false);
             }
+
+            await RemoveDoorOfAsync(_player.Character.Id).ConfigureAwait(false);
 
             _field.Leave(_player.Character.Id);
             await _field.BroadcastAsync(_packets.UserLeaveField(_player.Character.Id)).ConfigureAwait(false);
@@ -770,6 +778,14 @@ public sealed class ChannelHandler : PacketHandlerBase
             }
 
             await session.SendAsync(_packets.SummonedEnterField(summon, animated: true)).ConfigureAwait(false);
+        }
+
+        // Standing Mystic Door sides in this map.
+        foreach (MysticDoor door in field.Doors)
+        {
+            (short x, short y) = door.PositionIn(field.MapId);
+            await session.SendAsync(
+                _packets.TownPortalCreated(door.OwnerId, x, y, isTown: door.IsTownSide(field.MapId))).ConfigureAwait(false);
         }
     }
 
@@ -1373,6 +1389,12 @@ public sealed class ChannelHandler : PacketHandlerBase
             await SpawnSummonAsync(c, skillId, level, effect).ConfigureAwait(false);
         }
 
+        // Mystic Door opens a portal pair: here, and at a door spot in the return town.
+        if (_field is not null && skillId == MysticDoor.SkillMysticDoor)
+        {
+            await SpawnDoorAsync(session, c, effect).ConfigureAwait(false);
+        }
+
         List<BuffStat> buffs = SkillBuff.FromEffect(skillId, effect);
         if (buffs.Count == 0)
         {
@@ -1461,6 +1483,119 @@ public sealed class ChannelHandler : PacketHandlerBase
             c.Id, skillId, level, c.Level, player.X, player.Y, foothold: 0, hp,
             DateTime.UtcNow.AddMilliseconds(durationMs));
         await field.BroadcastAsync(_packets.SummonedEnterField(summon, animated: false)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Opens a Mystic Door pair (ports the <c>MapleStatEffect</c> magic-door branch): the field
+    /// side at the caster's feet, the town side at a free wz door-portal (type 6) in the map's
+    /// return town. Recasting replaces the old pair.
+    /// </summary>
+    private async ValueTask SpawnDoorAsync(MapleSession session, Character c, SkillEffect effect)
+    {
+        Field field = _field!;
+        FieldPlayer player = _player!;
+
+        MapData? mapData = _maps.GetMap(c.MapId);
+        int townMapId = mapData?.ReturnMap ?? 0;
+        if (mapData is null || townMapId is <= 0 or MapData.NoLink || townMapId == c.MapId)
+        {
+            return; // no return town (already in town, or no data) — the door has nowhere to go
+        }
+
+        MapData? townData = _maps.GetMap(townMapId);
+        if (townData is null)
+        {
+            return;
+        }
+
+        await RemoveDoorOfAsync(c.Id).ConfigureAwait(false);
+
+        // The town side lands on a free door-portal spot (type 6); fall back to the spawn point.
+        Field townField = _fields.Get(townMapId);
+        var taken = new HashSet<int>(townField.Doors.Select(d => d.TownPortalId));
+        PortalData? townSpot = townData.Portals.FirstOrDefault(p => p.Type == 6 && !taken.Contains(p.Id))
+            ?? townData.SpawnPortal;
+        if (townSpot is null)
+        {
+            return;
+        }
+
+        // Arriving on the field side spawns at the portal nearest the door.
+        PortalData? nearest = mapData.Portals
+            .OrderBy(p => Math.Abs(p.X - player.X) + Math.Abs(p.Y - player.Y))
+            .FirstOrDefault();
+
+        var door = new MysticDoor
+        {
+            OwnerId = c.Id,
+            SkillId = MysticDoor.SkillMysticDoor,
+            FieldMapId = c.MapId,
+            FieldX = player.X,
+            FieldY = player.Y,
+            FieldPortalId = nearest?.Id ?? 0,
+            TownMapId = townMapId,
+            TownX = (short)townSpot.X,
+            TownY = (short)townSpot.Y,
+            TownPortalId = townSpot.Id,
+            ExpiresAt = DateTime.UtcNow.AddMilliseconds(effect.DurationMs > 0 ? effect.DurationMs : 30_000),
+        };
+        field.AddDoor(door);
+        townField.AddDoor(door);
+
+        await field.BroadcastAsync(_packets.TownPortalCreated(c.Id, door.FieldX, door.FieldY, isTown: false)).ConfigureAwait(false);
+        await townField.BroadcastAsync(_packets.TownPortalCreated(c.Id, door.TownX, door.TownY, isTown: true)).ConfigureAwait(false);
+        await session.SendAsync(_packets.MysticDoorInfo(door)).ConfigureAwait(false);
+    }
+
+    /// <summary>Removes a player's door pair from both maps and tells both fields.</summary>
+    private async ValueTask RemoveDoorOfAsync(int ownerId)
+    {
+        MysticDoor? door = null;
+        foreach (Field f in _fields.Fields)
+        {
+            door = f.FindDoorByOwner(ownerId);
+            if (door is not null)
+            {
+                break;
+            }
+        }
+
+        if (door is null)
+        {
+            return;
+        }
+
+        foreach (int mapId in new[] { door.FieldMapId, door.TownMapId })
+        {
+            Field side = _fields.Get(mapId);
+            if (side.RemoveDoor(ownerId) is not null)
+            {
+                await side.BroadcastAsync(_packets.TownPortalRemoved(ownerId)).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_EnterTownPortalRequest</c> — stepping through a Mystic Door (ports
+    /// <c>ReqCTownPortalPool.TryEnterTownPortal</c>): warps to the door's other side.
+    /// </summary>
+    private async ValueTask HandleEnterTownPortalAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // [door owner id:4][unk:1]
+        int doorOwnerId = packet.ReadInt();
+        MysticDoor? door = _field.FindDoorByOwner(doorOwnerId);
+        if (door is null)
+        {
+            return;
+        }
+
+        int target = door.TargetMapFor(_field.MapId);
+        await MovePlayerToMapAsync(session, target, door.TargetPortalFor(_field.MapId)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleSummonedMoveAsync(PacketReader packet)

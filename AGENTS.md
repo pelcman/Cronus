@@ -435,6 +435,14 @@ Each milestone means adding one "working vertical slice".
         simplification). End-to-end test: a priest's cast reaches the other client in the map.
         Also this batch: buddy capacity (+5 via NPC, entry-blob byte now per-character), the
         Fredrick remote merchant pack-up, and the wz map recovery rate driving sauna regen.
+  - [x] **M10ae: Mystic Door** — the priest's town portal:
+        `LP_TownPortalCreated/Removed/TownPortal` (byte-layouts per `ResCTownPortalPool`), a
+        door pair standing in both maps (field side at the caster, town side on a free wz
+        door-portal type-6 spot in the return town), `CP_EnterTownPortalRequest` warping to
+        the other side (town side arrives on its door spot, field side on the nearest portal),
+        expiry on the buff tick per map side, replay to entrants, and despawn on logout.
+        Recast replaces the pair. Party-window door info is sent to the owner
+        (`LP_TownPortal`); the party-member door display is left for a later pass.
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

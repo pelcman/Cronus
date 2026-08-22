@@ -168,6 +168,13 @@ public sealed class BuffExpiryService
                 sent++;
             }
 
+            // Mystic Doors close on schedule; each map's side sweeps itself.
+            foreach (MysticDoor door in field.TakeExpiredDoors(now))
+            {
+                await field.BroadcastAsync(_packets.TownPortalRemoved(door.OwnerId)).ConfigureAwait(false);
+                sent++;
+            }
+
             foreach (FieldPlayer player in field.Players)
             {
                 List<ActiveBuff> expired = _buffs.TakeExpired(player.Character.Id, now);

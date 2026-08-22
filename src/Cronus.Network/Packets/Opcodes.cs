@@ -47,6 +47,7 @@ public static class ClientOpcode
     public const string SummonedMove = "CP_SummonedMove";
     public const string SummonedAttack = "CP_SummonedAttack";
     public const string SummonedHit = "CP_SummonedHit";
+    public const string EnterTownPortalRequest = "CP_EnterTownPortalRequest";
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
     public const string UserSelectNpc = "CP_UserSelectNpc";
     public const string UserShopRequest = "CP_UserShopRequest";
@@ -156,6 +157,9 @@ public static class ServerOpcode
     public const string SummonedMove = "LP_SummonedMove";
     public const string SummonedAttack = "LP_SummonedAttack";
     public const string SummonedHit = "LP_SummonedHit";
+    public const string TownPortal = "LP_TownPortal";
+    public const string TownPortalCreated = "LP_TownPortalCreated";
+    public const string TownPortalRemoved = "LP_TownPortalRemoved";
     public const string DropEnterField = "LP_DropEnterField";
     public const string DropLeaveField = "LP_DropLeaveField";
     public const string GuildResult = "LP_GuildResult";
