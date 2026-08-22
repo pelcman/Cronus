@@ -31,6 +31,7 @@ public class NpcScriptEngineTests
         public void AskText(int npcId, string text) => Emit(new Prompt(3, text, false, false));
         public void AskAccept(int npcId, string text) => Emit(new Prompt(13, text, false, false));
         public void AskAvatar(int npcId, string text, IReadOnlyList<int> styles) => Emit(new Prompt(8, text, false, false));
+        public void OpenRps(int npcId) { }
 
         private void Emit(Prompt p)
         {

@@ -697,6 +697,44 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // LP_RPSGame result types (OpsRPS).
+    public const byte RpsNotEnoughMoney = 6;
+    public const byte RpsNoEmptySlot = 7;
+    public const byte RpsOpenType = 8;
+    public const byte RpsStartGame = 9;
+    public const byte RpsTimeOver = 10;
+    public const byte RpsNpcSelection = 11;
+    public const byte RpsContinue = 12;
+    public const byte RpsQuit = 13;
+    public const byte RpsRetry = 14;
+
+    /// <summary>Builds a bare <c>LP_RPSGame</c> result (ports <c>ResCRPSGameDlg.RPSGame</c>).</summary>
+    public byte[] RpsResult(byte type)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.RpsGame);
+        w.WriteByte(type);
+        return w.ToArray();
+    }
+
+    /// <summary>The janken dialog opens at an NPC (<c>RPSRes_Open</c> + the template id).</summary>
+    public byte[] RpsOpen(int npcTemplateId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.RpsGame);
+        w.WriteByte(RpsOpenType);
+        w.WriteInt(npcTemplateId);
+        return w.ToArray();
+    }
+
+    /// <summary>The NPC's hand and the running win streak (negative = you lost).</summary>
+    public byte[] RpsSelection(int npcPick, int streak)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.RpsGame);
+        w.WriteByte(RpsNpcSelection);
+        w.WriteByte((byte)npcPick);
+        w.WriteByte((byte)(sbyte)streak);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_SkillCooltimeSet</c> — starts the client's cooldown timer for a skill (ports
     /// <c>ResCUserLocal.SkillCooltimeSet</c>; JMS &lt; 302 sends the seconds as 2 bytes).

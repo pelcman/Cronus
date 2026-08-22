@@ -32,4 +32,28 @@ public class SalonTests
         Assert.Equal(30032, r.ReadInt());
         Assert.Equal(0, r.Remaining);           // no CMS trailing int for JMS
     }
+
+    [Fact]
+    public void RpsPackets_HaveExactVanillaLayouts()
+    {
+        var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
+
+        var open = new PacketReader(packets.RpsOpen(9000019), ServerConfig.Jms186.CodePage);
+        Assert.Equal(ServerOps.Get(ServerOpcode.RpsGame), open.ReadHeader());
+        Assert.Equal(ChannelPackets.RpsOpenType, open.ReadByte());
+        Assert.Equal(9000019, open.ReadInt());
+        Assert.Equal(0, open.Remaining);
+
+        var pick = new PacketReader(packets.RpsSelection(2, -1), ServerConfig.Jms186.CodePage);
+        pick.ReadHeader();
+        Assert.Equal(ChannelPackets.RpsNpcSelection, pick.ReadByte());
+        Assert.Equal(2, pick.ReadByte());
+        Assert.Equal(-1, (sbyte)pick.ReadByte()); // negative streak = lost
+        Assert.Equal(0, pick.Remaining);
+
+        var start = new PacketReader(packets.RpsResult(ChannelPackets.RpsStartGame), ServerConfig.Jms186.CodePage);
+        start.ReadHeader();
+        Assert.Equal(ChannelPackets.RpsStartGame, start.ReadByte());
+        Assert.Equal(0, start.Remaining);
+    }
 }

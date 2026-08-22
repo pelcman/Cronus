@@ -24,4 +24,7 @@ public interface INpcDialog
 
     /// <summary>SM_ASKAVATAR with the candidate style ids the client previews.</summary>
     void AskAvatar(int npcId, string text, IReadOnlyList<int> styles);
+
+    /// <summary>Opens the janken (rock-paper-scissors) dialog at the NPC (no answer expected).</summary>
+    void OpenRps(int npcId);
 }

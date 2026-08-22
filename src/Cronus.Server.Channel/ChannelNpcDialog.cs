@@ -43,6 +43,9 @@ public sealed class ChannelNpcDialog : INpcDialog
     public void AskAvatar(int npcId, string text, IReadOnlyList<int> styles)
         => Send(_packets.ScriptMessageAvatar(npcId, text, styles));
 
+    public void OpenRps(int npcId)
+        => Send(_packets.RpsOpen(npcId));
+
     private void Send(byte[] packet)
         => _session.SendAsync(packet).AsTask().GetAwaiter().GetResult();
 }

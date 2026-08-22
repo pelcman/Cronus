@@ -113,6 +113,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opSummonedAttack;
     private readonly int _opSummonedHit;
     private readonly int _opEnterTownPortal;
+    private readonly int _opRpsGame;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
@@ -253,6 +254,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opSummonedAttack = clientOpcodes.Get(ClientOpcode.SummonedAttack);
         _opSummonedHit = clientOpcodes.Get(ClientOpcode.SummonedHit);
         _opEnterTownPortal = clientOpcodes.Get(ClientOpcode.EnterTownPortalRequest);
+        _opRpsGame = clientOpcodes.Get(ClientOpcode.RpsGame);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
@@ -466,6 +468,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opEnterTownPortal)
         {
             await HandleEnterTownPortalAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opRpsGame)
+        {
+            await HandleRpsGameAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opTransferField)
         {
@@ -1651,6 +1657,117 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         int target = door.TargetMapFor(_field.MapId);
         await MovePlayerToMapAsync(session, target, door.TargetPortalFor(_field.MapId)).ConfigureAwait(false);
+    }
+
+    // Janken (rock-paper-scissors) dialog constants (ports ReqCRPSGameDlg).
+    private const int RpsTax = 1000;
+    private const int RpsRefund = 500;
+    private const int RpsFirstPrize = 4031332; // certificates for 1..10 straight wins
+
+    /// <summary>
+    /// Handles <c>CP_RPSGame</c> — the janken master's dialog (ports
+    /// <c>ReqCRPSGameDlg.OnRPSGame</c>): 1000 meso a game, a first-round loss refunds 500,
+    /// quitting cashes the streak out as the matching certificate item.
+    /// </summary>
+    private async ValueTask HandleRpsGameAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || packet.Remaining < 1)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        int type = packet.ReadByte();
+        switch (type)
+        {
+            case 0: // start: pay the table charge
+            {
+                _player.RpsStreak = 0;
+                if (c.Meso < RpsTax)
+                {
+                    await session.SendAsync(_packets.RpsResult(ChannelPackets.RpsNotEnoughMoney)).ConfigureAwait(false);
+                    return;
+                }
+
+                c.Meso -= RpsTax;
+                _characters.Save(c);
+                await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+                await session.SendAsync(_packets.RpsResult(ChannelPackets.RpsStartGame)).ConfigureAwait(false);
+                break;
+            }
+
+            case 1: // the player's hand: 0 rock, 1 paper, 2 scissors
+            {
+                if (packet.Remaining < 1)
+                {
+                    return;
+                }
+
+                int pick = packet.ReadByte();
+                int npcPick = Random.Shared.Next(3);
+                bool lose = (pick == 0 && npcPick == 1) || (pick == 1 && npcPick == 2) || (pick == 2 && npcPick == 0);
+                bool refund = false;
+                if (lose)
+                {
+                    refund = _player.RpsStreak == 0; // a first-round loss gives half back
+                    _player.RpsStreak = -1;
+                }
+                else if (pick != npcPick)
+                {
+                    _player.RpsStreak++; // a draw replays the round (the reference counts it as a win)
+                }
+
+                await session.SendAsync(_packets.RpsSelection(npcPick, _player.RpsStreak)).ConfigureAwait(false);
+
+                if (refund)
+                {
+                    c.Meso = (int)Math.Clamp((long)c.Meso + RpsRefund, 0, int.MaxValue);
+                    _characters.Save(c);
+                    await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+                }
+
+                if (_player.RpsStreak >= 10)
+                {
+                    await ScriptGainItemAsync(session, RpsFirstPrize + 9, 1).ConfigureAwait(false);
+                    await session.SendAsync(_packets.ShowItemGain(RpsFirstPrize + 9, 1)).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case 2: // ran out of time
+                _player.RpsStreak = -1;
+                await session.SendAsync(_packets.RpsResult(ChannelPackets.RpsTimeOver)).ConfigureAwait(false);
+                break;
+
+            case 3: // keep the streak going
+                await session.SendAsync(_packets.RpsResult(ChannelPackets.RpsContinue)).ConfigureAwait(false);
+                break;
+
+            case 4: // quit: cash the streak out
+            {
+                await session.SendAsync(_packets.RpsResult(ChannelPackets.RpsQuit)).ConfigureAwait(false);
+                if (_player.RpsStreak >= 1)
+                {
+                    int itemId = RpsFirstPrize + Math.Min(_player.RpsStreak, 10) - 1;
+                    await ScriptGainItemAsync(session, itemId, 1).ConfigureAwait(false);
+                    await session.SendAsync(_packets.ShowItemGain(itemId, 1)).ConfigureAwait(false);
+                    _player.RpsStreak = 0;
+                }
+
+                break;
+            }
+
+            case 5: // retry (a fresh game after losing; charged on the next start)
+                if (c.Meso < RpsTax)
+                {
+                    await session.SendAsync(_packets.RpsResult(ChannelPackets.RpsNotEnoughMoney)).ConfigureAwait(false);
+                    return;
+                }
+
+                await session.SendAsync(_packets.RpsResult(ChannelPackets.RpsRetry)).ConfigureAwait(false);
+                break;
+        }
     }
 
     /// <summary>

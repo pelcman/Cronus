@@ -85,6 +85,9 @@ public sealed class NpcConversation : IDisposable
         return _action == 0 ? -1 : _selection;
     }
 
+    /// <summary>Opens the janken dialog (ports <c>sendRPS</c>); it runs outside the conversation.</summary>
+    public void sendRPS() => _dialog.OpenRps(NpcId);
+
     public void dispose() => End();
 
     // --- Host-facing side ---
