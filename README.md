@@ -37,14 +37,23 @@ A playable in-group server (all through the real encrypted protocol):
 - **Progression** — exp/level-ups with party sharing, SP → skills, buff skills with
   server-side expiry, quests (accept/complete with kill counters, rewards, lottery,
   quest scripts on Jint), skill macros, key bindings — all persisted
-- **Social** — parties (invite/accept/decline, HP bars, exp share), buddy list (offline
-  adds included), guilds (create/invite/ranks/emblem/notice + guild chat), messenger,
+- **Social** — parties (survive relogs and channel switches), buddy list (offline adds,
+  expandable capacity), guilds (create/invite/ranks/emblem/notice + guild chat), messenger,
   megaphones, trade, **Omok & match-card game rooms**, **personal shops**, **hired
-  merchants** that keep selling while the owner is offline (and survive restarts)
+  merchants** that keep selling while the owner is offline (and survive restarts), whisper
+  and `/find` across channels
+- **Multi-channel** — `CRONUS_CHANNELS` real channels with in-game channel change
+- **Classes** — Adventurers, **Knights of Cygnus, and Aran**, with job advancement NPCs
+  for every branch (1st–4th job)
+- **Summons & doors** — puppets, hawks, dragons, beholder, pirate birds; **Mystic Door**
+  with the party-window display
+- **Towns** — 160+ scripted NPCs: world travel, storage, **beauty salons** (hair/face/
+  skin with the style-picker UI), refiners, guild HQ, saunas, the Free Market, the janken
+  master, and a name-aware greeting for everything unscripted
 - **Scripts & data** — NPC / portal / quest scripts (JavaScript, Jint), wz_xml game data,
   the reference's SQL drop/shop tables, env-driven rates (`CRONUS_RATE_*`)
 
-406 tests, all green. See the roadmap and design notes in
+407 tests, all green. See the roadmap and design notes in
 [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md), and the real-client runbook in
 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
