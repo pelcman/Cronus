@@ -752,27 +752,58 @@ restart).
       external deps). Verified: starts and binds in both modes.
 - [x] `Cronus.Database.Tests`: repository + LoginService-over-DB tests via EF Core InMemory.
 
-### Next (M5b → characters, then channel)
-- [ ] Character model + `DataGW_CharacterStat` / `DataAvatarLook` encoding (needed to show
-      characters in `LP_SelectWorldResult` / `LP_ViewAllCharResult`)
-- [ ] `CP_CheckDuplicatedID` / `CP_CreateNewCharacter` → create characters (persist via DB)
-- [ ] Stand up a minimal channel server so `LP_SelectCharacterResult` migrate resolves
-- [ ] Replace plaintext password with a real hash (BCrypt); consider async repository APIs
-- [ ] EF Core migrations (replace EnsureCreated); reconcile with JMSv186 `sql/` schema
-- [x] Verify against a live MySQL server — `CRONUS_DB` → MySQL 8.4: `EnsureCreated` builds the
-      `accounts`/`characters`/`items` schema and the host logs "Connected to MySQL; …
-      persistent." (2026-08-21). A full write/read-back integration test is still TODO.
+### Remaining work (as of 2026-08-22, post stable-1)
 
-### Improvements / tech debt (ongoing)
-- [ ] **Add golden vectors**: run the Java build, capture handshake→login real bytes with
-      RirePE, pin them in tests (currently round-trip only).
-- [ ] Test AES-OFB block handling (0x5B0/0x5B4) with large payloads.
-- [ ] Move to `Span<byte>`/`Memory<byte>`-centric APIs to cut allocations (naive first).
-- [ ] Warn on undefined opcodes (@FFFF) at startup.
-- [ ] Externalize ports / DB connection / data paths via appsettings.json.
-- [x] Docker Compose (bundled MySQL) + Dockerfile — `docker compose up --build`.
-      (Container build not run in the dev environment; standard .NET multi-stage pattern.)
-- [x] CI (GitHub Actions: build + test on push/PR to main).
+**A. Verification & stability (highest value per the final goal)**
+- [ ] Live-client pass over the newest features (quest chains/acts, reactor drops, /gender,
+      SP grants) — bot-verified only so far; a human client run is the gate.
+- [ ] Long-session soak test: hours-long run watching memory, disconnect cleanup, respawn
+      services, SQLite growth.
+- [ ] Golden vectors: capture handshake→login→entry real bytes from the Java build with
+      RirePE and pin them (round-trip + oracle-source parity only today).
+
+**B. Deployment rehearsal (final goal: friends on a fixed public IP)**
+- [ ] LAN rehearsal: `CRONUS_HOST=<LAN IP>`, second PC with a patched client, full play.
+- [ ] Public-IP rehearsal: port forwarding (8484 / 7575.. / cash shop), `CRONUS_HOST`
+      public, external tester; validate SERVER_SETUP.md end to end and fix doc gaps found.
+- [ ] Docker path re-check after the SQLite/.env changes (compose bundles MySQL; the SQLite
+      default may simplify it to a single container + volume).
+- [ ] Backup/restore guide for `cronus.db` (copy while stopped; document).
+
+**C. Quest / NPC completeness (second wave)**
+- [ ] Quest-script coverage: 448 quests name a start/endscript in wz; the data-driven
+      fallback accepts/completes them silently. Port dialogs for the high-traffic chains
+      (job advancement lines first).
+- [ ] `normalAutoStart` behaviour confirmed on the live client (304 quests).
+- [ ] Exclusive.img (mutually-exclusive quest groups) — small, data-driven.
+- [ ] Medal-item title message on medal grants (cosmetic dropMessage).
+- Deferred with cause: `infoNumber`/`infoex` acts (no-op upstream), owl-of-Minerva search
+  results and parcel delivery (ACK-only stubs upstream).
+
+**D. Systems parked earlier (unchanged)**
+- [ ] Guild BBS (LP opcode unresolved even upstream), alliances.
+- [ ] Mastery books (intentional simplification: skills level to wz max directly).
+- [ ] Mob stat buffs / player diseases (dead code upstream).
+- [ ] Mini-game invites via the game UI.
+
+**E. Architecture / tech debt**
+- [ ] Split `Cronus.Server.Channel` into a channel (session/network) layer and a game
+      (world logic) layer, per the Maple2 alignment; `ChannelHandler` is ~7k lines.
+- [ ] Structured logging (Serilog) to replace Console writes; keep CRONUS_DEBUG hex taps.
+- [ ] Password hashing (BCrypt) before any public exposure; auto-register stays for the
+      in-group use case.
+- [ ] EF Core migrations to replace EnsureCreated+additive-sync once the schema settles.
+- [ ] `Span<byte>`-centric packet APIs to cut allocations (perf, not correctness).
+
+**F. Done recently (context)**
+- [x] stable-1 tag: login→entry→combat→pickup→re-login crash-free on the live client.
+- [x] Item slot-class type byte + skill master-level encoding fixes (the error-38 family).
+- [x] Quest flow: nextQuest chains, skill/quest-state/sp/buffItemID acts, interval repeats,
+      lvmax/item gates, /questreset; scriptless-NPC clicks silent (client quest UI works).
+- [x] NPC idle animation relay (CP_NpcMove); storage script coverage for all trunk NPCs.
+- [x] Reactor drops from `reactordrops` (quest-gated, reference spread).
+- [x] SQLite default persistence + additive migrations; `.env` configuration (Maple2
+      style); `/gender` with same-channel re-entry.
 
 ---
 
