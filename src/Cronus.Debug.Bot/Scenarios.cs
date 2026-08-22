@@ -684,6 +684,52 @@ public sealed class Scenarios
         }).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Map-independent extras for the golden-vector capture: a self-whisper (its ack packet),
+    /// a channel change (MigrateCommand + the fresh entry blob on the other channel), and a
+    /// cash-shop entry (SetCashShop's full CharacterData + balances + locker). Every step is
+    /// tolerant — a side that lacks a feature just skips, the diff shows the hole.
+    /// </summary>
+    public async Task RunCaptureExtrasAsync(BotClient bot, CancellationToken ct)
+    {
+        await StepAsync(bot, "capture:whisper-ack", async () =>
+        {
+            PacketWriter w = bot.NewPacket(ClientOpcode.Whisper);
+            w.WriteByte(0x02 | 0x04);
+            w.WriteString(bot.CharacterName);
+            w.WriteString("golden");
+            await bot.SendAsync(w).ConfigureAwait(false);
+            await bot.ExpectAsync(ServerOpcode.Whisper).ConfigureAwait(false);
+            return "";
+        }).ConfigureAwait(false);
+
+        await StepAsync(bot, "capture:channel-change", async () =>
+        {
+            PacketWriter w = bot.NewPacket(ClientOpcode.UserTransferChannelRequest);
+            w.WriteByte(1);
+            await bot.SendAsync(w).ConfigureAwait(false);
+            PacketReader r = await bot.ExpectAsync(ServerOpcode.MigrateCommand).ConfigureAwait(false);
+            r.ReadByte();
+            var ip = new IPAddress(r.ReadBytes(4));
+            int port = (ushort)r.ReadShort();
+            await MigrateAsync(bot, new IPEndPoint(ip, port), bot.CharacterId, ct).ConfigureAwait(false);
+            await bot.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
+            return $"channel 2 at {ip}:{port}";
+        }).ConfigureAwait(false);
+
+        await StepAsync(bot, "capture:cash-shop", async () =>
+        {
+            await bot.SendAsync(bot.NewPacket(ClientOpcode.UserMigrateToCashShopRequest)).ConfigureAwait(false);
+            PacketReader r = await bot.ExpectAsync(ServerOpcode.MigrateCommand).ConfigureAwait(false);
+            r.ReadByte();
+            var ip = new IPAddress(r.ReadBytes(4));
+            int port = (ushort)r.ReadShort();
+            await MigrateAsync(bot, new IPEndPoint(ip, port), bot.CharacterId, ct).ConfigureAwait(false);
+            await bot.ExpectAsync(ServerOpcode.SetCashShop).ConfigureAwait(false);
+            return $"cash shop at {ip}:{port}";
+        }).ConfigureAwait(false);
+    }
+
     // ---- shared helpers ------------------------------------------------------------------
 
     /// <summary>

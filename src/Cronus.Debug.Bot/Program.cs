@@ -71,6 +71,8 @@ if (!string.IsNullOrWhiteSpace(captureFile))
         };
         await scenarios.LoginAndEnterAsync(goldenBot, captureIndex, cts.Token);
         await Task.Delay(TimeSpan.FromSeconds(3), cts.Token);          // collect the entry burst
+        await scenarios.RunCaptureExtrasAsync(goldenBot, cts.Token);   // whisper / channel / cash shop
+        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
         goldenBot.Capture = null;                                      // detach before the writer closes
         await goldenBot.DisposeAsync();
     }
