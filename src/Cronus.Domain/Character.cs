@@ -79,6 +79,9 @@ public sealed class Character
     /// <summary>Map remembered by a script (Free Market / ship entrances) to return to; 0 = none.</summary>
     public int RememberedMap { get; set; }
 
+    /// <summary>The channel last played on (0-based) — where the cash shop sends the client back.</summary>
+    public int LastChannel { get; set; }
+
     /// <summary>Skill macros: slot index (0-4) → macro (persisted as a JSON column).</summary>
     public Dictionary<int, SkillMacroEntry> SkillMacros { get; set; } = new();
 

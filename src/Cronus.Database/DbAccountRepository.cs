@@ -42,4 +42,17 @@ public sealed class DbAccountRepository : IAccountRepository
         db.SaveChanges();
         return account;
     }
+
+    public Account? FindById(int accountId)
+    {
+        using CronusDbContext db = _contextFactory();
+        return db.Accounts.FirstOrDefault(a => a.Id == accountId);
+    }
+
+    public void Save(Account account)
+    {
+        using CronusDbContext db = _contextFactory();
+        db.Accounts.Update(account);
+        db.SaveChanges();
+    }
 }

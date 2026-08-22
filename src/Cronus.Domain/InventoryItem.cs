@@ -24,6 +24,9 @@ public sealed class InventoryItem
     /// <summary>Item flags (sealed, tradeable, etc.).</summary>
     public short Flag { get; set; }
 
+    /// <summary>Cash unique id for cash-shop items (encodes as the 8-byte SN); 0 = not cash.</summary>
+    public long CashId { get; set; }
+
     // --- Equip-only stats ---
     public byte UpgradeSlots { get; set; }
     public byte Level { get; set; }

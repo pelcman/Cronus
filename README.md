@@ -43,6 +43,8 @@ A playable in-group server (all through the real encrypted protocol):
   merchants** that keep selling while the owner is offline (and survive restarts), whisper
   and `/find` across channels
 - **Multi-channel** — `CRONUS_CHANNELS` real channels with in-game channel change
+- **Cash shop** — a real cash-shop server: browse, buy with an NX allowance
+  (`CRONUS_NX`), an account locker, and moving items in and out of the inventory
 - **Classes** — Adventurers, **Knights of Cygnus, and Aran**, with job advancement NPCs
   for every branch (1st–4th job)
 - **Summons & doors** — puppets, hawks, dragons, beholder, pirate birds; **Mystic Door**
@@ -53,7 +55,7 @@ A playable in-group server (all through the real encrypted protocol):
 - **Scripts & data** — NPC / portal / quest scripts (JavaScript, Jint), wz_xml game data,
   the reference's SQL drop/shop tables, env-driven rates (`CRONUS_RATE_*`)
 
-407 tests, all green. See the roadmap and design notes in
+411 tests, all green. See the roadmap and design notes in
 [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md), and the real-client runbook in
 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
@@ -101,6 +103,7 @@ Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
 | `CRONUS_AUTO_REGISTER` | `0`/`false` = only existing accounts may log in (default: unknown accounts auto-create on first login) |
 | `CRONUS_CHANNELS` | Game channels to run, 1–8 (default 2) on consecutive ports from the channel port; in-game channel change works |
 | `CRONUS_DEBUG` | `1` = log every packet (hex dumps) for protocol debugging; default off — heavy for real play |
+| `CRONUS_NX` | Cash-shop NX allowance: every account is topped up to this floor on entering the shop (default 300000; `0` disables the cash shop) |
 
 To connect a real client, point a JMS v186 client at the host via EmuClient's localhost
 redirect. Accounts auto-register on first login. See

@@ -50,6 +50,11 @@ public static class ClientOpcode
     public const string EnterTownPortalRequest = "CP_EnterTownPortalRequest";
     public const string PetDropPickUpRequest = "CP_PetDropPickUpRequest";
     public const string RpsGame = "CP_RPSGame";
+    public const string CashShopChargeParamRequest = "CP_CashShopChargeParamRequest";
+    public const string CashShopQueryCashRequest = "CP_CashShopQueryCashRequest";
+    public const string CashShopCashItemRequest = "CP_CashShopCashItemRequest";
+    public const string CashShopCheckCouponRequest = "CP_CashShopCheckCouponRequest";
+    public const string JmsRecommendedAvatar = "CP_JMS_RECOMMENDED_AVATAR";
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
     public const string UserSelectNpc = "CP_UserSelectNpc";
     public const string UserShopRequest = "CP_UserShopRequest";
@@ -162,6 +167,11 @@ public static class ServerOpcode
     public const string TownPortal = "LP_TownPortal";
     public const string SkillCooltimeSet = "LP_SkillCooltimeSet";
     public const string RpsGame = "LP_RPSGame";
+    public const string SetCashShop = "LP_SetCashShop";
+    public const string CashShopChargeParamResult = "LP_CashShopChargeParamResult";
+    public const string CashShopQueryCashResult = "LP_CashShopQueryCashResult";
+    public const string CashShopCashItemResult = "LP_CashShopCashItemResult";
+    public const string JmsPointshopFreeCouponDialog = "LP_JMS_POINTSHOP_FREE_COUPON_DIALOG";
     public const string TownPortalCreated = "LP_TownPortalCreated";
     public const string TownPortalRemoved = "LP_TownPortalRemoved";
     public const string DropEnterField = "LP_DropEnterField";

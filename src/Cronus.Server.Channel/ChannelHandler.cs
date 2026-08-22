@@ -56,6 +56,9 @@ public sealed class ChannelHandler : PacketHandlerBase
 
     /// <summary>Every channel's field registry (index = channel id) for cross-channel lookups.</summary>
     private readonly IReadOnlyList<FieldRegistry>? _worldFields;
+
+    /// <summary>The cash-shop server's advertised endpoint; null = no cash shop (decline).</summary>
+    private readonly System.Net.IPEndPoint? _cashShopEndpoint;
     private readonly int _opReactorHit;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
@@ -171,7 +174,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         INpcNameProvider? npcNames = null,
         IStyleProvider? styles = null,
         IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
-        IReadOnlyList<FieldRegistry>? worldFields = null)
+        IReadOnlyList<FieldRegistry>? worldFields = null,
+        System.Net.IPEndPoint? cashShopEndpoint = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -197,6 +201,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _styles = styles;
         _channelEndpoints = channelEndpoints;
         _worldFields = worldFields;
+        _cashShopEndpoint = cashShopEndpoint;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -378,8 +383,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
         else if (opcode == _opMigrateCashShop)
         {
-            // No cash shop server: decline (2 = shop server unavailable).
-            await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 2)).ConfigureAwait(false);
+            await HandleMigrateCashShopAsync(session).ConfigureAwait(false);
         }
         else if (opcode == _opCashItemUse)
         {
@@ -663,6 +667,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         var player = new FieldPlayer(character, session) { Channel = _channelId };
+        character.LastChannel = _channelId; // the cash shop sends the client back here
         _player = player;
         session.UserData = character;
 
@@ -1794,6 +1799,23 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await session.SendAsync(_packets.RpsResult(ChannelPackets.RpsRetry)).ConfigureAwait(false);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserMigrateToCashShopRequest</c> — sends the client to the cash-shop
+    /// server (ports <c>OnUserMigrateToCashShopRequest</c>). Without one configured, decline so
+    /// the button unfreezes.
+    /// </summary>
+    private async ValueTask HandleMigrateCashShopAsync(MapleSession session)
+    {
+        if (_player is null || _cashShopEndpoint is null || _player.Character.Hp <= 0)
+        {
+            await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 2)).ConfigureAwait(false);
+            return;
+        }
+
+        _characters.Save(_player.Character);
+        await session.SendAsync(_packets.MigrateCommand(_cashShopEndpoint.Address, _cashShopEndpoint.Port)).ConfigureAwait(false);
     }
 
     /// <summary>

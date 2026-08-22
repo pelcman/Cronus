@@ -14,6 +14,14 @@ public sealed class InMemoryAccountRepository : IAccountRepository
     public Account? Find(string loginId)
         => _accounts.TryGetValue(loginId, out Account? account) ? account : null;
 
+    public Account? FindById(int accountId)
+        => _accounts.Values.FirstOrDefault(a => a.Id == accountId);
+
+    public void Save(Account account)
+    {
+        // Objects are shared; nothing extra to flush in memory.
+    }
+
     public Account Create(string loginId, string password, byte gender)
     {
         var account = new Account

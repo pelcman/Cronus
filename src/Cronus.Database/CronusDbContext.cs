@@ -44,6 +44,16 @@ public sealed class CronusDbContext : DbContext
         account.Property(a => a.Password).HasMaxLength(128).IsRequired();
         account.Property(a => a.Gender);
         account.Property(a => a.IsGameMaster);
+        account.Property(a => a.NexonPoint);
+        account.Property(a => a.MaplePoint);
+        account.Property(a => a.CashLocker).HasConversion(
+            map => JsonSerializer.Serialize(map, JsonOptions),
+            json => JsonSerializer.Deserialize<Dictionary<long, CashLockerItem>>(json, JsonOptions) ?? new Dictionary<long, CashLockerItem>(),
+            new ValueComparer<Dictionary<long, CashLockerItem>>(
+                (a, b) => JsonSerializer.Serialize(a, JsonOptions) == JsonSerializer.Serialize(b, JsonOptions),
+                map => JsonSerializer.Serialize(map, JsonOptions).GetHashCode(),
+                map => JsonSerializer.Deserialize<Dictionary<long, CashLockerItem>>(
+                    JsonSerializer.Serialize(map, JsonOptions), JsonOptions) ?? new Dictionary<long, CashLockerItem>()));
 
         var character = modelBuilder.Entity<Character>();
         character.ToTable("characters");

@@ -478,6 +478,19 @@ Each milestone means adding one "working vertical slice".
         and the travel network gained Ereve and Rien. Not modelled: the Ereve/Rien tutorial
         quest lines and Cygnus-specific passives in the growth bonuses.
 
+  - [x] **M10ai: cash shop server** — a real cash-shop stage on its own port (the next after
+        the channels): `LP_SetCashShop` (CharacterData + account name + empty sale/discount/
+        best-item tables — the client's Etc.wz renders the catalog), balances
+        (`LP_CashShopQueryCashResult`), the account locker (`CashItemRes_LoadLocker_Done`,
+        55-byte `DataGW_CashItemInfo` entries), buying by commodity SN against the wz
+        Commodity catalog (`WzCommodityProvider`), locker↔inventory moves (inventory cash
+        items now carry their 8-byte unique id in `RawEncode`), destroy, and migrate-out back
+        to the channel the player came from (`Character.LastChannel`). NX economy: `CRONUS_NX`
+        tops every account up to an allowance floor on entry (accounts persist NexonPoint/
+        MaplePoint/locker as columns + a JSON locker). Slot/trunk expansion and wishlists are
+        declined like the reference; gifts/coupons are out of scope. End-to-end test: migrate
+        in → buy a pet → move it into the inventory with its cash id.
+
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated

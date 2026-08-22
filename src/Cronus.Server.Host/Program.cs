@@ -50,6 +50,15 @@ int channelCount = Math.Clamp(
 IReadOnlyList<IPEndPoint> channelEndpoints =
     Enumerable.Range(0, channelCount).Select(i => new IPEndPoint(channelHost, channelPort + i)).ToList();
 
+// The cash-shop server sits on the next port after the channels. CRONUS_NX keeps every
+// account's NX balance topped up to this floor on entry (default 300000; 0 disables the shop).
+int cashShopPort = channelPort + channelCount;
+var cashShopEndpoint = new IPEndPoint(channelHost, cashShopPort);
+int nxFloor = int.TryParse(Environment.GetEnvironmentVariable("CRONUS_NX"), out int nx)
+    ? Math.Max(0, nx)
+    : 300_000;
+bool cashShopEnabled = nxFloor > 0;
+
 // LP_AliveReq body: the server pings idle clients so they keep the connection open.
 byte[] keepAlive = new PacketWriter(
     serverOps.Get(ServerOpcode.AliveReq), config.PacketHeaderSize, config.CodePage).ToArray();
@@ -104,6 +113,7 @@ IQuestProvider quests = CreateQuestProvider();
 IReactorProvider? reactorProvider = CreateReactorProvider();
 INpcNameProvider? npcNames = CreateNpcNameProvider();
 IStyleProvider? styles = CreateStyleProvider();
+ICommodityProvider? commodities = CreateCommodityProvider();
 Rates rates = CreateRates();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
@@ -132,9 +142,28 @@ for (int i = 0; i < channelCount; i++)
         new IPEndPoint(IPAddress.Any, channelPort + i),
         config,
         () => new LoggingHandler(
-            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields),
+            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
             $"channel{channelId}", verbose: wireDebug),
         keepAlive));
+}
+
+// The cash-shop server (its own listener; the client migrates here and back).
+MapleListener? cashShopListener = null;
+if (cashShopEnabled)
+{
+    cashShopListener = new MapleListener(
+        new IPEndPoint(IPAddress.Any, cashShopPort),
+        config,
+        () => new LoggingHandler(
+            new CashShopHandler(clientOps, serverOps, characters, accounts, config,
+                commodities: commodities, channelEndpoints: channelEndpoints, nxFloor: nxFloor),
+            "cashshop", verbose: wireDebug),
+        keepAlive);
+    Console.WriteLine($"[cashshop] listening on port {cashShopPort}, NX allowance floor {nxFloor}.");
+}
+else
+{
+    Console.WriteLine("[cashshop] disabled (CRONUS_NX=0) — the client button is declined.");
 }
 
 // Server ticks per channel: respawn dead mobs, regenerate idle players' HP/MP, and
@@ -172,6 +201,11 @@ try
 {
     var tasks = new List<Task> { loginListener.RunAsync(cts.Token) };
     tasks.AddRange(channelListeners.Select(l => l.RunAsync(cts.Token)));
+    if (cashShopListener is not null)
+    {
+        tasks.Add(cashShopListener.RunAsync(cts.Token));
+    }
+
     tasks.AddRange(tickTasks.Select(run => run(cts.Token)));
     await Task.WhenAll(tasks);
 }
@@ -181,6 +215,11 @@ finally
     foreach (MapleListener listener in channelListeners)
     {
         await listener.DisposeAsync();
+    }
+
+    if (cashShopListener is not null)
+    {
+        await cashShopListener.DisposeAsync();
     }
 }
 
@@ -350,6 +389,18 @@ static INpcNameProvider? CreateNpcNameProvider()
 
     Console.WriteLine("[npc] NPC names loaded from String data (unscripted NPCs greet by name).");
     return new WzNpcNameProvider(wzRoot);
+}
+
+static ICommodityProvider? CreateCommodityProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !File.Exists(Path.Combine(wzRoot, "Etc", "Commodity.img.xml")))
+    {
+        return null;
+    }
+
+    Console.WriteLine("[cashshop] commodity catalog loaded from Etc data.");
+    return new WzCommodityProvider(wzRoot);
 }
 
 static IStyleProvider? CreateStyleProvider()

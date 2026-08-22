@@ -90,7 +90,16 @@ public static class ItemEncoder
     private static void WriteRaw(PacketWriter w, InventoryItem item)
     {
         w.WriteInt(item.ItemId);
-        w.WriteByte(0);                 // hasUniqueId = 0
+        if (item.CashId != 0)
+        {
+            w.WriteByte(1);             // hasUniqueId
+            w.WriteLong(item.CashId);   // the cash item SN
+        }
+        else
+        {
+            w.WriteByte(0);             // hasUniqueId = 0
+        }
+
         w.WriteLong(NoExpiration);
         // JMS >= 194 would add Encode4(0) here; v186 does not.
     }
