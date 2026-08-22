@@ -152,7 +152,7 @@ public sealed class Scenarios
 
     // ---- the solo content walkthrough ----------------------------------------------------
 
-    public async Task RunSoloSuiteAsync(BotClient bot, CancellationToken ct)
+    public async Task RunSoloSuiteAsync(BotClient bot, CancellationToken ct, bool fieldAudits = true)
     {
         await StepAsync(bot, "set-field", async () =>
         {
@@ -241,6 +241,11 @@ public sealed class Scenarios
             return bad.Count == 0 ? $"{items.Length} item types clean" : throw new InvalidOperationException("malformed: " + string.Join(", ", bad));
         }).ConfigureAwait(false);
 
+        // Ground drops broadcast to every bot sharing the field, so several bots dropping at once
+        // cross each other's DropEnterField/DropLeaveField streams. This is a packet-correctness
+        // audit, not a concurrency test, so run it on a single designated bot (the others exercise
+        // the field concurrently through movement/chat); single-bot it is byte-clean and stable.
+        if (fieldAudits)
         await StepAsync(bot, "drop-pickup-audit", async () =>
         {
             // Spawn a real ground drop and pick it up, validating the whole client-facing
@@ -521,6 +526,16 @@ public sealed class Scenarios
             {
                 throw new InvalidOperationException($"SetCashShop CharacterData mis-sized (leftover {shopLeftover}b) — client would EOF-crash");
             }
+
+            // Return to the game channel so the bot ends in a field (findable for the whisper/party
+            // pair steps that follow) rather than stranded in the cash shop.
+            await bot.SendAsync(bot.NewPacket(ClientOpcode.UserTransferFieldRequest)).ConfigureAwait(false);
+            PacketReader back = await bot.ExpectAsync(ServerOpcode.MigrateCommand).ConfigureAwait(false);
+            back.ReadByte();
+            var backIp = new IPAddress(back.ReadBytes(4));
+            int backPort = (ushort)back.ReadShort();
+            await MigrateAsync(bot, new IPEndPoint(backIp, backPort), bot.CharacterId, ct).ConfigureAwait(false);
+            await bot.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
 
             return "SetField + SetCashShop both parsed clean (79 skills, 9 with master level, 4th job)";
         }).ConfigureAwait(false);

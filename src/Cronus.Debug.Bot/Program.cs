@@ -91,7 +91,9 @@ await Task.WhenAll(bots.Select((bot, i) => Task.Run(async () =>
     await scenarios.LoginAndEnterAsync(bot, i + 1, cts.Token);
     if (bot.CharacterId != 0)
     {
-        await scenarios.RunSoloSuiteAsync(bot, cts.Token);
+        // Only the first bot runs the field-mutating drop-pickup audit; ground drops broadcast to
+        // the whole field, so concurrent droppers would cross each other's streams (false NGs).
+        await scenarios.RunSoloSuiteAsync(bot, cts.Token, fieldAudits: i == 0);
     }
 }, cts.Token)));
 

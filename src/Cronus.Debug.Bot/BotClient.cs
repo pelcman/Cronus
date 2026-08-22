@@ -15,7 +15,7 @@ namespace Cronus.Debug.Bot;
 /// </summary>
 public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
 {
-    private sealed record Pending(int Opcode, TaskCompletionSource<byte[]> Tcs);
+    private sealed record Pending(int Opcode, TaskCompletionSource<byte[]> Tcs, Func<PacketReader, bool>? Match);
 
     private readonly ServerConfig _config;
     private readonly List<Pending> _waiters = new();
@@ -123,7 +123,16 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
     /// Waits for the next server packet with the given opcode (already-received unclaimed
     /// packets match first). The returned reader is positioned after the opcode header.
     /// </summary>
-    public async Task<PacketReader> ExpectAsync(string serverOpcode, TimeSpan? timeout = null)
+    public Task<PacketReader> ExpectAsync(string serverOpcode, TimeSpan? timeout = null)
+        => ExpectAsync(serverOpcode, null, timeout);
+
+    /// <summary>
+    /// Awaits the next server packet with <paramref name="serverOpcode"/> that also satisfies
+    /// <paramref name="match"/>. The predicate gets a fresh reader positioned at the body; packets
+    /// that match the opcode but not the predicate stay buffered for other waiters. This lets a bot
+    /// pick out its own drop/leave events when several bots share a field.
+    /// </summary>
+    public async Task<PacketReader> ExpectAsync(string serverOpcode, Func<PacketReader, bool>? match, TimeSpan? timeout = null)
     {
         int opcode = ServerOps.Get(serverOpcode);
         TaskCompletionSource<byte[]> tcs;
@@ -138,7 +147,7 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
                     break;
                 }
 
-                if (buffered.Opcode == opcode)
+                if (buffered.Opcode == opcode && (match is null || match(ReaderFor(buffered.Packet))))
                 {
                     return ReaderFor(buffered.Packet);
                 }
@@ -147,7 +156,7 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
             }
 
             tcs = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _waiters.Add(new Pending(opcode, tcs));
+            _waiters.Add(new Pending(opcode, tcs, match));
         }
 
         byte[] packet = await tcs.Task.WaitAsync(timeout ?? TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -174,7 +183,7 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
         {
             for (int i = 0; i < _waiters.Count; i++)
             {
-                if (_waiters[i].Opcode == opcode)
+                if (_waiters[i].Opcode == opcode && (_waiters[i].Match is null || _waiters[i].Match!(ReaderFor(full))))
                 {
                     Pending waiter = _waiters[i];
                     _waiters.RemoveAt(i);
