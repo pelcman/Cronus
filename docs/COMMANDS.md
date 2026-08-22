@@ -36,6 +36,7 @@ when the server restarts (see [SERVER_SETUP.md](SERVER_SETUP.md)).
 | `/guildcreate <name>` | Create a guild (free, works anywhere) with you as master |
 | `/maxskills` | Max every skill your current job can learn |
 | `/questreset <id>` | Clear one quest from your records (started and completed) |
+| `/gender [m\|f]` | Toggle (or set) your character's gender; re-enters the channel to apply the look |
 | `/notice <msg>` | Blue notice broadcast to your current map |
 | `/snotice <msg>` | Blue notice broadcast to the whole server |
 | `/pos` | Show your position and map id |

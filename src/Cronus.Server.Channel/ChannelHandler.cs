@@ -6731,6 +6731,37 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
             }
 
+            case "gender":
+            {
+                // Toggle (or set: /gender m|f) the character's gender, then bounce the client
+                // through a same-channel migration so it re-enters with the new look — gender
+                // rides in the entry CharacterData/AvatarLook, which only a re-entry redraws.
+                Character gc = _player!.Character;
+                byte newGender = parts.Length >= 2
+                    ? parts[1].ToLowerInvariant() switch
+                    {
+                        "m" or "male" or "0" or "男" => (byte)0,
+                        "f" or "female" or "1" or "女" => (byte)1,
+                        _ => gc.Gender,
+                    }
+                    : (byte)(gc.Gender == 0 ? 1 : 0);
+                gc.Gender = newGender;
+                _characters.Save(gc);
+                await ReplyAsync(session, newGender == 0 ? "gender → 男 (male)" : "gender → 女 (female)").ConfigureAwait(false);
+
+                if (_channelEndpoints is { } eps && _channelId >= 0 && _channelId < eps.Count)
+                {
+                    System.Net.IPEndPoint self = eps[_channelId];
+                    await session.SendAsync(_packets.MigrateCommand(self.Address, self.Port)).ConfigureAwait(false);
+                }
+                else
+                {
+                    await ReplyAsync(session, "再ログインで見た目に反映されます").ConfigureAwait(false);
+                }
+
+                break;
+            }
+
             case "questreset" when parts.Length >= 2 && int.TryParse(parts[1], out int resetQuestId):
             {
                 // Clears one quest from both records (debug/bot use: makes quest flows re-runnable).
@@ -6877,7 +6908,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
                     + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
+                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /gender [m|f], /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 

@@ -36,6 +36,25 @@ public static class CharacterDataParser
         return r.Remaining;
     }
 
+    /// <summary>Reads just far enough into a full-entry SetField to return the stat block's
+    /// gender byte (id + 13-name precede it). Throws on a map-change SetField.</summary>
+    public static byte ReadGenderFromSetField(PacketReader r)
+    {
+        r.ReadShort(); r.ReadInt(); r.ReadByte(); r.ReadInt(); r.ReadByte();
+        if (r.ReadByte() != 1)
+        {
+            throw new InvalidOperationException("not a full-entry SetField");
+        }
+
+        r.ReadShort();
+        r.ReadInt(); r.ReadInt(); r.ReadInt();  // damage seeds
+        r.ReadLong();                            // statmask
+        r.ReadByte();                            // combat orders
+        r.ReadInt();                             // character id
+        r.ReadBytes(13);                         // name
+        return r.ReadByte();                     // gender
+    }
+
     /// <summary>Reads the cash-shop entry packet (<c>LP_SetCashShop</c>), which embeds the same
     /// full CharacterData blob followed by the account name and the (empty) sale tables. Throws or
     /// returns leftover-byte count — a maxed character crashed here for the same reason as entry.</summary>

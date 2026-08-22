@@ -380,6 +380,34 @@ public sealed class Scenarios
             return "";
         }).ConfigureAwait(false);
 
+        await StepAsync(bot, "cmd:/gender-toggle", async () =>
+        {
+            // /gender flips the character and bounces the client through a same-channel
+            // migration; the fresh SetField's stat block must carry the flipped gender byte.
+            await ChatAsync(bot, "/gender f").ConfigureAwait(false);
+            PacketReader mig = await bot.ExpectAsync(ServerOpcode.MigrateCommand).ConfigureAwait(false);
+            mig.ReadByte();
+            var ip = new IPAddress(mig.ReadBytes(4));
+            int port = (ushort)mig.ReadShort();
+            await MigrateAsync(bot, new IPEndPoint(ip, port), bot.CharacterId, ct).ConfigureAwait(false);
+
+            PacketReader field = await bot.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
+            byte gender = CharacterDataParser.ReadGenderFromSetField(field);
+            if (gender != 1)
+            {
+                throw new InvalidOperationException($"gender byte {gender} after /gender f, expected 1");
+            }
+
+            await ChatAsync(bot, "/gender m").ConfigureAwait(false);
+            PacketReader back = await bot.ExpectAsync(ServerOpcode.MigrateCommand).ConfigureAwait(false);
+            back.ReadByte();
+            var ip2 = new IPAddress(back.ReadBytes(4));
+            int port2 = (ushort)back.ReadShort();
+            await MigrateAsync(bot, new IPEndPoint(ip2, port2), bot.CharacterId, ct).ConfigureAwait(false);
+            await bot.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
+            return "f -> re-entry carried gender 1 -> back to m";
+        }).ConfigureAwait(false);
+
         await StepAsync(bot, "quest:wz-chain-1000-1001", async () =>
         {
             // The real wz tutorial chain: 1000 starts at npc 2101 (needs the beginner shirt
