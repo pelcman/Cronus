@@ -49,11 +49,16 @@ public static class ItemEncoder
     public static bool IsPet(int itemId) => itemId / 10_000 == 500;
 
     /// <summary>Writes the item body (<c>GW_ItemSlotBase::Encode</c>): type byte, RawEncode, then
-    /// the equip / pet / bundle body.</summary>
+    /// the equip / pet / bundle body.
+    /// The leading type byte is the GW_ItemSlot CLASS discriminator — 1 equip, 2 bundle, 3 pet —
+    /// NOT the inventory tab (the reference's <c>Equip.getType()</c> returns 1 and
+    /// <c>Item.getType()</c> returns 2 for every bundle item). The client news the slot object from
+    /// this byte alone, so writing the tab number (3 setup / 4 etc / 5 cash) makes it mis-parse the
+    /// body (a setup item as a pet, etc/cash as unknown) and die with "error code 38".</summary>
     public static void WriteItem(PacketWriter w, InventoryItem item)
     {
         int type = ItemType(item.ItemId);
-        w.WriteByte((byte)(IsPet(item.ItemId) ? 3 : type));
+        w.WriteByte((byte)(IsPet(item.ItemId) ? 3 : type == 1 ? 1 : 2));
 
         WriteRaw(w, item);
 

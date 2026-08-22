@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\src\Cronus.Database\Cronus.Database.csproj" />
     <ProjectReference Include="..\..\src\Cronus.Domain\Cronus.Domain.csproj" />
     <ProjectReference Include="..\..\src\Cronus.Server.Login\Cronus.Server.Login.csproj" />
+    <ProjectReference Include="..\..\src\Cronus.Server.Game\Cronus.Server.Game.csproj" />
   </ItemGroup>
 
 </Project>

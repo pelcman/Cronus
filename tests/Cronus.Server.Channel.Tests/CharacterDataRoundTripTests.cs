@@ -120,7 +120,11 @@ public class CharacterDataRoundTripTests
 
     private static void WalkItem(PacketReader r)
     {
+        // The client dispatches on the type byte alone: 1 equip, 2 bundle, 3 pet. Anything else
+        // is unparseable to it (the wrong-tab-number bug crashed the real client with EOF).
         int type = r.ReadByte();
+        Assert.True(type is 1 or 2 or 3, $"item type byte {type} — client only knows 1/2/3");
+
         int itemId = r.ReadInt();
         bool hasUid = r.ReadByte() != 0;
         if (hasUid) r.ReadLong();
@@ -139,7 +143,7 @@ public class CharacterDataRoundTripTests
             if (!hasUid) r.ReadLong();
             r.ReadLong(); r.ReadInt();
         }
-        else if (type == 3 && itemId / 10_000 == 500)
+        else if (type == 3)
         {
             r.ReadBytes(13); r.ReadByte(); r.ReadShort(); r.ReadByte(); r.ReadLong();
             r.ReadShort(); r.ReadShort(); r.ReadInt(); r.ReadShort(); r.ReadByte(); r.ReadInt();

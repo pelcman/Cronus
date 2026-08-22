@@ -10,17 +10,25 @@ namespace Cronus.Debug.Bot;
 /// </summary>
 public static class ItemBodyParser
 {
-    /// <summary>Reads one item body (type byte + raw + type-specific body). Returns its item id.</summary>
+    /// <summary>Reads one item body (type byte + raw + type-specific body). Returns its item id.
+    /// The client dispatches on the type byte ALONE (GW_ItemSlotBase::CreateItem): 1 equip,
+    /// 2 bundle, 3 pet. Any other value is unparseable to the client, so it throws here — keying
+    /// on the item id instead would tolerate a wrong type byte the real client crashes on.</summary>
     public static int Read(PacketReader r)
     {
-        int type = r.ReadByte();          // 1 equip, 2/3/4/5 bundle, 3 pet
+        int type = r.ReadByte();
+        if (type is not (1 or 2 or 3))
+        {
+            throw new InvalidOperationException($"item type byte {type} — the client only knows 1 (equip), 2 (bundle), 3 (pet)");
+        }
+
         int itemId = ReadRaw(r, out bool hasUniqueId);
 
         if (type == 1)
         {
             ReadEquip(r, hasUniqueId);
         }
-        else if (type == 3 && itemId / 10_000 == 500)
+        else if (type == 3)
         {
             ReadPet(r);
         }

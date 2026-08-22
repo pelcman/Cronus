@@ -95,6 +95,24 @@ public class InventoryEncodingTests
         Assert.Equal(Blob(justUse).Length + BundleItemBytes, Blob(c).Length);
     }
 
+    [Theory]
+    [InlineData(1302000, 1)] // equip -> GW_ItemSlotEquip
+    [InlineData(2000000, 2)] // use   -> GW_ItemSlotBundle
+    [InlineData(3010000, 2)] // setup -> bundle (NOT 3 — that byte means pet to the client)
+    [InlineData(4000000, 2)] // etc   -> bundle (NOT the tab number 4)
+    [InlineData(5060000, 2)] // cash bundle -> bundle (NOT 5)
+    [InlineData(5000000, 3)] // pet   -> GW_ItemSlotPet
+    public void ItemTypeByte_IsTheSlotClass_NotTheTabNumber(int itemId, byte expectedType)
+    {
+        // The client dispatches GW_ItemSlotBase::CreateItem on this byte alone (reference:
+        // Equip.getType() == 1, Item.getType() == 2, pets forced to 3). Writing the inventory tab
+        // number here made the real client mis-parse every setup/etc/cash item body and crash
+        // with "error code 38" on pickup and on re-entry.
+        var w = new PacketWriter(encoding: ServerConfig.Jms186.CodePage);
+        Cronus.Server.Login.ItemEncoder.WriteItem(w, new InventoryItem { ItemId = itemId, Position = 1, Quantity = 1 });
+        Assert.Equal(expectedType, w.ToArray()[0]);
+    }
+
     [Fact]
     public void NeedsMasterLevel_MatchesReferenceGroups()
     {
