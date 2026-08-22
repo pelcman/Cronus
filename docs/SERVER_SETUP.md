@@ -86,6 +86,7 @@ matters most for remote play is `CRONUS_HOST`.
 | `CRONUS_SHOPS` | Path to a `shops`+`shopitems` SQL dump (e.g. `init_data_set.sql`) → vendor NPCs open shops to buy/sell. Unset = shops disabled. | `init_data_set.sql` |
 | `CRONUS_RATE_EXP` / `CRONUS_RATE_DROP` / `CRONUS_RATE_MESO` | Server rate multipliers for kill exp, drop chance, and mob meso. Unset = 1.0 (authentic). | `4` |
 | `CRONUS_AUTO_REGISTER` | `0` / `false` disables account auto-creation, so **only pre-existing accounts can log in** (a simple allow-list for a public IP). Unset/`1` = unknown accounts are created on first login. | `0` |
+| `CRONUS_CHANNELS` | How many game channels to run (1–8, default 2). Channels listen on **consecutive ports** from the channel port (7575, 7576, …) — open/forward all of them. In-game channel change works between them. | `2` |
 | `CRONUS_STARTMAP` | Map new characters spawn in. | `100000000` |
 | *(args)* | `dotnet run --project src/Cronus.Server.Host <loginPort> <channelPort>` overrides the ports. | `8484 7575` |
 
@@ -108,8 +109,8 @@ The startup log should now show `advertised to clients as 203.0.113.9:7575`.
 
 ## Part 3 — Open the ports
 
-Friends' clients must reach **both** ports on your public IP: **8484** (login) and
-**7575** (channel), TCP.
+Friends' clients must reach the login port **8484** and **every channel port** on your
+public IP — with the default 2 channels that's **7575 and 7576**, TCP.
 
 1. **Windows Firewall** on the server PC: allow inbound TCP 8484 and 7575
    (Control Panel → Windows Defender Firewall → Advanced → Inbound Rules → New Rule →

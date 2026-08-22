@@ -50,6 +50,9 @@ public sealed class ChannelHandler : PacketHandlerBase
 
     /// <summary>Valid hair/face/skin ids from game data, for salon scripts; null without wz.</summary>
     private readonly IStyleProvider? _styles;
+
+    /// <summary>Every channel's advertised endpoint (index = channel id); null = single channel.</summary>
+    private readonly IReadOnlyList<System.Net.IPEndPoint>? _channelEndpoints;
     private readonly int _opReactorHit;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
@@ -161,7 +164,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         IReactorProvider? reactors = null,
         PortalScriptEngine? reactorScripts = null,
         INpcNameProvider? npcNames = null,
-        IStyleProvider? styles = null)
+        IStyleProvider? styles = null,
+        IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -185,6 +189,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _reactorScripts = reactorScripts;
         _npcNames = npcNames;
         _styles = styles;
+        _channelEndpoints = channelEndpoints;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -360,8 +365,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
         else if (opcode == _opTransferChannel)
         {
-            // Single-channel server: decline so the client's channel menu unblocks.
-            await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 1)).ConfigureAwait(false);
+            await HandleTransferChannelAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opMigrateCashShop)
         {
@@ -1616,6 +1620,29 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         int target = door.TargetMapFor(_field.MapId);
         await MovePlayerToMapAsync(session, target, door.TargetPortalFor(_field.MapId)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_UserTransferChannelRequest</c> — a real channel change when this server runs
+    /// several channels (ports <c>OnUserTransferChannelRequest</c>): persist, then hand the client
+    /// the target channel's endpoint with <c>LP_MigrateCommand</c>. The client disconnects and
+    /// migrates in there; this side's normal disconnect cleanup tears the old presence down.
+    /// </summary>
+    private async ValueTask HandleTransferChannelAsync(MapleSession session, PacketReader packet)
+    {
+        int target = packet.Remaining > 0 ? packet.ReadByte() : -1;
+        if (_player is null || _channelEndpoints is null
+            || target < 0 || target >= _channelEndpoints.Count || target == _channelId
+            || _player.Character.Hp <= 0)
+        {
+            // Single-channel server / bad target / dead: decline so the channel menu unblocks.
+            await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 1)).ConfigureAwait(false);
+            return;
+        }
+
+        _characters.Save(_player.Character);
+        System.Net.IPEndPoint endpoint = _channelEndpoints[target];
+        await session.SendAsync(_packets.MigrateCommand(endpoint.Address, endpoint.Port)).ConfigureAwait(false);
     }
 
     private async ValueTask HandleSummonedMoveAsync(PacketReader packet)

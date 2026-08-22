@@ -21,6 +21,9 @@ public sealed class LoginHandler : PacketHandlerBase
     private readonly WorldRegistry _worlds;
     private readonly ICharacterRepository _characters;
     private readonly IPEndPoint _channelEndpoint;
+
+    /// <summary>Every channel's endpoint (index = channel id); character select routes by choice.</summary>
+    private readonly IReadOnlyList<IPEndPoint> _channelEndpoints;
     private readonly int _characterSlots;
     private readonly int _startMapId;
 
@@ -43,13 +46,15 @@ public sealed class LoginHandler : PacketHandlerBase
         ICharacterRepository? characters = null,
         IPEndPoint? channelEndpoint = null,
         int characterSlots = 3,
-        int startMapId = 100000000)
+        int startMapId = 100000000,
+        IReadOnlyList<IPEndPoint>? channelEndpoints = null)
     {
         _loginService = loginService;
         _packets = new LoginPackets(serverOpcodes, config);
         _worlds = worlds ?? WorldRegistry.CreateDefault();
         _characters = characters ?? new InMemoryCharacterRepository();
         _channelEndpoint = channelEndpoint ?? new IPEndPoint(IPAddress.Loopback, 7575);
+        _channelEndpoints = channelEndpoints is { Count: > 0 } ? channelEndpoints : new[] { _channelEndpoint };
         _characterSlots = characterSlots;
         _startMapId = startMapId;
 
@@ -256,8 +261,12 @@ public sealed class LoginHandler : PacketHandlerBase
     {
         int characterId = packet.ReadInt();
 
-        byte[] migrate = _packets.SelectCharacterResult(
-            _channelEndpoint.Address, _channelEndpoint.Port, characterId);
+        // Route to the channel picked at world select (clamped; defaults to channel 0).
+        int channel = session.UserData is LoginState state
+            ? Math.Clamp(state.SelectedChannel, 0, _channelEndpoints.Count - 1)
+            : 0;
+        IPEndPoint endpoint = _channelEndpoints[channel];
+        byte[] migrate = _packets.SelectCharacterResult(endpoint.Address, endpoint.Port, characterId);
         await session.SendAsync(migrate).ConfigureAwait(false);
     }
 

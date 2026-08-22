@@ -442,7 +442,18 @@ Each milestone means adding one "working vertical slice".
         the other side (town side arrives on its door spot, field side on the nearest portal),
         expiry on the buff tick per map side, replay to entrants, and despawn on logout.
         Recast replaces the pair. Party-window door info is sent to the owner
-        (`LP_TownPortal`); the party-member door display is left for a later pass.
+        (`LP_TownPortal`) and to every party member (`PartyInfo_TownPortalChanged`, op 46 —
+        the declared enum values are the live ones; the reference's `OpsParty.init()` remap is
+        dead code, never called from `PacketOps`).
+  - [x] **M10af: real multi-channel** — `CRONUS_CHANNELS` (default 2) channel servers on
+        consecutive ports, each with its own `FieldRegistry` and world ticks; account-scoped
+        registries (parties, guilds, messenger, storage, buddy, merchants) stay shared. The
+        login routes character select to the channel picked at world select, and in-game
+        channel change works: `CP_UserTransferChannelRequest` → persist → `LP_MigrateCommand`
+        `[1][ip:4][port:2]` → the client reconnects and migrates into the target channel.
+        Simplifications: a channel switch drops party membership (the disconnect path), /find
+        and whisper only search the local channel, and hired merchants are visible on every
+        channel (the registry is shared).
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

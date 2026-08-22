@@ -44,6 +44,12 @@ var loginService = new LoginService(accounts, autoRegister: autoRegister);
 IPAddress channelHost = ResolveHost(Environment.GetEnvironmentVariable("CRONUS_HOST"), IPAddress.Loopback);
 var channelEndpoint = new IPEndPoint(channelHost, channelPort);
 
+// CRONUS_CHANNELS game channels (default 2), on consecutive ports from the channel port.
+int channelCount = Math.Clamp(
+    int.TryParse(Environment.GetEnvironmentVariable("CRONUS_CHANNELS"), out int cc) ? cc : 2, 1, 8);
+IReadOnlyList<IPEndPoint> channelEndpoints =
+    Enumerable.Range(0, channelCount).Select(i => new IPEndPoint(channelHost, channelPort + i)).ToList();
+
 // LP_AliveReq body: the server pings idle clients so they keep the connection open.
 byte[] keepAlive = new PacketWriter(
     serverOps.Get(ServerOpcode.AliveReq), config.PacketHeaderSize, config.CodePage).ToArray();
@@ -64,7 +70,9 @@ var loginListener = new MapleListener(
     config,
     () => new LoggingHandler(
         new LoginHandler(clientOps, serverOps, loginService, config,
-            characters: characters, channelEndpoint: channelEndpoint, startMapId: startMap),
+            worlds: WorldRegistry.CreateDefault(channelCount),
+            characters: characters, channelEndpoint: channelEndpoint, startMapId: startMap,
+            channelEndpoints: channelEndpoints),
         "login"),
     keepAlive: null); // keep-alive disabled during login diagnosis
 
@@ -72,7 +80,15 @@ var loginListener = new MapleListener(
 // name transfers degrade to "disabled portal"; direct map-id jumps still work; no NPCs spawn).
 IMapProvider maps = CreateMapProvider();
 IMobProvider mobs = CreateMobProvider();
-var fields = new FieldRegistry(maps, mobs);
+
+// Each channel gets its own world state (fields); everything account-scoped is shared below.
+var channelFields = new List<FieldRegistry>();
+for (int i = 0; i < channelCount; i++)
+{
+    channelFields.Add(new FieldRegistry(maps, mobs));
+}
+
+FieldRegistry fields = channelFields[0];
 ISkillProvider skills = CreateSkillProvider();
 IItemProvider items = CreateItemProvider();
 IDropProvider drops = CreateDropProvider();
@@ -100,20 +116,34 @@ var miniGames = new MiniGameRegistry();
 var playerShops = new PlayerShopRegistry();
 var merchants = new HiredMerchantRegistry(merchantRepo);
 
-var channelListener = new MapleListener(
-    new IPEndPoint(IPAddress.Any, channelPort),
-    config,
-    () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles),
-        "channel"),
-    keepAlive);
+var channelListeners = new List<MapleListener>();
+for (int i = 0; i < channelCount; i++)
+{
+    int channelId = i;
+    FieldRegistry chFields = channelFields[i];
+    channelListeners.Add(new MapleListener(
+        new IPEndPoint(IPAddress.Any, channelPort + i),
+        config,
+        () => new LoggingHandler(
+            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints),
+            $"channel{channelId}"),
+        keepAlive));
+}
 
-// Server ticks: respawn dead mobs, regenerate idle players' HP/MP, and periodically persist
-// online characters so a crash loses at most a couple of minutes of progress.
-var mobRespawn = new MobRespawnService(fields, new ChannelPackets(serverOps, config));
-var playerRegen = new PlayerRegenService(fields, new ChannelPackets(serverOps, config), parties);
-var autoSave = new CharacterAutoSaveService(fields, characters);
-var buffExpiry = new BuffExpiryService(fields, buffs, new ChannelPackets(serverOps, config));
+// Server ticks per channel: respawn dead mobs, regenerate idle players' HP/MP, and
+// periodically persist online characters so a crash loses at most a couple of minutes.
+var tickTasks = new List<Func<CancellationToken, Task>>();
+foreach (FieldRegistry chFields in channelFields)
+{
+    var mobRespawnSvc = new MobRespawnService(chFields, new ChannelPackets(serverOps, config));
+    var playerRegenSvc = new PlayerRegenService(chFields, new ChannelPackets(serverOps, config), parties);
+    var autoSaveSvc = new CharacterAutoSaveService(chFields, characters);
+    var buffExpirySvc = new BuffExpiryService(chFields, buffs, new ChannelPackets(serverOps, config));
+    tickTasks.Add(mobRespawnSvc.RunAsync);
+    tickTasks.Add(playerRegenSvc.RunAsync);
+    tickTasks.Add(autoSaveSvc.RunAsync);
+    tickTasks.Add(buffExpirySvc.RunAsync);
+}
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -124,7 +154,7 @@ Console.CancelKeyPress += (_, e) =>
 
 Console.WriteLine($"Cronus — JMS v{config.Version}, region {config.Region}");
 Console.WriteLine($"  login   : listening on 0.0.0.0:{loginPort}");
-Console.WriteLine($"  channel : listening on 0.0.0.0:{channelPort}, advertised to clients as {channelEndpoint}");
+Console.WriteLine($"  channels: {channelCount} — ports {channelPort}..{channelPort + channelCount - 1}, advertised to clients as {channelHost}");
 if (channelHost.Equals(IPAddress.Loopback))
 {
     Console.WriteLine("  (localhost only — set CRONUS_HOST=<your LAN/public IP> so friends can connect)");
@@ -133,18 +163,18 @@ Console.WriteLine("Accounts auto-register on first login. Press Ctrl+C to stop."
 
 try
 {
-    await Task.WhenAll(
-        loginListener.RunAsync(cts.Token),
-        channelListener.RunAsync(cts.Token),
-        mobRespawn.RunAsync(cts.Token),
-        playerRegen.RunAsync(cts.Token),
-        autoSave.RunAsync(cts.Token),
-        buffExpiry.RunAsync(cts.Token));
+    var tasks = new List<Task> { loginListener.RunAsync(cts.Token) };
+    tasks.AddRange(channelListeners.Select(l => l.RunAsync(cts.Token)));
+    tasks.AddRange(tickTasks.Select(run => run(cts.Token)));
+    await Task.WhenAll(tasks);
 }
 finally
 {
     await loginListener.DisposeAsync();
-    await channelListener.DisposeAsync();
+    foreach (MapleListener listener in channelListeners)
+    {
+        await listener.DisposeAsync();
+    }
 }
 
 Console.WriteLine("Stopped.");

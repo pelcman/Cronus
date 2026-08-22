@@ -49,14 +49,14 @@ public sealed class WorldRegistry
         return null;
     }
 
-    /// <summary>One world ("Cronus", id 0) with two channels, for local development.</summary>
-    public static WorldRegistry CreateDefault()
+    /// <summary>One world ("Cronus", id 0) with the given number of channels (default two).</summary>
+    public static WorldRegistry CreateDefault(int channelCount = 2)
     {
-        var channels = new List<GameChannel>
+        var channels = new List<GameChannel>();
+        for (int i = 0; i < Math.Max(1, channelCount); i++)
         {
-            new() { Id = 0, Name = "Cronus-1", OnlineCount = 0 },
-            new() { Id = 1, Name = "Cronus-2", OnlineCount = 0 },
-        };
+            channels.Add(new GameChannel { Id = i, Name = $"Cronus-{i + 1}", OnlineCount = 0 });
+        }
 
         var world = new GameWorld
         {

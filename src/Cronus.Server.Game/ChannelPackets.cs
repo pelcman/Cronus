@@ -693,6 +693,19 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_MigrateCommand</c> — sends the client to another game server (a channel
+    /// change; ports <c>ResCClientSocket.MigrateCommand</c>, no JMS ≥ 302 trailing byte).
+    /// </summary>
+    public byte[] MigrateCommand(System.Net.IPAddress ip, int port)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MigrateCommand);
+        w.WriteByte(1);
+        w.WriteBytes(ip.GetAddressBytes());
+        w.WriteShort((short)port);
+        return w.ToArray();
+    }
+
     /// <summary>A reactor appears (ports <c>ResCReactorPool.ReactorEnterField</c>).</summary>
     public byte[] ReactorEnterField(FieldReactor reactor)
     {
