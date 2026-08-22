@@ -459,6 +459,16 @@ Each milestone means adding one "working vertical slice".
         member's own channel. Remaining quirk: hired merchants are visible on every channel
         (the registry is shared).
 
+  - [x] **M10ag: fidelity & QoL batch** — the death exp penalty now ports `playerDead`
+        (1% in towns, `0.2/LUK + 0.05` in the field, archers 0.08, beginners exempt; was a
+        flat −10%); pets loot drops for their owner (`CP_PetDropPickUpRequest` → the shared
+        pickup path, LeaveType 5 with the pet slot); cooldown skills start the client timer
+        (`LP_SkillCooltimeSet`, wz `cooltime`); and the Free Market is reachable: 21 town
+        entrance portals (market01–18, marketJ00–02) remember the town via the new
+        `player.rememberMap()/warpToRememberedMap()` script APIs (persisted) and market00
+        walks back out. Event-only portals (`hidenPT_*`, unity) stay inert by design — their
+        targets aren't in the data.
+
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated
