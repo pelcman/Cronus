@@ -1545,6 +1545,16 @@ public sealed class ChannelHandler : PacketHandlerBase
         await field.BroadcastAsync(_packets.TownPortalCreated(c.Id, door.FieldX, door.FieldY, isTown: false)).ConfigureAwait(false);
         await townField.BroadcastAsync(_packets.TownPortalCreated(c.Id, door.TownX, door.TownY, isTown: true)).ConfigureAwait(false);
         await session.SendAsync(_packets.MysticDoorInfo(door)).ConfigureAwait(false);
+
+        // The party window shows the door for every member.
+        if (_parties.GetForCharacter(c.Id) is { } party)
+        {
+            byte[] notice = _packets.PartyTownPortalChanged(door);
+            foreach (FieldPlayer member in party.Members)
+            {
+                await TrySendAsync(member, notice).ConfigureAwait(false);
+            }
+        }
     }
 
     /// <summary>Removes a player's door pair from both maps and tells both fields.</summary>
@@ -1571,6 +1581,16 @@ public sealed class ChannelHandler : PacketHandlerBase
             if (side.RemoveDoor(ownerId) is not null)
             {
                 await side.BroadcastAsync(_packets.TownPortalRemoved(ownerId)).ConfigureAwait(false);
+            }
+        }
+
+        // The party window drops the door.
+        if (_parties.GetForCharacter(ownerId) is { } party)
+        {
+            byte[] notice = _packets.PartyTownPortalChanged(null);
+            foreach (FieldPlayer member in party.Members)
+            {
+                await TrySendAsync(member, notice).ConfigureAwait(false);
             }
         }
     }

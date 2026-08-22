@@ -69,6 +69,17 @@ public class MysticDoorTests
         Assert.Equal(999999999, reset.ReadInt());
         Assert.Equal(999999999, reset.ReadInt());
         Assert.Equal(0, reset.Remaining);
+
+        var party = new PacketReader(packets.PartyTownPortalChanged(door), ServerConfig.Jms186.CodePage);
+        Assert.Equal(ServerOps.Get(ServerOpcode.PartyResult), party.ReadHeader());
+        Assert.Equal(46, party.ReadByte());       // PartyInfo_TownPortalChanged
+        Assert.Equal(5, party.ReadByte());        // the town door-portal number
+        Assert.Equal(104040000, party.ReadInt());
+        Assert.Equal(100000000, party.ReadInt());
+        Assert.Equal(MysticDoor.SkillMysticDoor, party.ReadInt());
+        Assert.Equal((short)-400, party.ReadShort());
+        Assert.Equal((short)33, party.ReadShort());
+        Assert.Equal(0, party.Remaining);
     }
 
     [Fact]

@@ -2630,6 +2630,25 @@ public sealed class ChannelPackets
     private const byte PartyJoinOp = 15;            // PartyRes_JoinParty (someone joined)
     private const byte PartyInviteSentOp = 22;      // PartyRes_InviteParty_Sent
     private const byte PartyChangeLeaderOp = 31;    // PartyRes_ChangePartyBoss_Done
+    private const byte PartyTownPortalChangedOp = 46; // PartyInfo_TownPortalChanged
+
+    /// <summary>
+    /// Builds <c>PartyInfo_TownPortalChanged</c> — a party member's Mystic Door opened or closed
+    /// (ports the <c>ResCWvsContext.PartyResult</c> case): the door-portal number, both map ids,
+    /// the skill, and the town-side position. Pass null when the door closed.
+    /// </summary>
+    public byte[] PartyTownPortalChanged(MysticDoor? door)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.PartyResult);
+        w.WriteByte(PartyTownPortalChangedOp);
+        w.WriteByte((byte)(door?.TownPortalId ?? 0));
+        w.WriteInt(door?.FieldMapId ?? 0);
+        w.WriteInt(door?.TownMapId ?? 0);
+        w.WriteInt(door?.SkillId ?? 0);
+        w.WriteShort(door?.TownX ?? 0);
+        w.WriteShort(door?.TownY ?? 0);
+        return w.ToArray();
+    }
 
     /// <summary>
     /// Builds a bare <c>LP_PartyResult</c> that carries only its op byte — the many acknowledgement
