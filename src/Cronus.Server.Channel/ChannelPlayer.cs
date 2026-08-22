@@ -169,6 +169,19 @@ public sealed class ChannelPlayer : INpcPlayer
         Send(_packets.StatChanged(_character, StatFlag.Hp | StatFlag.Mp));
     }
 
+    public void rememberMap()
+    {
+        _character.RememberedMap = _character.MapId;
+        _characters.Save(_character);
+    }
+
+    public void warpToRememberedMap(int fallbackMapId)
+    {
+        int target = _character.RememberedMap > 0 ? _character.RememberedMap : fallbackMapId;
+        _character.RememberedMap = 0;
+        warp(target, 0);
+    }
+
     public void warp(int mapId) => warp(mapId, 0);
 
     /// <summary>

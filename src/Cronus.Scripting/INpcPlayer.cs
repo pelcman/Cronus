@@ -71,6 +71,12 @@ public interface INpcPlayer
     /// <summary>Restores HP and MP to full and notifies the client.</summary>
     void heal();
 
+    /// <summary>Remembers the current map so a later script can send the player back.</summary>
+    void rememberMap();
+
+    /// <summary>Warps to the remembered map (or the fallback when none) and forgets it.</summary>
+    void warpToRememberedMap(int fallbackMapId);
+
     /// <summary>Warps the player to another map's default spawn portal.</summary>
     void warp(int mapId);
 
