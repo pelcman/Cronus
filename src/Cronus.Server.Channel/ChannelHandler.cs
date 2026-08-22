@@ -47,6 +47,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly IReactorProvider? _reactors;
     private readonly PortalScriptEngine? _reactorScripts;
     private readonly INpcNameProvider? _npcNames;
+
+    /// <summary>Valid hair/face/skin ids from game data, for salon scripts; null without wz.</summary>
+    private readonly IStyleProvider? _styles;
     private readonly int _opReactorHit;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
@@ -153,7 +156,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         HiredMerchantRegistry? merchants = null,
         IReactorProvider? reactors = null,
         PortalScriptEngine? reactorScripts = null,
-        INpcNameProvider? npcNames = null)
+        INpcNameProvider? npcNames = null,
+        IStyleProvider? styles = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -176,6 +180,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _reactors = reactors;
         _reactorScripts = reactorScripts;
         _npcNames = npcNames;
+        _styles = styles;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -6094,7 +6099,11 @@ public sealed class ChannelHandler : PacketHandlerBase
         openStorage: () => OpenStorageAsync(session),
         gainItem: (itemId, quantity) => ScriptGainItemAsync(session, itemId, quantity),
         itemCount: itemId => CountInventoryItem(_player!.Character, itemId),
-        effectOf: EffectResolverFor(_player!.Character));
+        effectOf: EffectResolverFor(_player!.Character),
+        styles: _styles,
+        avatarModified: () => _field is { } f
+            ? f.BroadcastAsync(_packets.UserAvatarModified(_player!.Character), exceptCharacterId: _player!.Character.Id)
+            : ValueTask.CompletedTask);
 
     /// <summary>
     /// Gives (positive) or takes (negative) items on behalf of a script, pushing the live

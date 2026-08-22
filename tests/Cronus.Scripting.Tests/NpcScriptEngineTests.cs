@@ -30,6 +30,7 @@ public class NpcScriptEngineTests
         public void AskMenu(int npcId, string text) => Emit(new Prompt(5, text, false, false));
         public void AskText(int npcId, string text) => Emit(new Prompt(3, text, false, false));
         public void AskAccept(int npcId, string text) => Emit(new Prompt(13, text, false, false));
+        public void AskAvatar(int npcId, string text, IReadOnlyList<int> styles) => Emit(new Prompt(8, text, false, false));
 
         private void Emit(Prompt p)
         {
@@ -194,6 +195,17 @@ public class NpcScriptEngineTests
         public int MaxMp = 100;
         public void gainMaxHp(int amount) => MaxHp = Math.Clamp(MaxHp + amount, 1, 30000);
         public void gainMaxMp(int amount) => MaxMp = Math.Clamp(MaxMp + amount, 1, 30000);
+
+        public int Hair = 30030;
+        public int Face = 20000;
+        public int Skin;
+        public int getHair() => Hair;
+        public int getFace() => Face;
+        public int getSkin() => Skin;
+        public bool isValidStyle(int styleId) => true;
+        public void setHair(int hairId) => Hair = hairId;
+        public void setFace(int faceId) => Face = faceId;
+        public void setSkin(int skinColor) => Skin = skinColor;
 
         public HashSet<int> Started { get; } = new();
         public HashSet<int> Completed { get; } = new();
@@ -413,6 +425,59 @@ public class NpcScriptEngineTests
     {
         var engine = new NpcScriptEngine(new DictionaryNpcScriptSource(new Dictionary<int, string>()));
         Assert.Null(engine.StartQuest(999, 9010000, new RecordingDialog(), null));
+    }
+
+    [Fact]
+    public void AskAvatar_ReturnsChosenIndex()
+    {
+        const int npcId = 9000001;
+        const string script = """
+            function start() {
+                var pick = cm.askAvatar("Pick a style:", [30030, 30040, 30050]);
+                cm.sendOk(pick < 0 ? "cancelled" : "picked " + pick);
+            }
+            """;
+        var engine = new NpcScriptEngine(new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+        var dialog = new RecordingDialog();
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation? cm = engine.Start(npcId, dialog, player: null);
+        Assert.NotNull(cm);
+
+        Prompt avatar = dialog.Take(cts.Token);
+        Assert.Equal(8, avatar.MessageType);
+        Assert.True(cm!.Advance(messageType: 8, action: 1, selection: 1, text: string.Empty));
+
+        Prompt ok = dialog.Take(cts.Token);
+        Assert.Equal("picked 1", ok.Text);
+        cm.Advance(messageType: 0, action: 1, selection: 0, text: string.Empty);
+        WaitUntilEnded(cm, cts.Token);
+    }
+
+    [Fact]
+    public void AskAvatar_CancelReturnsMinusOne()
+    {
+        const int npcId = 9000002;
+        const string script = """
+            function start() {
+                var pick = cm.askAvatar("Pick a style:", [30030, 30040]);
+                cm.sendOk(pick < 0 ? "cancelled" : "picked " + pick);
+            }
+            """;
+        var engine = new NpcScriptEngine(new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+        var dialog = new RecordingDialog();
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation? cm = engine.Start(npcId, dialog, player: null);
+        Assert.NotNull(cm);
+
+        dialog.Take(cts.Token);
+        Assert.True(cm!.Advance(messageType: 8, action: 0, selection: -1, text: string.Empty));
+
+        Prompt ok = dialog.Take(cts.Token);
+        Assert.Equal("cancelled", ok.Text);
+        cm.Advance(messageType: 0, action: 1, selection: 0, text: string.Empty);
+        WaitUntilEnded(cm, cts.Token);
     }
 
     private static void WaitUntilEnded(NpcConversation cm, CancellationToken ct)

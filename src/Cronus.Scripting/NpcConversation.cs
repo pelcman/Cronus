@@ -75,6 +75,16 @@ public sealed class NpcConversation : IDisposable
         return _text;
     }
 
+    /// <summary>
+    /// Shows the style-picker (SM_ASKAVATAR) over the candidate hair/face/skin ids and returns
+    /// the chosen index into <paramref name="styles"/>, or -1 if the player cancelled.
+    /// </summary>
+    public int askAvatar(string text, params int[] styles)
+    {
+        Prompt(ScriptMessageType.AskAvatar, () => _dialog.AskAvatar(NpcId, text, styles));
+        return _action == 0 ? -1 : _selection;
+    }
+
     public void dispose() => End();
 
     // --- Host-facing side ---

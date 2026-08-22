@@ -40,6 +40,28 @@ public interface INpcPlayer
 
     int getSp();
 
+    int getHair();
+
+    int getFace();
+
+    int getSkin();
+
+    /// <summary>
+    /// True if the id names a hair (30000+), face (20000+), or skin color (&lt; 100) the client
+    /// has data for — i.e. safe to pass to <c>setHair/setFace/setSkin</c> or an avatar picker.
+    /// False for everything when the server runs without game data.
+    /// </summary>
+    bool isValidStyle(int styleId);
+
+    /// <summary>Changes the hair (validated against game data) and shows it to the field.</summary>
+    void setHair(int hairId);
+
+    /// <summary>Changes the face (validated against game data) and shows it to the field.</summary>
+    void setFace(int faceId);
+
+    /// <summary>Changes the skin color (validated against game data) and shows it to the field.</summary>
+    void setSkin(int skinColor);
+
     /// <summary>Adds (or, if negative, removes) mesos, clamped at zero, and persists.</summary>
     void gainMeso(int amount);
 

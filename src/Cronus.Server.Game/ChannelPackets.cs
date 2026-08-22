@@ -128,6 +128,28 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_ScriptMessage</c> SM_ASKAVATAR — the style-picker dialog listing candidate
+    /// hair/face/skin ids for the client to preview (ports <c>ResCScriptMan.ScriptMessage</c>'s
+    /// SM_ASKAVATAR case; the CMS-only trailing int is omitted for JMS).
+    /// </summary>
+    public byte[] ScriptMessageAvatar(int npcId, string text, IReadOnlyList<int> styles)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ScriptMessage);
+        w.WriteByte(4);              // nSpeakerTypeID (unused)
+        w.WriteInt(npcId);           // nSpeakerTemplateID
+        w.WriteByte(8);              // nMsgType = SM_ASKAVATAR
+        w.WriteByte(0);              // param (JMS >= 180)
+        w.WriteString(text);
+        w.WriteByte(styles.Count);
+        foreach (int style in styles)
+        {
+            w.WriteInt(style);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_NpcEnterField</c> spawning an NPC (ports <c>ResCNpcPool.NpcEnterField</c> +
     /// <c>CNpc_Init</c>, JMS v186 path — no JMS &gt;= 194 trailing byte).
     /// </summary>

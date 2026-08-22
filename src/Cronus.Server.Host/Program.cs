@@ -80,6 +80,7 @@ IShopProvider shops = CreateShopProvider();
 IQuestProvider quests = CreateQuestProvider();
 IReactorProvider? reactorProvider = CreateReactorProvider();
 INpcNameProvider? npcNames = CreateNpcNameProvider();
+IStyleProvider? styles = CreateStyleProvider();
 Rates rates = CreateRates();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
@@ -103,7 +104,7 @@ var channelListener = new MapleListener(
     new IPEndPoint(IPAddress.Any, channelPort),
     config,
     () => new LoggingHandler(
-        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames),
+        new ChannelHandler(clientOps, serverOps, characters, config, fields, maps, npcScripts, skills, channelId: 0, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles),
         "channel"),
     keepAlive);
 
@@ -312,6 +313,18 @@ static INpcNameProvider? CreateNpcNameProvider()
 
     Console.WriteLine("[npc] NPC names loaded from String data (unscripted NPCs greet by name).");
     return new WzNpcNameProvider(wzRoot);
+}
+
+static IStyleProvider? CreateStyleProvider()
+{
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(Path.Combine(wzRoot, "Character", "Hair")))
+    {
+        return null;
+    }
+
+    Console.WriteLine("[style] hair/face/skin styles loaded from Character data (salons enabled).");
+    return new WzStyleProvider(wzRoot);
 }
 
 static IReactorProvider? CreateReactorProvider()

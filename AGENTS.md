@@ -404,6 +404,23 @@ Each milestone means adding one "working vertical slice".
         `reactorTime` respawn on the world tick, `LP_ReactorEnterField` replayed to entrants),
         and `scripts/reactor/{id}.js` reward hooks with the full script player API. The wz
         junction gained Reactor.wz. Deferred: touch-reactors and item-drop-triggered reactors.
+  - [x] **M10ab: stat growth + NPC coverage batch** (client-test feedback) — level-ups and
+        AP-into-HP/MP now use the reference's job-scaled random growth tables (+growth passives,
+        +INT/10 MP), `/level` raises run real level-ups, and `CRONUS_AUTO_REGISTER=0` turns off
+        account auto-creation (allow-list mode for public hosting). NPC content: world-travel
+        network on 15 station/guide NPCs (13 destinations), storage Goldmen in every Ossyria
+        town, and a name-aware fallback greeting for every unscripted NPC (`WzNpcNameProvider`
+        over String.wz — no NPC is silent anymore).
+  - [x] **M10ac: beauty salons** — the `SM_ASKAVATAR` style-picker dialog end to end
+        (`ScriptMessageAvatar` builder with the byte-layout test, `cm.askAvatar(text, styles)`
+        returning the picked index, answer parsing was already in place) plus styling script
+        APIs `player.getHair/getFace/getSkin/setHair/setFace/setSkin/isValidStyle`. Look
+        changes persist, push `LP_StatChanged` (Skin/Face/Hair bits), and broadcast
+        `LP_UserAvatarModified` to the field. A `WzStyleProvider` validates every id against
+        the wz Character tree (invalid = refused, so a script can never crash a client with a
+        nonexistent style), and 36 salon scripts cover hair style / hair color / face / eye
+        color / skin NPCs in every town (Henesys, Kerning, Orbis, Ludi, Mu Lung, Ariant,
+        Showa, and the CMS/visitor salons in the JMS data).
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

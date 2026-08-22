@@ -21,4 +21,7 @@ public interface INpcDialog
 
     /// <summary>SM_ASKACCEPT.</summary>
     void AskAccept(int npcId, string text);
+
+    /// <summary>SM_ASKAVATAR with the candidate style ids the client previews.</summary>
+    void AskAvatar(int npcId, string text, IReadOnlyList<int> styles);
 }

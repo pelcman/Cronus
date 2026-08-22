@@ -1,3 +1,4 @@
+using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Scripting;
@@ -23,6 +24,8 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<int, int, ValueTask>? _gainItem;
     private readonly Func<int, int>? _itemCount;
     private readonly CharacterProgression.EffectResolver? _effectOf;
+    private readonly IStyleProvider? _styles;
+    private readonly Func<ValueTask>? _avatarModified;
 
     public ChannelPlayer(
         Character character,
@@ -34,7 +37,9 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<ValueTask>? openStorage = null,
         Func<int, int, ValueTask>? gainItem = null,
         Func<int, int>? itemCount = null,
-        CharacterProgression.EffectResolver? effectOf = null)
+        CharacterProgression.EffectResolver? effectOf = null,
+        IStyleProvider? styles = null,
+        Func<ValueTask>? avatarModified = null)
     {
         _character = character;
         _characters = characters;
@@ -46,6 +51,8 @@ public sealed class ChannelPlayer : INpcPlayer
         _gainItem = gainItem;
         _itemCount = itemCount;
         _effectOf = effectOf;
+        _styles = styles;
+        _avatarModified = avatarModified;
     }
 
     public string getName() => _character.Name;
@@ -79,6 +86,59 @@ public sealed class ChannelPlayer : INpcPlayer
     public int getAp() => _character.Ap;
 
     public int getSp() => _character.Sp;
+
+    public int getHair() => _character.Hair;
+
+    public int getFace() => _character.Face;
+
+    public int getSkin() => _character.SkinColor;
+
+    public bool isValidStyle(int styleId)
+        => _styles is not null
+            && (styleId >= 30000 ? _styles.IsValidHair(styleId)
+                : styleId >= 20000 ? _styles.IsValidFace(styleId)
+                : styleId is >= 0 and < 100 && _styles.IsValidSkin(styleId));
+
+    public void setHair(int hairId)
+    {
+        if (_styles is not null && !_styles.IsValidHair(hairId))
+        {
+            return; // no data for it — changing would crash the client
+        }
+
+        _character.Hair = hairId;
+        ApplyLook(StatFlag.Hair);
+    }
+
+    public void setFace(int faceId)
+    {
+        if (_styles is not null && !_styles.IsValidFace(faceId))
+        {
+            return;
+        }
+
+        _character.Face = faceId;
+        ApplyLook(StatFlag.Face);
+    }
+
+    public void setSkin(int skinColor)
+    {
+        if (_styles is not null && !_styles.IsValidSkin(skinColor))
+        {
+            return;
+        }
+
+        _character.SkinColor = (byte)skinColor;
+        ApplyLook(StatFlag.Skin);
+    }
+
+    /// <summary>Persists a look change, updates the owner's UI, and shows it to the field.</summary>
+    private void ApplyLook(StatFlag flag)
+    {
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, flag));
+        _avatarModified?.Invoke().AsTask().GetAwaiter().GetResult();
+    }
 
     public void gainMeso(int amount)
     {

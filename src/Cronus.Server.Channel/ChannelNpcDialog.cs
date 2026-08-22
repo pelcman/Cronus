@@ -40,6 +40,9 @@ public sealed class ChannelNpcDialog : INpcDialog
     public void AskAccept(int npcId, string text)
         => Send(_packets.ScriptMessage(npcId, SmAskAccept, text, false, false));
 
+    public void AskAvatar(int npcId, string text, IReadOnlyList<int> styles)
+        => Send(_packets.ScriptMessageAvatar(npcId, text, styles));
+
     private void Send(byte[] packet)
         => _session.SendAsync(packet).AsTask().GetAwaiter().GetResult();
 }
