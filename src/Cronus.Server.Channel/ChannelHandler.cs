@@ -28,6 +28,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
 
     private readonly ChannelPackets _packets;
     private readonly ICharacterRepository _characters;
+    private readonly IAccountRepository? _accounts;
     private readonly FieldRegistry _fields;
     private readonly IMapProvider _maps;
     private readonly ISkillProvider _skills;
@@ -178,8 +179,10 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         IStyleProvider? styles = null,
         IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
         IReadOnlyList<FieldRegistry>? worldFields = null,
-        System.Net.IPEndPoint? cashShopEndpoint = null)
+        System.Net.IPEndPoint? cashShopEndpoint = null,
+        IAccountRepository? accounts = null)
     {
+        _accounts = accounts;
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
         _fields = fields ?? new FieldRegistry();

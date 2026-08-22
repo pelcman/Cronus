@@ -56,7 +56,12 @@ public static class CharacterEncoder
         w.WriteInt(0);                         // (JMS >= 180)
     }
 
-    /// <summary>Writes AvatarLook for <paramref name="c"/>, rendering equipped items.</summary>
+    /// <summary>
+    /// Writes AvatarLook for <paramref name="c"/> (ports <c>DataAvatarLook.Encode</c>): base
+    /// equips are visible; a cash overlay in the matching -1xx slot takes the visible entry and
+    /// pushes the base item into the masked list; the cash weapon (-111) rides separately as the
+    /// weapon-sticker int.
+    /// </summary>
     public static void WriteAvatarLook(PacketWriter w, Character c)
     {
         w.WriteByte(c.Gender);
@@ -65,27 +70,57 @@ public static class CharacterEncoder
         w.WriteByte(0);                        // ignored byte
         w.WriteInt(c.Hair);
 
-        // Visible equipment: slots 1..99 (masked/covered slots below -100 are ignored for now).
-        // Each entry: [slot:1][itemId:4]; 0xFF terminates the list. Sorted by slot for determinism.
-        foreach (InventoryItem item in VisibleEquips(c))
+        var visible = new Dictionary<byte, int>();
+        var masked = new List<(byte Slot, int ItemId)>();
+        int weaponSticker = 0;
+        foreach (InventoryItem item in c.EquippedItems
+                     .Where(i => i.Position is < 0 and >= -128)
+                     .OrderBy(i => -i.Position))
         {
-            w.WriteByte((byte)(-item.Position));
-            w.WriteInt(item.ItemId);
+            byte pos = (byte)(-item.Position);
+            if (pos == 111)
+            {
+                weaponSticker = item.ItemId; // the cash weapon becomes the sticker
+            }
+            else if (pos < 100)
+            {
+                if (!visible.ContainsKey(pos))
+                {
+                    visible[pos] = item.ItemId;
+                }
+            }
+            else
+            {
+                // A cash overlay: it takes the visible slot, the base item goes masked.
+                pos -= 100;
+                if (visible.TryGetValue(pos, out int baseItem))
+                {
+                    masked.Add((pos, baseItem));
+                }
+
+                visible[pos] = item.ItemId;
+            }
+        }
+
+        foreach (KeyValuePair<byte, int> entry in visible)
+        {
+            w.WriteByte(entry.Key);
+            w.WriteInt(entry.Value);
         }
 
         w.WriteByte(0xFF);                     // end of visible items
-        w.WriteByte(0xFF);                     // end of masked items (none)
+        foreach ((byte slot, int itemId) in masked)
+        {
+            w.WriteByte(slot);
+            w.WriteInt(itemId);
+        }
 
-        // Weapon sticker: the cash-weapon slot (-111); 0 if none.
-        w.WriteInt(0);
+        w.WriteByte(0xFF);                     // end of masked items
+
+        w.WriteInt(weaponSticker);             // nWeaponStickerID (the -111 cash weapon)
         w.WriteInt(0);                         // pet 1
         w.WriteLong(0);                        // pet 2 & 3 (JMS >= 146)
     }
-
-    private static IEnumerable<InventoryItem> VisibleEquips(Character c)
-        => c.EquippedItems
-            .Where(i => i.Position is > -100 and < 0)
-            .OrderBy(i => -i.Position);
 
     /// <summary>
     /// Writes a full character entry for <c>LP_SelectWorldResult</c>: stat, look, the JMS-&gt;=180

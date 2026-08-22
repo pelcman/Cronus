@@ -8,6 +8,15 @@ public interface IStyleProvider
     bool IsValidFace(int faceId);
 
     bool IsValidSkin(int skinColor);
+
+    /// <summary>Every valid hair id, ascending (30xxx male / 31xxx female, color digit included).</summary>
+    IReadOnlyList<int> AllHairs();
+
+    /// <summary>Every valid face id, ascending (20xxx male / 21xxx female, color hundreds digit included).</summary>
+    IReadOnlyList<int> AllFaces();
+
+    /// <summary>Every valid skin color, ascending (0-based).</summary>
+    IReadOnlyList<int> AllSkins();
 }
 
 /// <summary>
@@ -31,6 +40,13 @@ public sealed class WzStyleProvider : IStyleProvider
     public bool IsValidFace(int faceId) => _sets.Value.Faces.Contains(faceId);
 
     public bool IsValidSkin(int skinColor) => _sets.Value.Bodies.Contains(2000 + skinColor);
+
+    public IReadOnlyList<int> AllHairs() => _sets.Value.Hairs.Order().ToList();
+
+    public IReadOnlyList<int> AllFaces() => _sets.Value.Faces.Order().ToList();
+
+    public IReadOnlyList<int> AllSkins()
+        => _sets.Value.Bodies.Where(b => b is >= 2000 and < 2100).Select(b => b - 2000).Order().ToList();
 
     private static (HashSet<int>, HashSet<int>, HashSet<int>) Load(string wzRoot)
     {

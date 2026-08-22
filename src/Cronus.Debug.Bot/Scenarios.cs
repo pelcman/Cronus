@@ -369,6 +369,64 @@ public sealed class Scenarios
             return msgType == 8 ? "askAvatar opened" : $"unexpected type {msgType}";
         }).ConfigureAwait(false);
 
+        await StepAsync(bot, "cmd:/beauty-console", async () =>
+        {
+            // /beauty opens the style console: category menu -> (skin) -> avatar picker -> apply.
+            await ChatAsync(bot, "/beauty").ConfigureAwait(false);
+            PacketReader menu = await bot.ExpectAsync(ServerOpcode.ScriptMessage).ConfigureAwait(false);
+            menu.ReadByte(); menu.ReadInt();
+            int menuType = menu.ReadByte();
+            if (menuType != 5)
+            {
+                throw new InvalidOperationException($"expected askMenu (5), got {menuType}");
+            }
+
+            PacketWriter pick = bot.NewPacket(ClientOpcode.UserScriptMessageAnswer);
+            pick.WriteByte(5);          // answering the menu
+            pick.WriteByte(1);          // proceed
+            pick.WriteInt(4);           // 肌の色
+            await bot.SendAsync(pick).ConfigureAwait(false);
+
+            // Long lists insert a page menu before the picker; answer page 1 when one appears.
+            bool sawPicker = false;
+            for (int hop = 0; hop < 3 && !sawPicker; hop++)
+            {
+                PacketReader next = await bot.ExpectAsync(ServerOpcode.ScriptMessage).ConfigureAwait(false);
+                next.ReadByte(); next.ReadInt();
+                int nextType = next.ReadByte();
+                PacketWriter answer = bot.NewPacket(ClientOpcode.UserScriptMessageAnswer);
+                switch (nextType)
+                {
+                    case 5:             // the page menu
+                        answer.WriteByte(5);
+                        answer.WriteByte(1);
+                        answer.WriteInt(0);
+                        break;
+                    case 8:             // the avatar picker
+                        sawPicker = true;
+                        answer.WriteByte(8);
+                        answer.WriteByte(1);
+                        answer.WriteByte(0);
+                        break;
+                    default:
+                        throw new InvalidOperationException($"unexpected script message {nextType}");
+                }
+
+                await bot.SendAsync(answer).ConfigureAwait(false);
+            }
+
+            if (!sawPicker)
+            {
+                throw new InvalidOperationException("the avatar picker never appeared");
+            }
+
+            PacketReader done = await bot.ExpectAsync(ServerOpcode.ScriptMessage).ConfigureAwait(false);
+            done.ReadByte(); done.ReadInt();
+            int sayType = done.ReadByte();
+            await EscapeDialogAsync(bot, sayType).ConfigureAwait(false);
+            return "menu -> skin picker -> applied";
+        }).ConfigureAwait(false);
+
         await StepAsync(bot, "whisper:self-ack", async () =>
         {
             PacketWriter w = bot.NewPacket(ClientOpcode.Whisper);

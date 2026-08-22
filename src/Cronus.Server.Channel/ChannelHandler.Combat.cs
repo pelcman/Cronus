@@ -270,11 +270,12 @@ public sealed partial class ChannelHandler
         int dropped = 0;
         foreach (DropEntry entry in entries)
         {
-            // Monster cards stop dropping once the killer has the mob's card registered in the
-            // Monster Book (the reference gates at count 5; this server registers a card on the
-            // first pickup and gates from then on).
+            // Monster cards stop dropping once the killer's registered count reaches the
+            // GameConstants threshold (this server: 1 — one pickup ends the farm; reference: 5).
             if (entry.ItemId / 10_000 == 238
-                && _player?.Character.MonsterCards.ContainsKey(entry.ItemId) == true)
+                && _player is not null
+                && _player.Character.MonsterCards.TryGetValue(entry.ItemId, out int cardCount)
+                && cardCount >= GameConstants.MonsterCardStopDropCount)
             {
                 continue;
             }

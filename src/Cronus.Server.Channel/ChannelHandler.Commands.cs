@@ -165,7 +165,18 @@ public sealed partial class ChannelHandler
                     : (byte)(gc.Gender == 0 ? 1 : 0);
                 gc.Gender = newGender;
                 _characters.Save(gc);
+
+                // The cash shop filters its catalog by the ACCOUNT gender delivered at login, so
+                // flip the account too (GameConstants gate) — it takes effect on the next login.
+                if (GameConstants.GenderCommandChangesAccount
+                    && _accounts?.FindById(gc.AccountId) is { } genderAccount)
+                {
+                    genderAccount.Gender = newGender;
+                    _accounts.Save(genderAccount);
+                }
+
                 await ReplyAsync(session, newGender == 0 ? "gender → 男 (male)" : "gender → 女 (female)").ConfigureAwait(false);
+                await ReplyAsync(session, "ポイントショップの性別反映には再ログインしてください").ConfigureAwait(false);
 
                 if (_channelEndpoints is { } eps && _channelId >= 0 && _channelId < eps.Count)
                 {
@@ -177,6 +188,36 @@ public sealed partial class ChannelHandler
                     await ReplyAsync(session, "再ログインで見た目に反映されます").ConfigureAwait(false);
                 }
 
+                break;
+            }
+
+            case "beauty":
+            {
+                // Opens the style console: a windowed picker over EVERY hair style / hair color /
+                // face / eye color / skin from the wz data — no ids to type. Driven as a C#-side
+                // conversation over the same dialog plumbing the NPC scripts use.
+                if (_conversation is { IsEnded: false })
+                {
+                    break; // another dialog is open
+                }
+
+                if (_styles is null)
+                {
+                    await ReplyAsync(session, "スタイルデータが未ロードです (CRONUS_WZ)").ConfigureAwait(false);
+                    break;
+                }
+
+                var beautyDialog = new ChannelNpcDialog(session, _packets);
+                var beautyConvo = new NpcConversation(BeautyNpcId, beautyDialog);
+                _conversation = beautyConvo;
+                ChannelPlayer beautyPlayer = CreateScriptPlayer(session);
+                IStyleProvider beautyStyles = _styles;
+                var beautyThread = new Thread(() => RunBeautyFlow(beautyConvo, beautyPlayer, beautyStyles))
+                {
+                    IsBackground = true,
+                    Name = "beauty-console",
+                };
+                beautyThread.Start();
                 break;
             }
 
@@ -326,7 +367,7 @@ public sealed partial class ChannelHandler
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
                     + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /gender [m|f], /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
+                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /gender [m|f], /beauty, /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 
@@ -407,6 +448,138 @@ public sealed partial class ChannelHandler
         // No script and no shop: send NOTHING (ports OnUserSelectNpc — TacosScriptNPC.start just
         // returns false). The client then runs its own quest UI for the NPC; a server-sent
         // greeting dialog here would swallow the click and break every quest-NPC conversation.
+    }
+
+    /// <summary>The NPC whose portrait fronts the /beauty console (the Henesys stylist).</summary>
+    private const int BeautyNpcId = 1012103;
+
+    /// <summary>Styles shown per picker page (the ask-avatar window renders a small grid).</summary>
+    private const int BeautyPageSize = 8;
+
+    /// <summary>
+    /// The /beauty conversation: category menu → (for long lists) a page menu → the windowed
+    /// style picker (SM_ASKAVATAR), then the change is applied through the same script-player
+    /// ops the salons use (validated + avatar broadcast). Runs on its own thread and blocks on
+    /// the client's answers exactly like a Jint NPC script.
+    /// </summary>
+    private static void RunBeautyFlow(NpcConversation cm, ChannelPlayer player, IStyleProvider styles)
+    {
+        try
+        {
+            int category = cm.askMenu("スタイルコンソールへようこそ！何を変えますか？\r\n"
+                + "#L0#髪型#l\r\n#L1#髪色#l\r\n#L2#整形（顔）#l\r\n#L3#目の色#l\r\n#L4#肌の色#l");
+
+            switch (category)
+            {
+                case 0: // hair style, keeping the current color where that variant exists
+                {
+                    int color = player.getHair() % 10;
+                    int lo = player.getGender() == 0 ? 30000 : 31000;
+                    List<int> candidates = styles.AllHairs()
+                        .Where(h => h >= lo && h < lo + 1000)
+                        .GroupBy(h => h / 10 * 10)
+                        .Select(g => g.Contains(g.Key + color) ? g.Key + color : g.First())
+                        .Distinct()
+                        .ToList();
+                    PickPagedStyle(cm, candidates, "髪型", picked => player.setHair(picked));
+                    break;
+                }
+
+                case 1: // hair color: the current style's valid color variants
+                {
+                    int baseHair = player.getHair() / 10 * 10;
+                    List<int> candidates = Enumerable.Range(0, 10)
+                        .Select(c2 => baseHair + c2)
+                        .Where(styles.IsValidHair)
+                        .ToList();
+                    PickPagedStyle(cm, candidates, "髪色", picked => player.setHair(picked));
+                    break;
+                }
+
+                case 2: // face, keeping the current eye color where that variant exists
+                {
+                    int eyeColor = player.getFace() / 100 % 10;
+                    int lo = player.getGender() == 0 ? 20000 : 21000;
+                    List<int> candidates = styles.AllFaces()
+                        .Where(f => f >= lo && f < lo + 1000)
+                        .GroupBy(f => f - (f / 100 % 10) * 100)
+                        .Select(g => g.Contains(g.Key + eyeColor * 100) ? g.Key + eyeColor * 100 : g.First())
+                        .Distinct()
+                        .ToList();
+                    PickPagedStyle(cm, candidates, "顔", picked => player.setFace(picked));
+                    break;
+                }
+
+                case 3: // eye color: the current face's valid color variants
+                {
+                    int baseFace = player.getFace() - (player.getFace() / 100 % 10) * 100;
+                    List<int> candidates = Enumerable.Range(0, 9)
+                        .Select(c2 => baseFace + (c2 * 100))
+                        .Where(styles.IsValidFace)
+                        .ToList();
+                    PickPagedStyle(cm, candidates, "目の色", picked => player.setFace(picked));
+                    break;
+                }
+
+                case 4: // skin
+                {
+                    List<int> candidates = styles.AllSkins().ToList();
+                    PickPagedStyle(cm, candidates, "肌の色", picked => player.setSkin(picked));
+                    break;
+                }
+            }
+        }
+        catch (ConversationEndedException)
+        {
+            // The player escaped the dialog — normal end.
+        }
+        catch (Exception)
+        {
+            // Never let a picker bug take the session down; the dialog just closes.
+        }
+        finally
+        {
+            cm.End();
+        }
+    }
+
+    /// <summary>Pages <paramref name="candidates"/> through the avatar picker and applies the pick.</summary>
+    private static void PickPagedStyle(NpcConversation cm, List<int> candidates, string what, Action<int> apply)
+    {
+        if (candidates.Count == 0)
+        {
+            cm.sendOk("選べる" + what + "が見つかりませんでした。");
+            return;
+        }
+
+        int page = 0;
+        int pages = (candidates.Count + BeautyPageSize - 1) / BeautyPageSize;
+        if (pages > 1)
+        {
+            var menu = new System.Text.StringBuilder(what + " （全" + candidates.Count + "種）ページを選んでください:");
+            for (int i = 0; i < pages; i++)
+            {
+                int from = i * BeautyPageSize + 1;
+                int to = Math.Min(candidates.Count, (i + 1) * BeautyPageSize);
+                menu.Append("\r\n#L").Append(i).Append('#').Append(from).Append('-').Append(to).Append("番#l");
+            }
+
+            page = cm.askMenu(menu.ToString());
+            if (page < 0 || page >= pages)
+            {
+                return;
+            }
+        }
+
+        int[] shown = candidates.Skip(page * BeautyPageSize).Take(BeautyPageSize).ToArray();
+        int pick = cm.askAvatar("お好きな" + what + "を選んでください。", shown);
+        if (pick < 0 || pick >= shown.Length)
+        {
+            return;
+        }
+
+        apply(shown[pick]);
+        cm.sendOk("はい、できあがり！お似合いですよ。");
     }
 
     /// <summary>The <c>player</c> object handed to NPC / quest / portal scripts.</summary>

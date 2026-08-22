@@ -40,6 +40,8 @@ public class CharacterDataRoundTripTests
         // Multi-tab inventory: equipped equip, un-equipped equip, use bundle, etc bundle,
         // a cash equip (unique id up front, no trailing serial), a pet, and throwing stars.
         c.EquippedItems.Add(new InventoryItem { ItemId = 1302000, Position = -11, Quantity = 1, UpgradeSlots = 7 }); // weapon (equipped)
+        c.EquippedItems.Add(new InventoryItem { ItemId = 1052999, Position = -105, Quantity = 1, CashId = 0x0102030405060708 }); // worn cash overlay (avatar section)
+        c.EquippedItems.Add(new InventoryItem { ItemId = 1702001, Position = -111, Quantity = 1, CashId = 0x1112131415161718 }); // cash weapon (avatar section)
         c.EquippedItems.Add(new InventoryItem { ItemId = 1040002, Position = 1, Quantity = 1 });                     // equip tab
         c.EquippedItems.Add(new InventoryItem { ItemId = 2000000, Position = 1, Quantity = 200 });                   // USE
         c.EquippedItems.Add(new InventoryItem { ItemId = 4000000, Position = 1, Quantity = 99 });                    // ETC

@@ -79,9 +79,9 @@ public sealed partial class ChannelHandler
         if (drop.ItemId / 10_000 == 238)
         {
             int count = c.MonsterCards.TryGetValue(drop.ItemId, out int have) ? have : 0;
-            if (count < 5)
+            if (count < GameConstants.MonsterCardMaxCount)
             {
-                count = Math.Min(5, count + Math.Max(1, (int)drop.Quantity));
+                count = Math.Min(GameConstants.MonsterCardMaxCount, count + Math.Max(1, (int)drop.Quantity));
                 c.MonsterCards[drop.ItemId] = count;
                 _characters.Save(c);
                 await session.SendAsync(_packets.MonsterBookSetCard(added: true, drop.ItemId, count)).ConfigureAwait(false);
@@ -161,8 +161,8 @@ public sealed partial class ChannelHandler
     }
 
     /// <summary>Meso-drop bounds (ports <c>OnUserDropMoneyRequest</c>): a throw is 10..50000 mesos.</summary>
-    private const int MinMesoDrop = 10;
-    private const int MaxMesoDrop = 50000;
+    private const int MinMesoDrop = GameConstants.MesoDropMin;
+    private const int MaxMesoDrop = GameConstants.MesoDropMax;
 
     /// <summary>
     /// Handles <c>CP_UserDropMoneyRequest</c> — a player throws mesos onto the ground for others to

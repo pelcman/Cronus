@@ -171,7 +171,18 @@ public static class CharacterDataEncoder
         }
 
         w.WriteShort(0);              // end of equipped items
-        w.WriteShort(0);              // end of equipped avatars (none)
+
+        // Equipped cash avatars (positions -101..-999): the overlay layer worn over the base
+        // equips. Omitting these made every worn cash-shop outfit vanish on re-login.
+        foreach (InventoryItem item in c.EquippedItems
+                     .Where(i => i.Position is <= -100 and > -1000)
+                     .OrderBy(i => -i.Position))
+        {
+            ItemEncoder.WriteSlot(w, item);
+            ItemEncoder.WriteItem(w, item);
+        }
+
+        w.WriteShort(0);              // end of equipped avatars
 
         WriteTab(w, c, type: 1);      // EQUIP tab (un-equipped equips, positive slots)
         w.WriteShort(0);              // end of equip inventory
