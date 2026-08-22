@@ -11,22 +11,24 @@ public static class PlayerRegen
     /// <summary>
     /// Recovers a modest amount of HP/MP toward the maximum and returns the stats that changed
     /// (0 when already full). Mutates <paramref name="c"/>. Sitting (<paramref name="seated"/>)
-    /// triples the amount. A simplification of MapleStory's level/job-scaled recovery.
+    /// triples the amount; otherwise the map's <paramref name="recovery"/> multiplier applies
+    /// (the reference skips it on chairs too). A simplification of MapleStory's level/job-scaled
+    /// recovery.
     /// </summary>
-    public static StatFlag Apply(Character c, bool seated = false)
+    public static StatFlag Apply(Character c, bool seated = false, double recovery = 1.0)
     {
-        int factor = seated ? 3 : 1;
+        double factor = seated ? 3 : recovery;
         StatFlag changed = 0;
 
         if (c.Hp < c.MaxHp)
         {
-            c.Hp = (short)Math.Min(c.MaxHp, c.Hp + (Math.Max(3, c.MaxHp / 50) * factor));
+            c.Hp = (short)Math.Min(c.MaxHp, c.Hp + (int)(Math.Max(3, c.MaxHp / 50) * factor));
             changed |= StatFlag.Hp;
         }
 
         if (c.Mp < c.MaxMp)
         {
-            c.Mp = (short)Math.Min(c.MaxMp, c.Mp + (Math.Max(3, c.MaxMp / 50) * factor));
+            c.Mp = (short)Math.Min(c.MaxMp, c.Mp + (int)(Math.Max(3, c.MaxMp / 50) * factor));
             changed |= StatFlag.Mp;
         }
 
@@ -83,7 +85,7 @@ public sealed class PlayerRegenService
                     continue; // recently moved or attacked — not resting
                 }
 
-                StatFlag changed = PlayerRegen.Apply(player.Character, player.Seated);
+                StatFlag changed = PlayerRegen.Apply(player.Character, player.Seated, field.Recovery);
                 if (changed == 0)
                 {
                     continue; // already at full HP/MP

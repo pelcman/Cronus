@@ -68,4 +68,18 @@ public class PlayerRegenTests
         Assert.Equal(30, sitting.Hp);  // x3 while seated
         Assert.Equal(30, sitting.Mp);
     }
+
+    [Fact]
+    public void Apply_MapRecoveryRate_MultipliesStandingRegen()
+    {
+        var sauna = new Character { Name = "Bather", Hp = 0, MaxHp = 500, Mp = 0, MaxMp = 500 };
+        PlayerRegen.Apply(sauna, seated: false, recovery: 2.0);
+        Assert.Equal(20, sauna.Hp);    // max(3, 500/50) x2 in the sauna
+        Assert.Equal(20, sauna.Mp);
+
+        // Sitting keeps the flat x3 (the reference skips the map rate on chairs too).
+        var seated = new Character { Name = "Seated", Hp = 0, MaxHp = 500, Mp = 0, MaxMp = 500 };
+        PlayerRegen.Apply(seated, seated: true, recovery: 2.0);
+        Assert.Equal(30, seated.Hp);
+    }
 }

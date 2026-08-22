@@ -282,7 +282,11 @@ public sealed class Field
         _mobs = BuildMobs(mapData, mobs);
         _nextMobOid = MobObjectIdBase + _mobs.Count;
         Reactors = BuildReactors(mapData);
+        Recovery = mapData?.Recovery ?? 1.0;
     }
+
+    /// <summary>The map's natural HP/MP recovery multiplier (sauna rooms are 2x+).</summary>
+    public double Recovery { get; }
 
     /// <summary>Reactors placed on this field (boxes, plants, …); empty when no map data.</summary>
     public IReadOnlyList<FieldReactor> Reactors { get; }

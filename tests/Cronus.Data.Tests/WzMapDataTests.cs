@@ -80,6 +80,22 @@ public class WzMapDataTests
     }
 
     [Fact]
+    public void ParsesRecoveryRate()
+    {
+        Assert.Equal(1.0, MapData.FromWz(100000000, Parse(MapXml)).Recovery); // absent -> 1x
+
+        const string saunaXml = """
+            <imgdir name="105040401.img">
+              <imgdir name="info">
+                <int name="returnMap" value="105040300"/>
+                <float name="recovery" value="2.0"/>
+              </imgdir>
+            </imgdir>
+            """;
+        Assert.Equal(2.0, MapData.FromWz(105040401, Parse(saunaXml)).Recovery);
+    }
+
+    [Fact]
     public void ParsesNpcAndMobLife()
     {
         MapData map = MapData.FromWz(100000000, Parse(MapXml));
