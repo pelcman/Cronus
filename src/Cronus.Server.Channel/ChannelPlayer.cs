@@ -26,6 +26,8 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly CharacterProgression.EffectResolver? _effectOf;
     private readonly IStyleProvider? _styles;
     private readonly Func<ValueTask>? _avatarModified;
+    private readonly Func<bool>? _hasMerchant;
+    private readonly Func<ValueTask<bool>>? _retrieveMerchant;
 
     public ChannelPlayer(
         Character character,
@@ -39,7 +41,9 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<int, int>? itemCount = null,
         CharacterProgression.EffectResolver? effectOf = null,
         IStyleProvider? styles = null,
-        Func<ValueTask>? avatarModified = null)
+        Func<ValueTask>? avatarModified = null,
+        Func<bool>? hasMerchant = null,
+        Func<ValueTask<bool>>? retrieveMerchant = null)
     {
         _character = character;
         _characters = characters;
@@ -53,6 +57,8 @@ public sealed class ChannelPlayer : INpcPlayer
         _effectOf = effectOf;
         _styles = styles;
         _avatarModified = avatarModified;
+        _hasMerchant = hasMerchant;
+        _retrieveMerchant = retrieveMerchant;
     }
 
     public string getName() => _character.Name;
@@ -257,6 +263,11 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void openStorage()
         => _openStorage?.Invoke().AsTask().GetAwaiter().GetResult();
+
+    public bool hasMerchant() => _hasMerchant?.Invoke() ?? false;
+
+    public bool retrieveMerchant()
+        => _retrieveMerchant is not null && _retrieveMerchant().AsTask().GetAwaiter().GetResult();
 
     public int getBuddyCapacity() => _character.BuddyCapacity;
 

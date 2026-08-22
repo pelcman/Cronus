@@ -6101,7 +6101,24 @@ public sealed class ChannelHandler : PacketHandlerBase
         styles: _styles,
         avatarModified: () => _field is { } f
             ? f.BroadcastAsync(_packets.UserAvatarModified(_player!.Character), exceptCharacterId: _player!.Character.Id)
-            : ValueTask.CompletedTask);
+            : ValueTask.CompletedTask,
+        hasMerchant: () => _merchants.GetByOwner(_player!.Character.Id) is not null,
+        retrieveMerchant: RetrieveMerchantAsync);
+
+    /// <summary>
+    /// Packs up the player's hired merchant from afar (the Fredrick service): visitors are shown
+    /// out, unsold stock and banked meso return to the owner. False when they have none.
+    /// </summary>
+    private async ValueTask<bool> RetrieveMerchantAsync()
+    {
+        if (_player is null || _merchants.GetByOwner(_player.Character.Id) is not { } merchant)
+        {
+            return false;
+        }
+
+        await CloseHiredMerchantAsync(merchant).ConfigureAwait(false);
+        return true;
+    }
 
     /// <summary>
     /// Gives (positive) or takes (negative) items on behalf of a script, pushing the live

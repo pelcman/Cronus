@@ -199,6 +199,8 @@ public class NpcScriptEngineTests
         public int Hair = 30030;
         public int Face = 20000;
         public int Skin;
+        public bool hasMerchant() => false;
+        public bool retrieveMerchant() => false;
         public int BuddyCapacity = 20;
         public int getBuddyCapacity() => BuddyCapacity;
         public void gainBuddyCapacity(int amount) => BuddyCapacity = Math.Clamp(BuddyCapacity + amount, 20, 100);

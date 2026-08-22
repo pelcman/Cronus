@@ -122,6 +122,15 @@ public interface INpcPlayer
     /// <summary>Opens the player's account storage (the trunk).</summary>
     void openStorage();
 
+    /// <summary>True if the player's hired merchant is standing somewhere.</summary>
+    bool hasMerchant();
+
+    /// <summary>
+    /// Packs up the player's hired merchant from afar: stock and banked meso return to them.
+    /// Returns false when they have none.
+    /// </summary>
+    bool retrieveMerchant();
+
     /// <summary>The buddy list's current maximum size.</summary>
     int getBuddyCapacity();
 
