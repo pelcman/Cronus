@@ -696,6 +696,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.FuncKeyMappedInit(_keymaps.Get(character.Id))).ConfigureAwait(false);
         await session.SendAsync(_packets.MacroSysDataInit(character.SkillMacros)).ConfigureAwait(false);
         await session.SendAsync(BuildBuddyList(character, ChannelPackets.FriendLoadDone)).ConfigureAwait(false);
+        await session.SendAsync(_packets.FamilyPrivilegeList()).ConfigureAwait(false); // before info (reference order)
         await session.SendAsync(_packets.FamilyInfoResult()).ConfigureAwait(false);
         await session.SendAsync(_packets.BroadcastSlideClear()).ConfigureAwait(false);
 

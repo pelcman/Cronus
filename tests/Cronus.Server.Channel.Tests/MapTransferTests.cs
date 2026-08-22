@@ -117,6 +117,15 @@ public class MapTransferTests
             => new(ClientOps.Get(opcodeName), session.Config.PacketHeaderSize, session.Config.CodePage);
     }
 
+    /// <summary>Polls until <paramref name="condition"/> holds (the token bounds the wait).</summary>
+    private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken ct)
+    {
+        while (!condition())
+        {
+            await Task.Delay(10, ct);
+        }
+    }
+
     private static (MapleSession Server, MapleSession Client) Wire(
         TransferClient client, ChannelHandler handler, CancellationToken ct)
     {
@@ -153,6 +162,8 @@ public class MapTransferTests
         await using MapleSession s2 = clientSession;
 
         await client.EnteredGame.Task.WaitAsync(cts.Token);
+        // SetField is sent before the server-side field join completes; wait for the join.
+        await WaitUntilAsync(() => fields.Get(100000000).Players.Any(fp => fp.Character.Id == hero.Id), cts.Token);
         Assert.Contains(fields.Get(100000000).Players, fp => fp.Character.Id == hero.Id);
 
         await client.RequestTransferAsync(mapId: 104040000, portalName: string.Empty);

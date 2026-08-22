@@ -151,6 +151,7 @@ public static class ServerOpcode
     public const string PetConsumeCureItemInit = "LP_JMS_PetConsumeCureItemInit";
     public const string FriendResult = "LP_FriendResult";
     public const string FamilyInfoResult = "LP_FamilyInfoResult";
+    public const string FamilyPrivilegeList = "LP_FamilyPrivilegeList";
     public const string ChangeSkillRecordResult = "LP_ChangeSkillRecordResult";
     public const string SkillUseResult = "LP_SkillUseResult";
     public const string BroadcastMsg = "LP_BroadcastMsg";

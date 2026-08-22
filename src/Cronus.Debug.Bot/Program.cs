@@ -52,6 +52,33 @@ var results = new List<StepResult>();
 var scenarios = new Scenarios(loginEndpoint, results);
 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(20));
 
+// Golden-vector capture mode: CRONUS_BOT_CAPTURE=<file> logs every decrypted server packet of
+// a single login→entry flow as OPCODE:HEX lines. Point it at the Java reference server, then at
+// Cronus, and diff the two files — that is the true byte-level oracle.
+string? captureFile = Environment.GetEnvironmentVariable("CRONUS_BOT_CAPTURE");
+if (!string.IsNullOrWhiteSpace(captureFile))
+{
+    Console.WriteLine($"Cronus.Debug.Bot — golden capture of login→entry vs {loginEndpoint} → {captureFile}");
+    {
+        await using var writer = new StreamWriter(captureFile, append: false) { AutoFlush = true };
+        // CRONUS_BOT_CAPTURE_INDEX picks the account (cronusbot{n}) and the character name —
+        // use a fresh index per comparison so both servers see the identical create+enter flow.
+        int captureIndex = int.TryParse(Environment.GetEnvironmentVariable("CRONUS_BOT_CAPTURE_INDEX"), out int ci) ? ci : 9;
+        var goldenBot = new BotClient("Golden", config, clientOps, serverOps)
+        {
+            CharacterName = $"GoldenVec{captureIndex}",
+            Capture = writer,
+        };
+        await scenarios.LoginAndEnterAsync(goldenBot, captureIndex, cts.Token);
+        await Task.Delay(TimeSpan.FromSeconds(3), cts.Token);          // collect the entry burst
+        goldenBot.Capture = null;                                      // detach before the writer closes
+        await goldenBot.DisposeAsync();
+    }
+
+    Console.WriteLine($"captured {File.ReadAllLines(captureFile).Length} packets.");
+    return results.Any(r => !r.Ok) ? 1 : 0;
+}
+
 // Drop-sweep audit mode: CRONUS_BOT_AUDIT_DROPS=<file of item ids> logs one bot in and spawns
 // every listed item as a ground drop, validating each DropEnterField the client would render.
 string? sweepFile = Environment.GetEnvironmentVariable("CRONUS_BOT_AUDIT_DROPS");

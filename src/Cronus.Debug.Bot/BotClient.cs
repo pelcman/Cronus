@@ -42,6 +42,10 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
 
     public OpcodeTable ServerOps { get; }
 
+    /// <summary>When set, every decrypted server packet is appended as an <c>OPCODE:HEX</c> line —
+    /// the golden-vector tap (point the bot at the Java reference server, then at Cronus, diff).</summary>
+    public StreamWriter? Capture { get; set; }
+
     /// <summary>Set once the login flow learns it; used by the channel scenarios.</summary>
     public int CharacterId { get; set; }
 
@@ -172,6 +176,8 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
 
     public override ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader packet)
     {
+        Capture?.WriteLine($"{opcode:X4}:{packet.ToHex()}");
+
         // Re-frame the body with its opcode so a fresh reader can be handed to the waiter.
         byte[] body = packet.ReadBytes(packet.Remaining);
         byte[] full = new byte[2 + body.Length];

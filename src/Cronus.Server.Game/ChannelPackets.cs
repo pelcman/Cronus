@@ -1430,23 +1430,62 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
-    /// Builds <c>LP_FamilyInfoResult</c> for a character with no family (the fixed default the
-    /// reference emits on entry: all zero except the pedigree-generation default byte). The large
-    /// static <c>LP_FamilyPrivilegeList</c> (0x006C, a version-constant reunion-privilege table)
-    /// is not yet ported — the family UI is non-core and this does not affect field entry.
+    /// Builds <c>LP_FamilyInfoResult</c> for a character with no family (ports
+    /// <c>ResCWvsContext.getFamilyInfo</c>; layout golden-verified byte-for-byte against the
+    /// live Java reference): rep, total rep, rep-today, junior count, the constant short 2,
+    /// junior count again, the empty leader block (8 zero bytes when family-less), and an
+    /// empty used-buff list.
     /// </summary>
     public byte[] FamilyInfoResult()
     {
         PacketWriter w = NewPacket(ServerOpcode.FamilyInfoResult);
-        w.WriteInt(0);      // dwFamilyID
-        w.WriteInt(0);      // reputation etc.
-        w.WriteInt(0);
-        w.WriteInt(0);
-        w.WriteByte(2);     // pedigree-generation default (matches reference)
-        w.WriteInt(0);
-        w.WriteInt(0);
-        w.WriteInt(0);
-        w.WriteByte(0);
+        w.WriteInt(0);      // current rep
+        w.WriteInt(0);      // total rep
+        w.WriteInt(0);      // rep recorded today
+        w.WriteShort(0);    // junior count
+        w.WriteShort(2);    // constant (reference Encode2(2))
+        w.WriteShort(0);    // junior count (again)
+        w.WriteLong(0);     // no family: leader id + empty strings collapse to Encode8(0)
+        w.WriteInt(0);      // used-buff count
+        return w.ToArray();
+    }
+
+    // The family reputation-privilege catalog (ports MapleFamilyBuff: type / rep cost / name /
+    // description, in wire order). Static, version-constant content — golden-verified against
+    // the live Java reference's LP_FamilyPrivilegeList capture.
+    private static readonly (byte Type, int Rep, string Name, string Desc)[] FamilyPrivileges =
+    {
+        (0, 300, "Family Reunion", "[Target] Me\n[Effect] Teleport directly to the Family member of your choice."),
+        (1, 500, "Summon Family", "[Target] 1 Family member\n[Effect] Summon a Family member of choice to the map you're in."),
+        (2, 700, "My Drop Rate 1.5x (15min)", "[Target] Me\n[Time] 15 min.\n[Effect] Monster drop rate will be increased #c1.5x#.\n*  If the Drop Rate event is in progress, this will be nullified."),
+        (3, 800, "My EXP 1.5x (15min)", "[Target] Me\n[Time] 15 min.\n[Effect] EXP earned from hunting will be increased #c1.5x#.\n* If the EXP event is in progress, this will be nullified."),
+        (4, 1000, "Family Bonding (30min)", "[Target] At least 6 Family members online that are below me in the Pedigree\n[Time] 30 min.\n[Effect] Monster drop rate and EXP earned will be increased #c2x#. \n* If the EXP event is in progress, this will be nullified."),
+        (2, 1200, "My Drop Rate 2x (15min)", "[Target] Me\n[Time] 15 min.\n[Effect] Monster drop rate will be increased #c2x#.\n* If the Drop Rate event is in progress, this will be nullified."),
+        (3, 1500, "My EXP 2x (15min)", "[Target] Me\n[Time] 15 min.\n[Effect] EXP earned from hunting will be increased #c2x#.\n* If the EXP event is in progress, this will be nullified."),
+        (2, 2000, "My Drop Rate 2x (30min)", "[Target] Me\n[Time] 30 min.\n[Effect] Monster drop rate will be increased #c2x#.\n* If the Drop Rate event is in progress, this will be nullified."),
+        (3, 2500, "My EXP 2x (30min)", "[Target] Me\n[Time] 30 min.\n[Effect] EXP earned from hunting will be increased #c2x#.\n* If the EXP event is in progress, this will be nullified."),
+        (2, 4000, "My Party Drop Rate 2x (30min)", "[Target] My party\n[Time] 30 min.\n[Effect] Monster drop rate will be increased #c2x#.\n* If the Drop Rate event is in progress, this will be nullified."),
+        (3, 5000, "My Party EXP 2x (30min)", "[Target] My party\n[Time] 30 min.\n[Effect] EXP earned from hunting will be increased #c2x#.\n* If the EXP event is in progress, this will be nullified."),
+    };
+
+    /// <summary>
+    /// Builds <c>LP_FamilyPrivilegeList</c> — the static reputation-privilege catalog the client
+    /// expects alongside the family info at entry (ports <c>ResCWvsContext.getFamilyData</c>):
+    /// count, then per entry type, rep cost, use count (1), name, and description.
+    /// </summary>
+    public byte[] FamilyPrivilegeList()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FamilyPrivilegeList);
+        w.WriteInt(FamilyPrivileges.Length);
+        foreach ((byte type, int rep, string name, string desc) in FamilyPrivileges)
+        {
+            w.WriteByte(type);
+            w.WriteInt(rep);
+            w.WriteInt(1);          // usable count
+            w.WriteString(name);
+            w.WriteString(desc);
+        }
+
         return w.ToArray();
     }
 
