@@ -24,6 +24,14 @@ public static class GameConstants
     public static bool SendMonsterBookCardEffect { get; set; } = true;
     public static bool SendMonsterBookCardMessage { get; set; } = true;
 
+    /// <summary>
+    /// The user-effect id for the card-get flash, tunable live via <c>/booktest effect &lt;n&gt;</c>.
+    /// v186's table is neither the ≤147 pre-BB one (13 crashed) nor the GMS-v95 default (15
+    /// crashed): with Aran in v186 the Resist entry shifts everything, giving the v302 layout
+    /// minus the later JMS charm entry — CardGet 16 (and QuestComplete 12).
+    /// </summary>
+    public static byte MonsterBookCardEffectValue { get; set; } = 16;
+
     // ---- Social -------------------------------------------------------------------------
 
     /// <summary>Minimum level to give fame (reference: 15).</summary>

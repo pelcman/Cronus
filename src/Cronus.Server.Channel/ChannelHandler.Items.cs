@@ -96,7 +96,7 @@ public sealed partial class ChannelHandler
 
                 if (GameConstants.SendMonsterBookCardEffect)
                 {
-                    await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectMonsterBookCardGet)).ConfigureAwait(false);
+                    await session.SendAsync(_packets.UserEffectLocal(GameConstants.MonsterBookCardEffectValue)).ConfigureAwait(false);
                 }
 
                 if (GameConstants.SendMonsterBookCardMessage)
@@ -105,7 +105,7 @@ public sealed partial class ChannelHandler
                 }
 
                 await _field.BroadcastAsync(
-                    _packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectMonsterBookCardGet),
+                    _packets.UserEffectRemote(c.Id, GameConstants.MonsterBookCardEffectValue),
                     exceptCharacterId: c.Id).ConfigureAwait(false);
             }
             else if (GameConstants.SendMonsterBookSetCard)

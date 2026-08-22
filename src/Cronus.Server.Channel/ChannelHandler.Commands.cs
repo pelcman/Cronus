@@ -238,8 +238,13 @@ public sealed partial class ChannelHandler
                 GameConstants.SendMonsterBookSetCard = mode is "set" or "all";
                 GameConstants.SendMonsterBookCardEffect = mode is "effect" or "all";
                 GameConstants.SendMonsterBookCardMessage = mode is "msg" or "all";
+                if (mode == "effect" && parts.Length >= 3 && byte.TryParse(parts[2], out byte effectValue))
+                {
+                    GameConstants.MonsterBookCardEffectValue = effectValue; // e.g. /booktest effect 16
+                }
+
                 await ReplyAsync(session,
-                    $"book packets: set={GameConstants.SendMonsterBookSetCard} effect={GameConstants.SendMonsterBookCardEffect} msg={GameConstants.SendMonsterBookCardMessage}").ConfigureAwait(false);
+                    $"book packets: set={GameConstants.SendMonsterBookSetCard} effect={GameConstants.SendMonsterBookCardEffect}(value {GameConstants.MonsterBookCardEffectValue}) msg={GameConstants.SendMonsterBookCardMessage}").ConfigureAwait(false);
                 break;
             }
 
