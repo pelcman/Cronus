@@ -469,6 +469,15 @@ Each milestone means adding one "working vertical slice".
         walks back out. Event-only portals (`hidenPT_*`, unity) stay inert by design — their
         targets aren't in the data.
 
+  - [x] **M10ah: Knights of Cygnus & Aran playable** — creation maps the pre-BB job type
+        (0 = Cygnus → Noblesse 1000, 2 = Aran → Legend 2000; the oracle's `OpsNewCharacter`
+        declared values), growth collapses to the explorer archetypes (`GrowthJob`), the
+        beginner family (0/1000/2000) earns no SP and loses no exp on death, the five knight
+        commanders + Lilin advance the branches (1x00→1x10→1x11 at 10/30/70; Aran
+        2100→2110→2111→2112 at 10/30/70/120), the wz already carries all their skill data,
+        and the travel network gained Ereve and Rien. Not modelled: the Ereve/Rien tutorial
+        quest lines and Cygnus-specific passives in the growth bonuses.
+
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated
