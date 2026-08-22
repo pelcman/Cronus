@@ -34,6 +34,9 @@ public sealed class AttackInfo
 
     public required int AttackSpeed { get; init; }
 
+    /// <summary>Charge time for key-down skills (Big Bang, Hurricane, …); 0 otherwise.</summary>
+    public int KeyDown { get; init; }
+
     public required IReadOnlyList<AttackTarget> Targets { get; init; }
 }
 
@@ -76,6 +79,11 @@ public static class AttackParser
         p.ReadInt();               // DR get_rand
         p.ReadInt();               // DR crc
         p.ReadInt();               // crc (JMS >= 164)
+
+        // Key-down (charge) skills carry tKeyDown right before the buff key; missing this
+        // shifted every later field for Big Bang / Hurricane-class attacks.
+        int keyDown = IsKeydownSkill(skillId) ? p.ReadInt() : 0;
+
         int buffKey = p.ReadByte();
         int attackActionKey = p.ReadShort() & 0xFFFF;
         p.ReadByte();              // nAttackActionType
@@ -116,7 +124,25 @@ public static class AttackParser
             BulletSlot = bulletSlot,
             AttackActionKey = attackActionKey,
             AttackSpeed = attackSpeed,
+            KeyDown = keyDown,
             Targets = targets,
         };
     }
+
+    /// <summary>Skills whose REMOTE mirror appends tKeyDown (ports <c>is_keydown_skill_remote</c>:
+    /// the Big Bangs and Evan's breaths).</summary>
+    public static bool IsKeydownSkillRemote(int skillId)
+        => skillId is 2121001 or 2221001 or 2321001 or 22121000 or 22151001;
+
+    /// <summary>Charge-up skills whose REQUEST carries tKeyDown (ports <c>is_keydown_skill</c>).</summary>
+    public static bool IsKeydownSkill(int skillId)
+        => IsKeydownSkillRemote(skillId)
+            || skillId is 3121004 or 3221001      // Storm Arrow / Piercing
+                or 5101004 or 5201002 or 5221004  // Screw Punch / Throwing Bomb / Rapid Fire
+                or 14111006 or 15101003           // Poison Bomb / Striker Screw Punch
+                or 4341002 or 4341003             // Final Cut / Monster Bomb
+                or 13111002 or 33121009;          // WB Storm Arrow / WH Wild Shoot
+
+    /// <summary>Meso Explosion — its mirror writes a per-mob hit count (ports <c>is_mesp_explosion</c>).</summary>
+    public const int MesoExplosionSkillId = 4211006;
 }

@@ -510,7 +510,13 @@ public sealed class ChannelPackets
         w.WriteByte((byte)attack.HitKey);
         w.WriteByte((byte)level);            // m_nLevel (JMS >= 164)
         w.WriteByte((byte)attack.SkillLevel);
-        // skillLevel == 0 → no skill id (basic); skill-effect rendering is a follow-up.
+        if (attack.SkillLevel != 0)
+        {
+            // The client reads nSkillID whenever nSLV != 0 — omitting it shifted every later
+            // byte and crashed onlookers the first time someone mirrored a SKILL attack.
+            w.WriteInt(attack.SkillId);
+        }
+
         w.WriteByte((byte)attack.BuffKey);
         w.WriteShort((short)attack.AttackActionKey); // JMS > 147
         w.WriteByte((byte)attack.AttackSpeed);
@@ -521,11 +527,21 @@ public sealed class ChannelPackets
         {
             w.WriteInt(target.MobObjectId);
             w.WriteByte(7);
+            if (attack.SkillId == AttackParser.MesoExplosionSkillId)
+            {
+                w.WriteByte((byte)target.Damages.Count); // meso explosion: per-mob hit count
+            }
+
             foreach (int damage in target.Damages)
             {
                 w.WriteByte((damage & unchecked((int)0x80000000)) != 0 ? (byte)1 : (byte)0); // critical
                 w.WriteInt(damage & 0x7FFFFFFF);
             }
+        }
+
+        if (AttackParser.IsKeydownSkillRemote(attack.SkillId))
+        {
+            w.WriteInt(attack.KeyDown); // charge time (Big Bang / Evan breath mirrors)
         }
 
         if (isShoot)
