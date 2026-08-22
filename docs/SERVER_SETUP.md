@@ -219,6 +219,8 @@ With MySQL, use your normal `mysqldump` routine instead.
 ## Configuration quick reference
 
 ```powershell
+# Windows: just double-click run-server.bat (builds + runs + shows errors)
+
 # Minimal local test (persists to cronus.db automatically, localhost)
 dotnet run --project src/Cronus.Server.Host
 

@@ -25,7 +25,11 @@ public sealed class WzItemCatalog : IItemCatalog
     private static readonly Regex EqpGroup = new("<imgdir name=\"([A-Za-z]+)\">", RegexOptions.Compiled);
 
     /// <summary>An item entry: a numeric imgdir. Ids are 4-8 digits across the tables.</summary>
-    private static readonly Regex ItemEntry = new("<imgdir name=\"(\\d{4,8})\">", RegexOptions.Compiled);
+    private static readonly Regex ItemEntry = new("<imgdir name=\"(\\d{4,8})\"\\s*/?>", RegexOptions.Compiled);
+
+    /// <summary>A bundle item inside an <c>Item/{tab}/{prefix}.img.xml</c> file (always 8 digits;
+    /// the tag is self-closing when the entry carries no children).</summary>
+    private static readonly Regex BundleEntry = new("<imgdir name=\"(\\d{8})\"\\s*/?>", RegexOptions.Compiled);
 
     /// <summary>Equip sub-categories in menu order, with their Japanese labels. Face and Hair are
     /// deliberately absent: they are avatar looks (see /beauty), not inventory items.</summary>
@@ -68,13 +72,18 @@ public sealed class WzItemCatalog : IItemCatalog
         string root = Path.Combine(wzRoot, "String");
         var categories = new List<ItemCategory>();
 
+        // String.wz names MANY ids the item data doesn't actually contain (unreleased/removed
+        // content — 56 equips and ~89 bundles in the v186 tree). The client crashes trying to
+        // render one, so a name alone is not enough: an id must also have real data.
+        HashSet<int> real = RealItemIds(wzRoot);
+
         string eqpPath = Path.Combine(root, "Eqp.img.xml");
         if (File.Exists(eqpPath))
         {
             string xml = File.ReadAllText(eqpPath);
             foreach ((string key, string label) in EquipGroups)
             {
-                IReadOnlyList<int> ids = IdsInEquipGroup(xml, key);
+                var ids = IdsInEquipGroup(xml, key).Where(real.Contains).ToList();
                 if (ids.Count > 0)
                 {
                     categories.Add(new ItemCategory(key, label, ids));
@@ -90,7 +99,7 @@ public sealed class WzItemCatalog : IItemCatalog
                 continue;
             }
 
-            IReadOnlyList<int> ids = SortedIds(ItemEntry.Matches(File.ReadAllText(path)));
+            var ids = SortedIds(ItemEntry.Matches(File.ReadAllText(path))).Where(real.Contains).ToList();
             if (ids.Count > 0)
             {
                 categories.Add(new ItemCategory(file, label, ids));
@@ -98,6 +107,57 @@ public sealed class WzItemCatalog : IItemCatalog
         }
 
         return categories;
+    }
+
+    /// <summary>
+    /// Every item id the game data actually defines — the client has the same files, so an id in
+    /// here is one it can render. Equips and pets are one file each
+    /// (<c>Character/**/{id:00000000}.img.xml</c>, <c>Item/Pet/{id}.img.xml</c>); bundle items are
+    /// grouped by id prefix inside <c>Item/{tab}/{prefix}.img.xml</c>.
+    /// </summary>
+    private static HashSet<int> RealItemIds(string wzRoot)
+    {
+        var ids = new HashSet<int>();
+
+        foreach (string dir in new[] { Path.Combine(wzRoot, "Character"), Path.Combine(wzRoot, "Item", "Pet") })
+        {
+            if (!Directory.Exists(dir))
+            {
+                continue;
+            }
+
+            foreach (string file in Directory.EnumerateFiles(dir, "*.img.xml", SearchOption.AllDirectories))
+            {
+                string name = Path.GetFileName(file);
+                int dot = name.IndexOf('.');
+                if (dot > 0 && int.TryParse(name.AsSpan(0, dot), out int id))
+                {
+                    ids.Add(id);
+                }
+            }
+        }
+
+        string itemRoot = Path.Combine(wzRoot, "Item");
+        if (Directory.Exists(itemRoot))
+        {
+            foreach (string file in Directory.EnumerateFiles(itemRoot, "*.img.xml", SearchOption.AllDirectories))
+            {
+                if (Path.GetDirectoryName(file)?.EndsWith("Pet", StringComparison.Ordinal) == true)
+                {
+                    continue; // already covered by the per-file pass above
+                }
+
+                foreach (Match m in BundleEntry.Matches(File.ReadAllText(file)))
+                {
+                    if (int.TryParse(m.Groups[1].ValueSpan, out int id))
+                    {
+                        ids.Add(id);
+                    }
+                }
+            }
+        }
+
+        return ids;
     }
 
     /// <summary>The item ids inside one Eqp sub-category (up to the next sub-category header).</summary>
