@@ -268,6 +268,154 @@ public class QuestTests
         Assert.DoesNotContain(hero.EquippedItems, i => i.ItemId == 1302000); // the other option not given
     }
 
+    [Fact]
+    public void WzQuestProvider_ParsesNextQuestSkillsAndQuestStates()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "cronus-quest-wz-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(root, "Quest"));
+        File.WriteAllText(Path.Combine(root, "Quest", "Check.img.xml"),
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <imgdir name="Check.img"><imgdir name="1000"><imgdir name="0"></imgdir><imgdir name="1"></imgdir></imgdir></imgdir>
+            """);
+        File.WriteAllText(Path.Combine(root, "Quest", "Act.img.xml"),
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <imgdir name="Act.img">
+              <imgdir name="1000">
+                <imgdir name="0"></imgdir>
+                <imgdir name="1">
+                  <int name="nextQuest" value="1001"/>
+                  <imgdir name="skill">
+                    <imgdir name="0">
+                      <int name="id" value="9001"/><int name="skillLevel" value="1"/><int name="masterLevel" value="1"/>
+                      <imgdir name="job"><int name="0" value="100"/><int name="1" value="110"/></imgdir>
+                    </imgdir>
+                  </imgdir>
+                  <imgdir name="quest">
+                    <imgdir name="0"><int name="id" value="2100"/><int name="state" value="2"/></imgdir>
+                  </imgdir>
+                </imgdir>
+              </imgdir>
+            </imgdir>
+            """);
+
+        QuestData? quest = new WzQuestProvider(root).GetQuest(1000);
+
+        Assert.NotNull(quest);
+        Assert.Equal(1001, quest!.EndAct!.NextQuest);
+        QuestSkillEntry skill = Assert.Single(quest.EndAct.Skills);
+        Assert.Equal(9001, skill.SkillId);
+        Assert.Equal(1, skill.SkillLevel);
+        Assert.Equal(new[] { 100, 110 }, skill.Jobs);
+        QuestPrereq stateChange = Assert.Single(quest.EndAct.QuestStates);
+        Assert.Equal(2100, stateChange.QuestId);
+        Assert.Equal(2, stateChange.State);
+    }
+
+    /// <summary>Completes a quest and captures LP_UserQuestResult (op, quest, npc, nextQuest).</summary>
+    private sealed class QuestResultClient : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _questId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opQuestResult = ServerOps.Get("LP_UserQuestResult");
+        private bool _sent;
+
+        public QuestResultClient(int characterId, int questId)
+        {
+            _characterId = characterId;
+            _questId = questId;
+        }
+
+        public TaskCompletionSource<(byte Op, int QuestId, short NextQuest)> Result { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserQuestRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteByte(2);                // complete
+                w.WriteShort((short)_questId);
+                w.WriteInt(9000021);
+                w.WriteInt(-1);                // no selection
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opQuestResult)
+            {
+                byte op = p.ReadByte();
+                int quest = p.ReadShort() & 0xFFFF;
+                p.ReadInt();                   // npc
+                short next = p.ReadShort();
+                Result.TrySetResult((op, quest, next));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CompleteQuest_ChainsNextQuest_GrantsSkills_AndSetsQuestStates()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Chained", MapId = 100000000, Level = 30, Job = 100,
+        });
+        hero.StartedQuests[1000] = string.Empty;
+        repo.Save(hero);
+
+        var quest = new QuestData
+        {
+            QuestId = 1000,
+            EndCheck = new QuestCheck { Npc = 9000021 },
+            EndAct = new QuestAct
+            {
+                NextQuest = 1001,
+                Skills = new[]
+                {
+                    new QuestSkillEntry(1000, 1, 0, new[] { 100, 110 }),   // job matches (100)
+                    new QuestSkillEntry(2000000, 1, 0, new[] { 200 }),     // job filter excludes
+                },
+                QuestStates = new[] { new QuestPrereq(2100, 2) },
+            },
+        };
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var quests = new InMemoryQuestProvider(new[] { quest });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new QuestResultClient(hero.Id, questId: 1000);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, quests: quests);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        (byte op, int questId, short nextQuest) = await client.Result.Task.WaitAsync(cts.Token);
+
+        Assert.Equal(8, op);                                   // QuestRes_Act_Success
+        Assert.Equal(1000, questId);
+        Assert.Equal(1001, nextQuest);                         // the chain the client auto-opens
+        Assert.Equal(1, hero.Skills[1000]);                    // job-matched skill granted
+        Assert.False(hero.Skills.ContainsKey(2000000));        // filtered out by job
+        Assert.True(hero.CompletedQuests.ContainsKey(2100));   // quest-state act applied
+    }
+
     /// <summary>Kills the mob once and captures the resulting quest progress update.</summary>
     private sealed class QuestHunter : PacketHandlerBase
     {

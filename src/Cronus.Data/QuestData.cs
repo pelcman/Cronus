@@ -22,6 +22,9 @@ public sealed class QuestCheck
     /// <summary>Minimum level to start (start side), 0 when absent.</summary>
     public int LevelMin { get; init; }
 
+    /// <summary>Maximum level to start (<c>lvmax</c>, start side), 0 = no cap.</summary>
+    public int LevelMax { get; init; }
+
     /// <summary>Mobs to kill (complete side), in wz order — the order of the progress string.</summary>
     public IReadOnlyList<QuestMobEntry> Mobs { get; init; } = Array.Empty<QuestMobEntry>();
 
@@ -38,6 +41,10 @@ public sealed class QuestCheck
     public IReadOnlyList<int> Jobs { get; init; } = Array.Empty<int>();
 }
 
+/// <summary>A skill granted by a quest act (<c>id</c>/<c>skillLevel</c>/<c>masterLevel</c>, with an
+/// optional job filter — grant only when the player's job is listed).</summary>
+public sealed record QuestSkillEntry(int SkillId, int SkillLevel, int MasterLevel, IReadOnlyList<int> Jobs);
+
 /// <summary>One side of a quest's <c>Act.img</c> node (0 = on start, 1 = on completion).</summary>
 public sealed class QuestAct
 {
@@ -50,6 +57,16 @@ public sealed class QuestAct
 
     /// <summary>Items given (positive count) or taken (negative count).</summary>
     public IReadOnlyList<QuestItemEntry> Items { get; init; } = Array.Empty<QuestItemEntry>();
+
+    /// <summary>The quest the client auto-opens next (<c>nextQuest</c>), 0 = none. This is how the
+    /// tutorial/beginner chains flow from one quest straight into the next.</summary>
+    public int NextQuest { get; init; }
+
+    /// <summary>Skills granted (or reset to level 0) by this act.</summary>
+    public IReadOnlyList<QuestSkillEntry> Skills { get; init; } = Array.Empty<QuestSkillEntry>();
+
+    /// <summary>Other quests whose state this act sets (<c>id</c>/<c>state</c>: 1 started, 2 completed).</summary>
+    public IReadOnlyList<QuestPrereq> QuestStates { get; init; } = Array.Empty<QuestPrereq>();
 }
 
 /// <summary>A quest definition: start/complete requirements and acts from Quest wz.</summary>
@@ -126,6 +143,7 @@ public sealed class WzQuestProvider : IQuestProvider
         {
             Npc = node.GetInt("npc"),
             LevelMin = node.GetInt("lvmin"),
+            LevelMax = node.GetInt("lvmax"),
             Mobs = ParseList(node.Child("mob"), row => new QuestMobEntry(row.GetInt("id"), row.GetInt("count"))),
             Items = ParseItems(node.Child("item")),
             Script = node.GetString("startscript", node.GetString("endscript", string.Empty)),
@@ -147,6 +165,13 @@ public sealed class WzQuestProvider : IQuestProvider
             Money = node.GetInt("money"),
             Fame = node.GetInt("pop"),
             Items = ParseItems(node.Child("item")),
+            NextQuest = node.GetInt("nextQuest"),
+            Skills = ParseList(node.Child("skill"), row => new QuestSkillEntry(
+                row.GetInt("id"),
+                row.GetInt("skillLevel"),
+                row.GetInt("masterLevel"),
+                ParseJobs(row.Child("job")))),
+            QuestStates = ParseList(node.Child("quest"), row => new QuestPrereq(row.GetInt("id"), row.GetInt("state", 2))),
         };
     }
 

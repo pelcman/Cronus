@@ -302,6 +302,22 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_NpcMove</c> relaying an NPC's idle animation / chat balloon / movement to the
+    /// whole field (ports <c>ResCNpcPool.NpcMove</c>, JMS v186 — no &gt;= 302 extra int). The
+    /// controlling client sends <c>CP_NpcMove</c> and the raw CMovePath (when present) is echoed
+    /// verbatim, exactly like mob movement.
+    /// </summary>
+    public byte[] NpcMove(int npcObjectId, byte chatIdx, byte oneTimeAction, ReadOnlySpan<byte> rawMovePath)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.NpcMove);
+        w.WriteInt(npcObjectId);
+        w.WriteByte(chatIdx);
+        w.WriteByte(oneTimeAction);
+        w.WriteBytes(rawMovePath);
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_MobEnterField</c> spawning a monster (ports <c>ResCMobPool.MobEnterField</c>
     /// + <c>CMob_Init</c>, JMS v186 path: control-normal, a 16-byte all-zero temporary-stat mask,
     /// and the pre-BB init tail — no temporary stats, MOBAPPEAR_NORMAL).

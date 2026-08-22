@@ -44,6 +44,7 @@ public static class ClientOpcode
     public const string UserAbilityUpRequest = "CP_UserAbilityUpRequest";
     public const string UserAbilityMassUpRequest = "CP_UserAbilityMassUpRequest";
     public const string MobMove = "CP_MobMove";
+    public const string NpcMove = "CP_NpcMove";
     public const string SummonedMove = "CP_SummonedMove";
     public const string SummonedAttack = "CP_SummonedAttack";
     public const string SummonedHit = "CP_SummonedHit";
@@ -154,6 +155,7 @@ public static class ServerOpcode
     public const string SkillUseResult = "LP_SkillUseResult";
     public const string BroadcastMsg = "LP_BroadcastMsg";
     public const string NpcEnterField = "LP_NpcEnterField";
+    public const string NpcMove = "LP_NpcMove";
     public const string MobEnterField = "LP_MobEnterField";
     public const string MobLeaveField = "LP_MobLeaveField";
     public const string MobChangeController = "LP_MobChangeController";

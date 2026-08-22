@@ -387,7 +387,7 @@ static INpcNameProvider? CreateNpcNameProvider()
         return null;
     }
 
-    Console.WriteLine("[npc] NPC names loaded from String data (unscripted NPCs greet by name).");
+    Console.WriteLine("[npc] NPC names loaded from String data.");
     return new WzNpcNameProvider(wzRoot);
 }
 

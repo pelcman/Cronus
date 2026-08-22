@@ -112,6 +112,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opAbilityUp;
     private readonly int _opAbilityMassUp;
     private readonly int _opMobMove;
+    private readonly int _opNpcMove;
     private readonly int _opSummonedMove;
     private readonly int _opSummonedAttack;
     private readonly int _opSummonedHit;
@@ -255,6 +256,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opAbilityUp = clientOpcodes.Get(ClientOpcode.UserAbilityUpRequest);
         _opAbilityMassUp = clientOpcodes.Get(ClientOpcode.UserAbilityMassUpRequest);
         _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
+        _opNpcMove = clientOpcodes.Get(ClientOpcode.NpcMove);
         _opSummonedMove = clientOpcodes.Get(ClientOpcode.SummonedMove);
         _opSummonedAttack = clientOpcodes.Get(ClientOpcode.SummonedAttack);
         _opSummonedHit = clientOpcodes.Get(ClientOpcode.SummonedHit);
@@ -452,6 +454,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opAbilityMassUp)
         {
             await HandleAbilityMassUpAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opNpcMove)
+        {
+            await HandleNpcMoveAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opMobMove)
         {
@@ -1141,6 +1147,34 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// int ×2 (JMS &gt;= 186), byte, int, 0xFFDDCC ×2, int.
     /// </summary>
     private const int MobMoveMidLength = 4 + 4 + 1 + 4 + 4 + 4 + 4;
+
+    /// <summary>
+    /// Handles <c>CP_NpcMove</c> — the controlling client drives NPC idle animation / random chat
+    /// balloons / movement, and the server relays it to the whole field (ports
+    /// <c>ReqCNpcPool.OnPacket</c> CP_NpcMove: echo chatIdx, one-time action, and the raw
+    /// CMovePath). Without this echo every NPC stands frozen with no idle animation.
+    /// </summary>
+    private async ValueTask HandleNpcMoveAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_NpcMove: [npcOid:4][chatIdx:1][oneTimeAction:1][movePath raw, optional]
+        int npcOid = packet.ReadInt();
+        if (packet.Remaining < 2 || _field.FindNpc(npcOid) is null)
+        {
+            return;
+        }
+
+        byte chatIdx = packet.ReadByte();
+        byte oneTimeAction = packet.ReadByte();
+        byte[] movePath = packet.ReadRemaining();
+
+        // The reference broadcasts to everyone, the mover included.
+        await _field.BroadcastAsync(_packets.NpcMove(npcOid, chatIdx, oneTimeAction, movePath)).ConfigureAwait(false);
+    }
 
     private async ValueTask HandleMobMoveAsync(MapleSession session, PacketReader packet)
     {
@@ -2964,6 +2998,19 @@ public sealed class ChannelHandler : PacketHandlerBase
                 return; // under-leveled
             }
 
+            if (start.LevelMax > 0 && c.Level > start.LevelMax)
+            {
+                return; // over-leveled (lvmax)
+            }
+
+            foreach (QuestItemEntry required in start.Items)
+            {
+                if (required.Count > 0 && CountInventoryItem(c, required.ItemId) < required.Count)
+                {
+                    return; // start-side item requirement not held
+                }
+            }
+
             foreach (QuestPrereq prereq in start.Quests)
             {
                 bool met = prereq.State == 1
@@ -3016,7 +3063,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         c.CompletedQuests[questId] = CharacterDataEncoder.FileTimeNow();
         _characters.Save(c);
 
-        await session.SendAsync(_packets.UserQuestResult(questId, npcId)).ConfigureAwait(false);
+        // nextQuest chains the client straight into the follow-up quest's dialog — the
+        // tutorial/beginner lines (1000 -> 1001 -> ...) flow through this.
+        short nextQuest = (short)(quest.EndAct?.NextQuest ?? 0);
+        await session.SendAsync(_packets.UserQuestResult(questId, npcId, nextQuest)).ConfigureAwait(false);
         await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordCompleted)).ConfigureAwait(false);
         await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectQuestComplete)).ConfigureAwait(false);
         if (_field is not null)
@@ -3138,6 +3188,42 @@ public sealed class ChannelHandler : PacketHandlerBase
         if (act.Exp > 0 && _player is not null)
         {
             await GrantExpToAsync(_player, act.Exp).ConfigureAwait(false);
+        }
+
+        // Skill grants (ports MapleQuestAction "skill"): honour the wz job filter, set the learned
+        // level, and push the record so the client updates its skill window immediately.
+        foreach (QuestSkillEntry skill in act.Skills)
+        {
+            if (skill.Jobs.Count > 0 && !skill.Jobs.Contains(c.Job))
+            {
+                continue;
+            }
+
+            c.Skills[skill.SkillId] = skill.SkillLevel;
+            await session.SendAsync(
+                _packets.ChangeSkillRecordResult(skill.SkillId, skill.SkillLevel, skill.MasterLevel)).ConfigureAwait(false);
+        }
+
+        // Other quests' state changes (ports MapleQuestAction "quest"): 1 = mark started,
+        // 2 = mark completed, anything else clears the record.
+        foreach (QuestPrereq state in act.QuestStates)
+        {
+            switch (state.State)
+            {
+                case 1:
+                    c.StartedQuests[state.QuestId] = string.Empty;
+                    await session.SendAsync(_packets.QuestRecordMessage(state.QuestId, ChannelPackets.QuestRecordStarted)).ConfigureAwait(false);
+                    break;
+                case 2:
+                    c.StartedQuests.Remove(state.QuestId);
+                    c.CompletedQuests[state.QuestId] = CharacterDataEncoder.FileTimeNow();
+                    await session.SendAsync(_packets.QuestRecordMessage(state.QuestId, ChannelPackets.QuestRecordCompleted)).ConfigureAwait(false);
+                    break;
+                default:
+                    c.StartedQuests.Remove(state.QuestId);
+                    await session.SendAsync(_packets.QuestRecordMessage(state.QuestId, ChannelPackets.QuestRecordNone)).ConfigureAwait(false);
+                    break;
+            }
         }
     }
 
@@ -6777,17 +6863,10 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         var dialog = new ChannelNpcDialog(session, _packets);
         _conversation = _npcScripts.Start(templateId, dialog, CreateScriptPlayer(session));
-        if (_conversation is null)
-        {
-            // No script: a friendly one-liner (with the NPC's real name when String data is
-            // loaded) so every NPC at least responds. The client's dialog-close answer is
-            // ignored by HandleScriptAnswer since no conversation is active.
-            string? npcName = _npcNames?.GetName(templateId);
-            string line = npcName is null
-                ? "……。"
-                : $"こんにちは、{npcName}です。今は特にお話しすることがありません。";
-            dialog.Say(templateId, line, prev: false, next: false);
-        }
+
+        // No script and no shop: send NOTHING (ports OnUserSelectNpc — TacosScriptNPC.start just
+        // returns false). The client then runs its own quest UI for the NPC; a server-sent
+        // greeting dialog here would swallow the click and break every quest-NPC conversation.
     }
 
     /// <summary>The <c>player</c> object handed to NPC / quest / portal scripts.</summary>
