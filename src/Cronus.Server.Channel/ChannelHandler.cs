@@ -2985,12 +2985,26 @@ public sealed class ChannelHandler : PacketHandlerBase
 
     private async ValueTask AcceptQuestAsync(MapleSession session, Character c, int questId, int npcId)
     {
-        if (c.StartedQuests.ContainsKey(questId) || c.CompletedQuests.ContainsKey(questId))
+        if (c.StartedQuests.ContainsKey(questId))
         {
             return;
         }
 
         QuestData? quest = _quests.GetQuest(questId);
+        if (c.CompletedQuests.TryGetValue(questId, out long completedAt))
+        {
+            // Repeatable quests (wz "interval", minutes): re-acceptable once the interval has
+            // passed since the last completion (ports MapleQuestRequirement.interval).
+            int interval = quest?.StartCheck?.IntervalMinutes ?? 0;
+            long intervalTicks = interval * 60L * 10_000_000L; // FILETIME is 100ns ticks
+            if (interval <= 0 || CharacterDataEncoder.FileTimeNow() - completedAt < intervalTicks)
+            {
+                return;
+            }
+
+            c.CompletedQuests.Remove(questId);
+        }
+
         if (quest?.StartCheck is { } start)
         {
             if (start.LevelMin > 0 && c.Level < start.LevelMin)
@@ -6652,6 +6666,21 @@ public sealed class ChannelHandler : PacketHandlerBase
 
                 _characters.Save(sc);
                 await ReplyAsync(session, $"maxed {learned} skills for job {sc.Job}").ConfigureAwait(false);
+                break;
+            }
+
+            case "questreset" when parts.Length >= 2 && int.TryParse(parts[1], out int resetQuestId):
+            {
+                // Clears one quest from both records (debug/bot use: makes quest flows re-runnable).
+                Character qc = _player!.Character;
+                bool removed = qc.StartedQuests.Remove(resetQuestId) | qc.CompletedQuests.Remove(resetQuestId);
+                _characters.Save(qc);
+                if (removed)
+                {
+                    await session.SendAsync(_packets.QuestRecordMessage(resetQuestId, ChannelPackets.QuestRecordNone)).ConfigureAwait(false);
+                }
+
+                await ReplyAsync(session, $"quest {resetQuestId} reset").ConfigureAwait(false);
                 break;
             }
 

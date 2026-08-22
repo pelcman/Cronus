@@ -25,6 +25,10 @@ public sealed class QuestCheck
     /// <summary>Maximum level to start (<c>lvmax</c>, start side), 0 = no cap.</summary>
     public int LevelMax { get; init; }
 
+    /// <summary>Repeat interval in minutes (<c>interval</c>, start side): the quest can be done
+    /// again once this long has passed since its last completion. 0 = not repeatable.</summary>
+    public int IntervalMinutes { get; init; }
+
     /// <summary>Mobs to kill (complete side), in wz order — the order of the progress string.</summary>
     public IReadOnlyList<QuestMobEntry> Mobs { get; init; } = Array.Empty<QuestMobEntry>();
 
@@ -144,6 +148,7 @@ public sealed class WzQuestProvider : IQuestProvider
             Npc = node.GetInt("npc"),
             LevelMin = node.GetInt("lvmin"),
             LevelMax = node.GetInt("lvmax"),
+            IntervalMinutes = node.GetInt("interval"),
             Mobs = ParseList(node.Child("mob"), row => new QuestMobEntry(row.GetInt("id"), row.GetInt("count"))),
             Items = ParseItems(node.Child("item")),
             Script = node.GetString("startscript", node.GetString("endscript", string.Empty)),
