@@ -71,7 +71,17 @@ public sealed class QuestAct
 
     /// <summary>Other quests whose state this act sets (<c>id</c>/<c>state</c>: 1 started, 2 completed).</summary>
     public IReadOnlyList<QuestPrereq> QuestStates { get; init; } = Array.Empty<QuestPrereq>();
+
+    /// <summary>SP grants (<c>sp</c> rows: <c>sp_value</c> + optional job filter).</summary>
+    public IReadOnlyList<QuestSpEntry> SpGrants { get; init; } = Array.Empty<QuestSpEntry>();
+
+    /// <summary>Item whose wz buff effect is applied by this act (<c>buffItemID</c>), 0 = none.</summary>
+    public int BuffItemId { get; init; }
 }
+
+/// <summary>An SP grant in a quest act; <see cref="Jobs"/> empty = any job, otherwise granted when
+/// the player's job is at or past one of the listed jobs (the reference picks the matching book).</summary>
+public sealed record QuestSpEntry(int SpValue, IReadOnlyList<int> Jobs);
 
 /// <summary>A quest definition: start/complete requirements and acts from Quest wz.</summary>
 public sealed class QuestData
@@ -177,6 +187,10 @@ public sealed class WzQuestProvider : IQuestProvider
                 row.GetInt("masterLevel"),
                 ParseJobs(row.Child("job")))),
             QuestStates = ParseList(node.Child("quest"), row => new QuestPrereq(row.GetInt("id"), row.GetInt("state", 2))),
+            SpGrants = ParseList(node.Child("sp"), row => new QuestSpEntry(
+                row.GetInt("sp_value"),
+                ParseJobs(row.Child("job")))),
+            BuffItemId = node.GetInt("buffItemID"),
         };
     }
 

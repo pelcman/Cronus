@@ -416,6 +416,92 @@ public class QuestTests
         Assert.True(hero.CompletedQuests.ContainsKey(2100));   // quest-state act applied
     }
 
+    [Fact]
+    public async Task CompleteQuest_GrantsSpWithJobFilter()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "SpGains", MapId = 100000000, Level = 30, Job = 110, Sp = 2,
+        });
+        hero.StartedQuests[1000] = string.Empty;
+        repo.Save(hero);
+
+        var quest = new QuestData
+        {
+            QuestId = 1000,
+            EndCheck = new QuestCheck { Npc = 9000021 },
+            EndAct = new QuestAct
+            {
+                SpGrants = new[]
+                {
+                    new QuestSpEntry(3, new[] { 100 }),   // job 110 >= 100 -> granted
+                    new QuestSpEntry(5, new[] { 2200 }),  // Evan-only -> filtered out
+                    new QuestSpEntry(1, Array.Empty<int>()), // unfiltered -> granted
+                },
+            },
+        };
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var quests = new InMemoryQuestProvider(new[] { quest });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new QuestResultClient(hero.Id, questId: 1000);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, quests: quests);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        (byte op, _, _) = await client.Result.Task.WaitAsync(cts.Token);
+
+        Assert.Equal(8, op);
+        Assert.Equal(2 + 3 + 1, hero.Sp);   // both matching grants applied, the Evan row skipped
+    }
+
+    [Fact]
+    public async Task IntervalQuest_ReacceptableAfterTheInterval()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Repeater", MapId = 100000000, Level = 30,
+        });
+        // Completed 2 hours ago (FILETIME ticks are 100ns).
+        hero.CompletedQuests[1000] = DateTime.UtcNow.AddHours(-2).ToFileTimeUtc();
+        repo.Save(hero);
+
+        var quest = new QuestData
+        {
+            QuestId = 1000,
+            StartCheck = new QuestCheck { Npc = 9000021, IntervalMinutes = 60 }, // repeatable hourly
+            EndCheck = new QuestCheck { Npc = 9000021 },
+        };
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var quests = new InMemoryQuestProvider(new[] { quest });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new QuestClient(hero.Id, action: 1, questId: 1000);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, quests: quests);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        (byte state, _) = await client.Record.Task.WaitAsync(cts.Token);
+
+        Assert.Equal(1, state);                                  // started again
+        Assert.True(hero.StartedQuests.ContainsKey(1000));
+        Assert.False(hero.CompletedQuests.ContainsKey(1000));    // completion cleared for the rerun
+    }
+
     /// <summary>Kills the mob once and captures the resulting quest progress update.</summary>
     private sealed class QuestHunter : PacketHandlerBase
     {

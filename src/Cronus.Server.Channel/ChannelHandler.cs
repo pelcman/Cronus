@@ -2260,12 +2260,18 @@ public sealed class ChannelHandler : PacketHandlerBase
         // Buff potions (spec/pad, speed, …) grant a temporary stat buff for spec/time ms.
         if (spec is not null)
         {
-            List<BuffStat> buffs = BuffEffect.FromSpec(spec);
-            if (buffs.Count > 0)
-            {
-                _buffs.Register(c.Id, -spec.ItemId, BuffEffect.Mask64(buffs), spec.Time); // state first
-                await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
-            }
+            await ApplyItemBuffAsync(session, spec).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Applies an item's wz buff spec as a temporary stat (registered for expiry).</summary>
+    private async ValueTask ApplyItemBuffAsync(MapleSession session, ConsumeSpec spec)
+    {
+        List<BuffStat> buffs = BuffEffect.FromSpec(spec);
+        if (buffs.Count > 0 && _player is not null)
+        {
+            _buffs.Register(_player.Character.Id, -spec.ItemId, BuffEffect.Mask64(buffs), spec.Time); // state first
+            await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
         }
     }
 
@@ -3189,6 +3195,18 @@ public sealed class ChannelHandler : PacketHandlerBase
             flags |= StatFlag.Fame;
         }
 
+        // SP grants (ports MapleQuestAction "sp"): a job filter row applies once the player's job
+        // has reached one of the listed jobs (the reference then picks that job's skill book —
+        // pre-BB non-Evan characters have a single book, which is what Character.Sp models).
+        foreach (QuestSpEntry sp in act.SpGrants)
+        {
+            if (sp.Jobs.Count == 0 || sp.Jobs.Any(j => c.Job >= j))
+            {
+                c.Sp = (short)Math.Clamp(c.Sp + sp.SpValue, 0, short.MaxValue);
+                flags |= StatFlag.Sp;
+            }
+        }
+
         if (flags != 0)
         {
             await session.SendAsync(_packets.StatChanged(c, flags)).ConfigureAwait(false);
@@ -3216,6 +3234,12 @@ public sealed class ChannelHandler : PacketHandlerBase
             c.Skills[skill.SkillId] = skill.SkillLevel;
             await session.SendAsync(
                 _packets.ChangeSkillRecordResult(skill.SkillId, skill.SkillLevel, skill.MasterLevel)).ConfigureAwait(false);
+        }
+
+        // Buff-item act (ports MapleQuestAction "buffItemID": apply the item's effect directly).
+        if (act.BuffItemId > 0 && _items.GetConsume(act.BuffItemId) is { } buffSpec)
+        {
+            await ApplyItemBuffAsync(session, buffSpec).ConfigureAwait(false);
         }
 
         // Other quests' state changes (ports MapleQuestAction "quest"): 1 = mark started,
@@ -6815,7 +6839,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
                     + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
+                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 
