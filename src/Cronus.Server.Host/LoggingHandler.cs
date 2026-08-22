@@ -11,11 +11,13 @@ public sealed class LoggingHandler : IPacketHandler
 {
     private readonly IPacketHandler _inner;
     private readonly string _tag;
+    private readonly bool _verbose;
 
-    public LoggingHandler(IPacketHandler inner, string tag)
+    public LoggingHandler(IPacketHandler inner, string tag, bool verbose = true)
     {
         _inner = inner;
         _tag = tag;
+        _verbose = verbose;
     }
 
     public ValueTask OnConnectedAsync(MapleSession session)
@@ -26,7 +28,11 @@ public sealed class LoggingHandler : IPacketHandler
 
     public ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader packet)
     {
-        Log($"recv opcode 0x{opcode:X4} ({packet.Length} bytes)");
+        if (_verbose)
+        {
+            Log($"recv opcode 0x{opcode:X4} ({packet.Length} bytes)");
+        }
+
         return _inner.OnPacketAsync(session, opcode, packet);
     }
 

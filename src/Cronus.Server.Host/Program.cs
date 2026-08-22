@@ -54,13 +54,20 @@ IReadOnlyList<IPEndPoint> channelEndpoints =
 byte[] keepAlive = new PacketWriter(
     serverOps.Get(ServerOpcode.AliveReq), config.PacketHeaderSize, config.CodePage).ToArray();
 
-// Wire diagnostics: log every packet the server sends (opcode + length + hex).
-MapleSession.DebugOnSend = (role, body) =>
+// Wire diagnostics (CRONUS_DEBUG=1): hex-dump every sent packet and log every received
+// opcode. Off by default — console I/O this heavy slows real multi-player sessions.
+bool wireDebug = Environment.GetEnvironmentVariable("CRONUS_DEBUG")?.Trim().ToLowerInvariant()
+    is "1" or "true" or "on" or "yes";
+if (wireDebug)
 {
-    ReadOnlySpan<byte> b = body.Span;
-    int opcode = b.Length >= 2 ? b[0] | (b[1] << 8) : -1;
-    Console.WriteLine($"[send:{role}] opcode 0x{opcode:X4} ({b.Length} bytes): {Convert.ToHexString(b)}");
-};
+    Console.WriteLine("[debug] wire diagnostics ON — every packet is logged (CRONUS_DEBUG).");
+    MapleSession.DebugOnSend = (role, body) =>
+    {
+        ReadOnlySpan<byte> b = body.Span;
+        int opcode = b.Length >= 2 ? b[0] | (b[1] << 8) : -1;
+        Console.WriteLine($"[send:{role}] opcode 0x{opcode:X4} ({b.Length} bytes): {Convert.ToHexString(b)}");
+    };
+}
 
 int startMap = int.TryParse(Environment.GetEnvironmentVariable("CRONUS_STARTMAP"), out int sm) ? sm : 100000000;
 Console.WriteLine($"[map] new characters start in map {startMap}");
@@ -73,7 +80,7 @@ var loginListener = new MapleListener(
             worlds: WorldRegistry.CreateDefault(channelCount),
             characters: characters, channelEndpoint: channelEndpoint, startMapId: startMap,
             channelEndpoints: channelEndpoints),
-        "login"),
+        "login", verbose: wireDebug),
     keepAlive: null); // keep-alive disabled during login diagnosis
 
 // Map data from a wz_xml tree if CRONUS_WZ points at one, else no static map data (portal-by-
@@ -126,7 +133,7 @@ for (int i = 0; i < channelCount; i++)
         config,
         () => new LoggingHandler(
             new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields),
-            $"channel{channelId}"),
+            $"channel{channelId}", verbose: wireDebug),
         keepAlive));
 }
 
