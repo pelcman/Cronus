@@ -451,9 +451,13 @@ Each milestone means adding one "working vertical slice".
         login routes character select to the channel picked at world select, and in-game
         channel change works: `CP_UserTransferChannelRequest` → persist → `LP_MigrateCommand`
         `[1][ip:4][port:2]` → the client reconnects and migrates into the target channel.
-        Simplifications: a channel switch drops party membership (the disconnect path), /find
-        and whisper only search the local channel, and hired merchants are visible on every
-        channel (the registry is shared).
+        Follow-ups landed: /find and whisper reach across channels (LR_OtherChannel = 3 with
+        the 1-based channel number), buddy presence notifies every channel, and parties
+        survive disconnects — a dropping member is marked offline on the roster (channel -2 in
+        the window), re-attaches on relog/channel switch with a window refresh + HP sync, and
+        the party dissolves only when the last member drops. The party window now shows each
+        member's own channel. Remaining quirk: hired merchants are visible on every channel
+        (the registry is shared).
 
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing

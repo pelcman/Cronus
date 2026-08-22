@@ -582,11 +582,12 @@ public sealed class ChannelHandler : PacketHandlerBase
                 _messengers.Unregister(_player.Character.Id, messenger);
             }
 
-            // Leave any party (the leader dropping disbands it — a documented simplification).
+            // The party survives the drop (relog / channel switch re-attaches); the member just
+            // shows offline. When the last member drops, the party dissolves.
             Party? party = _parties.GetForCharacter(_player.Character.Id);
             if (party is not null)
             {
-                await LeavePartyAsync(party, _player, byDisconnect: true).ConfigureAwait(false);
+                await PartyMemberWentOfflineAsync(party, _player.Character.Id).ConfigureAwait(false);
             }
 
             // Their summons and door vanish with them.
@@ -649,7 +650,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        var player = new FieldPlayer(character, session);
+        var player = new FieldPlayer(character, session) { Channel = _channelId };
         _player = player;
         session.UserData = character;
 
@@ -704,6 +705,19 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         await NotifyBuddiesOfPresenceAsync(character.Id, _channelId).ConfigureAwait(false); // "came online"
+
+        // Rejoining a surviving party (relog / channel switch) re-attaches the live presence
+        // and refreshes every member's window.
+        if (_parties.GetForCharacter(character.Id) is { } rejoined && rejoined.Reattach(player))
+        {
+            byte[] refresh = _packets.PartyRefresh(rejoined.Id, rejoined.ViewSlots(), rejoined.LeaderId, PartyChannel, loading: false);
+            foreach (FieldPlayer member in rejoined.Members)
+            {
+                await TrySendAsync(member, refresh).ConfigureAwait(false);
+            }
+
+            await SyncPartyHpAsync(rejoined, player).ConfigureAwait(false);
+        }
 
         // Guild window data + presence; a guild that no longer exists is scrubbed off the character.
         if (character.GuildId > 0)
@@ -5926,7 +5940,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         }
 
         _parties.Register(myId, target);
-        byte[] joinPacket = _packets.PartyJoin(target.Id, _player.Character.Name, target.ViewSlots(PartyChannel), target.LeaderId, PartyChannel);
+        byte[] joinPacket = _packets.PartyJoin(target.Id, _player.Character.Name, target.ViewSlots(), target.LeaderId, PartyChannel);
         await PartyBroadcastAsync(target, joinPacket).ConfigureAwait(false);
         await SyncPartyHpAsync(target, _player).ConfigureAwait(false);
     }
@@ -6045,7 +6059,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
                 party.Remove(kickId);
                 _parties.Unregister(kickId);
-                byte[] expel = _packets.PartyDepart(party.Id, kickId, kicked.Character.Name, PartyDepart.Expel, party.ViewSlots(PartyChannel), party.LeaderId, PartyChannel);
+                byte[] expel = _packets.PartyDepart(party.Id, kickId, kicked.Character.Name, PartyDepart.Expel, party.ViewSlots(), party.LeaderId, PartyChannel);
                 await PartyBroadcastAsync(party, expel).ConfigureAwait(false);
                 await TrySendAsync(kicked, expel).ConfigureAwait(false);
                 return;
@@ -6080,7 +6094,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         if (party.IsLeader(leaverId))
         {
             // Disband: notify all members while they're still listed, then drop the party.
-            byte[] disband = _packets.PartyDepart(party.Id, leaverId, leaverName, PartyDepart.Disband, party.ViewSlots(PartyChannel), party.LeaderId, PartyChannel);
+            byte[] disband = _packets.PartyDepart(party.Id, leaverId, leaverName, PartyDepart.Disband, party.ViewSlots(), party.LeaderId, PartyChannel);
             await PartyBroadcastAsync(party, disband).ConfigureAwait(false);
             _parties.Disband(party);
             return;
@@ -6088,7 +6102,7 @@ public sealed class ChannelHandler : PacketHandlerBase
 
         party.Remove(leaverId);
         _parties.Unregister(leaverId);
-        byte[] leave = _packets.PartyDepart(party.Id, leaverId, leaverName, PartyDepart.Leave, party.ViewSlots(PartyChannel), party.LeaderId, PartyChannel);
+        byte[] leave = _packets.PartyDepart(party.Id, leaverId, leaverName, PartyDepart.Leave, party.ViewSlots(), party.LeaderId, PartyChannel);
         await PartyBroadcastAsync(party, leave).ConfigureAwait(false); // remaining members
         if (!byDisconnect)
         {
@@ -6128,6 +6142,30 @@ public sealed class ChannelHandler : PacketHandlerBase
     }
 
     /// <summary>
+    /// Marks a disconnecting member offline: the party survives (they can come back on any
+    /// channel) and the others see them grey out. The last member dropping dissolves the party.
+    /// </summary>
+    private async ValueTask PartyMemberWentOfflineAsync(Party party, int characterId)
+    {
+        if (!party.MarkOffline(characterId))
+        {
+            return;
+        }
+
+        if (party.AllOffline)
+        {
+            _parties.Disband(party);
+            return;
+        }
+
+        byte[] refresh = _packets.PartyRefresh(party.Id, party.ViewSlots(), party.LeaderId, PartyChannel, loading: false);
+        foreach (FieldPlayer member in party.Members)
+        {
+            await TrySendAsync(member, refresh).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Rebroadcasts the party window to all members so a member's changed map or level shows up
     /// (the silent-update op; ports the <c>SILENT_UPDATE</c> path). No-op outside a party.
     /// </summary>
@@ -6139,7 +6177,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             return;
         }
 
-        byte[] refresh = _packets.PartyRefresh(party.Id, party.ViewSlots(PartyChannel), party.LeaderId, PartyChannel, loading: false);
+        byte[] refresh = _packets.PartyRefresh(party.Id, party.ViewSlots(), party.LeaderId, PartyChannel, loading: false);
         await PartyBroadcastAsync(party, refresh).ConfigureAwait(false);
     }
 

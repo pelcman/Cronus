@@ -204,6 +204,37 @@ public class PartyTests
     }
 
     [Fact]
+    public void Party_OfflineMember_SurvivesAndReattaches()
+    {
+        var leader = Player(1, "Lead");
+        var party = new Party(1, leader);
+        party.TryAdd(Player(2, "B"));
+
+        // The leader drops: still on the roster, hidden from fan-out, shown offline.
+        Assert.True(party.MarkOffline(1));
+        Assert.False(party.MarkOffline(3)); // not a member
+        Assert.Equal(2, party.Count);                       // roster keeps them
+        Assert.Single(party.Members);                       // fan-out skips them
+        Assert.False(party.AllOffline);
+        List<PartyMemberView> slots = party.ViewSlots();
+        Assert.False(slots[0].Online);                      // leader greyed out
+        Assert.True(slots[1].Online);
+
+        // They come back (a new presence, e.g. on another channel).
+        var returned = Player(1, "Lead");
+        returned.Channel = 1;
+        Assert.True(party.Reattach(returned));
+        Assert.Equal(2, party.Members.Count);
+        Assert.True(party.ViewSlots()[0].Online);
+        Assert.Equal(2, party.ViewSlots()[0].Channel);      // 1-based channel
+
+        // Everyone gone -> the party dissolves.
+        Assert.True(party.MarkOffline(1));
+        Assert.True(party.MarkOffline(2));
+        Assert.True(party.AllOffline);
+    }
+
+    [Fact]
     public void Party_AddRemove_TracksMembership()
     {
         var party = new Party(1, Player(1, "A"));

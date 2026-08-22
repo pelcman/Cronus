@@ -43,6 +43,7 @@ public sealed class Party
     public const int Capacity = 6;
 
     private readonly List<FieldPlayer> _members = new();
+    private readonly HashSet<int> _offline = new();
     private readonly object _gate = new();
 
     public Party(int id, FieldPlayer leader)
@@ -69,13 +70,64 @@ public sealed class Party
 
     public bool IsFull => Count >= Capacity;
 
+    /// <summary>The members currently online — every packet fan-out uses this view.</summary>
     public IReadOnlyList<FieldPlayer> Members
     {
         get
         {
             lock (_gate)
             {
+                return _members.Where(m => !_offline.Contains(m.Character.Id)).ToList();
+            }
+        }
+    }
+
+    /// <summary>Every member on the roster, online or not (offline entries' sessions are stale).</summary>
+    public IReadOnlyList<FieldPlayer> RosterPlayers
+    {
+        get
+        {
+            lock (_gate)
+            {
                 return _members.ToList();
+            }
+        }
+    }
+
+    /// <summary>Marks a member offline (disconnect / channel switch); the roster keeps them.</summary>
+    public bool MarkOffline(int characterId)
+    {
+        lock (_gate)
+        {
+            return _members.Any(m => m.Character.Id == characterId) && _offline.Add(characterId);
+        }
+    }
+
+    /// <summary>Re-attaches a returning member's live presence; false if not on the roster.</summary>
+    public bool Reattach(FieldPlayer player)
+    {
+        lock (_gate)
+        {
+            int i = _members.FindIndex(m => m.Character.Id == player.Character.Id);
+            if (i < 0)
+            {
+                return false;
+            }
+
+            _members[i] = player;
+            _offline.Remove(player.Character.Id);
+            return true;
+        }
+    }
+
+    /// <summary>True when nobody is left online (the party dissolves).</summary>
+    public bool AllOffline
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _members.All(m => _offline.Contains(m.Character.Id));
             }
         }
     }
@@ -127,6 +179,7 @@ public sealed class Party
             }
 
             _members.RemoveAt(i);
+            _offline.Remove(characterId);
             return true;
         }
     }
@@ -148,15 +201,20 @@ public sealed class Party
 
     /// <summary>
     /// Builds the 6-slot member view (real members first, then empty padding) that the party-window
-    /// encoder consumes. <paramref name="channel"/> is the 1-based channel all online members are on.
+    /// encoder consumes. Each online member carries their own 1-based channel; offline roster
+    /// members are shown offline (the encoder writes channel -2 for them).
     /// </summary>
-    public List<PartyMemberView> ViewSlots(int channel)
+    public List<PartyMemberView> ViewSlots()
     {
         var slots = new List<PartyMemberView>(Capacity);
-        foreach (FieldPlayer m in Members)
+        lock (_gate)
         {
-            var c = m.Character;
-            slots.Add(new PartyMemberView(c.Id, c.Name, c.Job, c.Level, c.MapId, channel, Online: true));
+            foreach (FieldPlayer m in _members)
+            {
+                var c = m.Character;
+                bool online = !_offline.Contains(c.Id);
+                slots.Add(new PartyMemberView(c.Id, c.Name, c.Job, c.Level, c.MapId, online ? m.Channel + 1 : 0, online));
+            }
         }
 
         while (slots.Count < Capacity)
@@ -228,13 +286,13 @@ public sealed class PartyRegistry
         }
     }
 
-    /// <summary>Disbands a party: drops it and unbinds every member.</summary>
+    /// <summary>Disbands a party: drops it and unbinds every roster member (offline included).</summary>
     public void Disband(Party party)
     {
         lock (_gate)
         {
             _byId.Remove(party.Id);
-            foreach (FieldPlayer m in party.Members)
+            foreach (FieldPlayer m in party.RosterPlayers)
             {
                 if (_byCharacter.TryGetValue(m.Character.Id, out Party? p) && p == party)
                 {

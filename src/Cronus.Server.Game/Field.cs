@@ -236,6 +236,9 @@ public sealed class FieldPlayer
 
     public byte Stance { get; set; }
 
+    /// <summary>The channel this player is on (0-based), stamped at migrate-in.</summary>
+    public int Channel { get; set; }
+
     /// <summary>
     /// <see cref="Environment.TickCount64"/> of the player's last move/attack. Natural HP/MP
     /// regen only kicks in after they've been idle for a bit (see <c>PlayerRegenService</c>).
