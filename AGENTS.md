@@ -757,27 +757,30 @@ restart).
 **A. Verification & stability (highest value per the final goal)**
 - [ ] Live-client pass over the newest features (quest chains/acts, reactor drops, /gender,
       SP grants) — bot-verified only so far; a human client run is the gate.
-- [ ] Long-session soak test: hours-long run watching memory, disconnect cleanup, respawn
-      services, SQLite growth.
+- [~] Long-session soak test: a 30-cycle bot-suite loop with memory sampling ran 2026-08-22
+      (see commit notes); an hours-long human-attended run is still open.
 - [ ] Golden vectors: capture handshake→login→entry real bytes from the Java build with
       RirePE and pin them (round-trip + oracle-source parity only today).
 
 **B. Deployment rehearsal (final goal: friends on a fixed public IP)**
-- [ ] LAN rehearsal: `CRONUS_HOST=<LAN IP>`, second PC with a patched client, full play.
+- [ ] LAN rehearsal: `CRONUS_HOST=<LAN IP>`, second PC with a patched client, full play —
+      checklist: docs/DEPLOY_REHEARSAL.md.
 - [ ] Public-IP rehearsal: port forwarding (8484 / 7575.. / cash shop), `CRONUS_HOST`
       public, external tester; validate SERVER_SETUP.md end to end and fix doc gaps found.
-- [ ] Docker path re-check after the SQLite/.env changes (compose bundles MySQL; the SQLite
-      default may simplify it to a single container + volume).
-- [ ] Backup/restore guide for `cronus.db` (copy while stopped; document).
+- [x] Docker path updated for SQLite/.env: single-container default with a `cronus-save`
+      volume, MySQL behind a compose profile, cash-shop port published. (No Docker engine
+      on the dev machine — structurally reviewed, container build still to be exercised.)
+- [x] Backup/restore/reset guide for `cronus.db` (SERVER_SETUP.md).
 
 **C. Quest / NPC completeness (second wave)**
 - [ ] Quest-script coverage: 448 quests name a start/endscript in wz; the data-driven
-      fallback accepts/completes them silently. Port dialogs for the high-traffic chains
-      (job advancement lines first).
+      fallback accepts/completes them silently. NOTE: the actual Nashorn scripts are not in
+      the reference repo, so this is content AUTHORING (no oracle) — write dialogs for the
+      high-traffic chains only, and only when the silent fallback proves confusing in play.
 - [ ] `normalAutoStart` behaviour confirmed on the live client (304 quests).
-- [ ] Exclusive.img (mutually-exclusive quest groups) — small, data-driven.
-- [ ] Medal-item title message on medal grants (cosmetic dropMessage).
-- Deferred with cause: `infoNumber`/`infoex` acts (no-op upstream), owl-of-Minerva search
+- Deferred with cause: Exclusive.img (never read by the reference), the medal-title
+  dropMessage (client already shows the item gain; medal names in this dump are partly
+  untranslated), `infoNumber`/`infoex` acts (no-op upstream), owl-of-Minerva search
   results and parcel delivery (ACK-only stubs upstream).
 
 **D. Systems parked earlier (unchanged)**
@@ -790,7 +793,8 @@ restart).
 - [ ] Split `Cronus.Server.Channel` into a channel (session/network) layer and a game
       (world logic) layer, per the Maple2 alignment; `ChannelHandler` is ~7k lines.
 - [ ] Structured logging (Serilog) to replace Console writes; keep CRONUS_DEBUG hex taps.
-- [ ] Password hashing (BCrypt) before any public exposure; auto-register stays for the
+- [x] Password hashing (BCrypt, work factor 10) with transparent in-place upgrade of
+      legacy plaintext rows on their next successful login; auto-register stays for the
       in-group use case.
 - [ ] EF Core migrations to replace EnsureCreated+additive-sync once the schema settles.
 - [ ] `Span<byte>`-centric packet APIs to cut allocations (perf, not correctness).
