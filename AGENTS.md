@@ -759,8 +759,12 @@ restart).
       SP grants) — bot-verified only so far; a human client run is the gate.
 - [~] Long-session soak test: a 30-cycle bot-suite loop with memory sampling ran 2026-08-22
       (see commit notes); an hours-long human-attended run is still open.
-- [ ] Golden vectors: capture handshake→login→entry real bytes from the Java build with
-      RirePE and pin them (round-trip + oracle-source parity only today).
+- [x] Golden vectors v1 (2026-08-22): ran the live Java build (JDK 21, local MySQL) and
+      diffed a full login→create→enter capture against Cronus via the bot's
+      CRONUS_BOT_CAPTURE mode — 10 opcodes byte-identical, the 6691-byte Java entry blob
+      parses to zero leftover with our schema, FamilyInfoResult fixed and
+      FamilyPrivilegeList added from the findings. Still open: extend the captured flow
+      (combat, shops, quests) and pin the vectors as regression tests.
 
 **B. Deployment rehearsal (final goal: friends on a fixed public IP)**
 - [ ] LAN rehearsal: `CRONUS_HOST=<LAN IP>`, second PC with a patched client, full play —
