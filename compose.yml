@@ -3,8 +3,8 @@
 #   docker compose up --build
 #
 # The client (via EmuClient) connects to 127.0.0.1:8484. On character select the server
-# hands the client to the channel at 127.0.0.1:7575 — both are published below, so a client
-# on the same host reaches them through the port mappings.
+# hands the client to the picked channel at 127.0.0.1:7575/7576 (CRONUS_CHANNELS, default 2)
+# — all published below, so a client on the same host reaches them through the mappings.
 
 services:
   db:
@@ -35,6 +35,7 @@ services:
     ports:
       - "8484:8484"
       - "7575:7575"
+      - "7576:7576"
     volumes:
       - ./scripts:/data/scripts:ro
       # - /path/to/wz_xml:/data/wz:ro
