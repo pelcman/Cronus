@@ -117,6 +117,139 @@ public class ChannelTransferTests
         Assert.Equal((short)7576, port);
     }
 
+    /// <summary>Sits in the map and flags a received whisper.</summary>
+    private sealed class Listener : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opWhisper = ServerOps.Get(ServerOpcode.Whisper);
+
+        public Listener(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<(string From, int Channel, string Message)> Received { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+            => await session.SendAsync(MigrateIn(session, _characterId));
+
+        public override ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField)
+            {
+                Ready.TrySetResult();
+            }
+            else if (opcode == _opWhisper)
+            {
+                int flags = p.ReadByte();
+                if ((flags & 0x10) != 0) // WP_Receive
+                {
+                    string from = p.ReadString();
+                    int channel = p.ReadByte();
+                    p.ReadByte(); // admin flag
+                    Received.TrySetResult((from, channel, p.ReadString()));
+                }
+            }
+
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>Migrates in, /finds then whispers a name; records both answers.</summary>
+    private sealed class Caller : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly string _targetName;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opWhisper = ServerOps.Get(ServerOpcode.Whisper);
+        private bool _sent;
+
+        public Caller(int characterId, string targetName)
+        {
+            _characterId = characterId;
+            _targetName = targetName;
+        }
+
+        public TaskCompletionSource<(byte LocationType, int Payload)> Location { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+            => await session.SendAsync(MigrateIn(session, _characterId));
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var find = new PacketWriter(ClientOps.Get(ClientOpcode.Whisper), session.Config.PacketHeaderSize, session.Config.CodePage);
+                find.WriteByte(0x01 | 0x04); // WP_Location | WP_Request
+                find.WriteString(_targetName);
+                await session.SendAsync(find.ToArray());
+
+                var whisper = new PacketWriter(ClientOps.Get(ClientOpcode.Whisper), session.Config.PacketHeaderSize, session.Config.CodePage);
+                whisper.WriteByte(0x02 | 0x04); // WP_Whisper | WP_Request
+                whisper.WriteString(_targetName);
+                whisper.WriteString("hello across channels");
+                await session.SendAsync(whisper.ToArray());
+            }
+            else if (opcode == _opWhisper)
+            {
+                int flags = p.ReadByte();
+                if ((flags & 0x08) != 0 && (flags & 0x01) != 0) // WP_Result | WP_Location
+                {
+                    p.ReadString(); // target name
+                    Location.TrySetResult((p.ReadByte(), p.ReadInt()));
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WhisperAndFind_ReachAcrossChannels()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character alice = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Alice", MapId = 100000000 });
+        Character bob = repo.Create(new Character { AccountId = 2, WorldId = 0, Name = "Bob", MapId = 100000000 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields0 = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var fields1 = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var world = new[] { fields0, fields1 };
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        // Bob sits on channel 1.
+        var bobClient = new Listener(bob.Id);
+        var bobHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields1, channelId: 1, worldFields: world);
+        var b2s = new Pipe();
+        var s2b = new Pipe();
+        await using var bServer = new MapleSession(b2s.Reader, s2b.Writer, ServerConfig.Jms186, SessionRole.Server, bobHandler);
+        await using var bClient = new MapleSession(s2b.Reader, b2s.Writer, ServerConfig.Jms186, SessionRole.Client, bobClient);
+        _ = bServer.RunAsync(cts.Token);
+        _ = bClient.RunAsync(cts.Token);
+        await bobClient.Ready.Task.WaitAsync(cts.Token);
+
+        // Alice, on channel 0, finds and whispers him.
+        var aliceClient = new Caller(alice.Id, "Bob");
+        var aliceHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields0, channelId: 0, worldFields: world);
+        var a2s = new Pipe();
+        var s2a = new Pipe();
+        await using var aServer = new MapleSession(a2s.Reader, s2a.Writer, ServerConfig.Jms186, SessionRole.Server, aliceHandler);
+        await using var aClient = new MapleSession(s2a.Reader, a2s.Writer, ServerConfig.Jms186, SessionRole.Client, aliceClient);
+        _ = aServer.RunAsync(cts.Token);
+        _ = aClient.RunAsync(cts.Token);
+
+        (byte locationType, int payload) = await aliceClient.Location.Task.WaitAsync(cts.Token);
+        Assert.Equal(3, locationType); // LR_OtherChannel
+        Assert.Equal(2, payload);      // 1-based channel number
+
+        (string from, int channel, string message) = await bobClient.Received.Task.WaitAsync(cts.Token);
+        Assert.Equal("Alice", from);
+        Assert.Equal(0, channel); // sender's wire channel id
+        Assert.Equal("hello across channels", message);
+    }
+
     [Fact]
     public async Task TransferChannel_SingleChannel_Declines()
     {

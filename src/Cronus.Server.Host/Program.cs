@@ -125,7 +125,7 @@ for (int i = 0; i < channelCount; i++)
         new IPEndPoint(IPAddress.Any, channelPort + i),
         config,
         () => new LoggingHandler(
-            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints),
+            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields),
             $"channel{channelId}"),
         keepAlive));
 }

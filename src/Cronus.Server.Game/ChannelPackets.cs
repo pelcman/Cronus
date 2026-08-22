@@ -2551,6 +2551,20 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>"/find" answer for a target on another channel (ports the
+    /// <c>LR_OtherChannel</c> branch; the payload is the 1-based channel number).</summary>
+    public byte[] WhisperLocationOtherChannel(string targetName, int channelNumber)
+    {
+        const byte LrOtherChannel = 3;
+
+        PacketWriter w = NewPacket(ServerOpcode.Whisper);
+        w.WriteByte((byte)(WpResult | WpLocation));
+        w.WriteString(targetName);
+        w.WriteByte(LrOtherChannel);
+        w.WriteInt(channelNumber);
+        return w.ToArray();
+    }
+
     // LP_Messenger sub-operations (ports OpsMessenger). The first byte selects the shape.
     private const byte MsmpEnter = 0;
     private const byte MsmpSelfEnterResult = 1;

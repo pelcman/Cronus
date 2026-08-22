@@ -53,6 +53,9 @@ public sealed class ChannelHandler : PacketHandlerBase
 
     /// <summary>Every channel's advertised endpoint (index = channel id); null = single channel.</summary>
     private readonly IReadOnlyList<System.Net.IPEndPoint>? _channelEndpoints;
+
+    /// <summary>Every channel's field registry (index = channel id) for cross-channel lookups.</summary>
+    private readonly IReadOnlyList<FieldRegistry>? _worldFields;
     private readonly int _opReactorHit;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
@@ -165,7 +168,8 @@ public sealed class ChannelHandler : PacketHandlerBase
         PortalScriptEngine? reactorScripts = null,
         INpcNameProvider? npcNames = null,
         IStyleProvider? styles = null,
-        IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null)
+        IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
+        IReadOnlyList<FieldRegistry>? worldFields = null)
     {
         _packets = new ChannelPackets(serverOpcodes, config);
         _characters = characters;
@@ -190,6 +194,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _npcNames = npcNames;
         _styles = styles;
         _channelEndpoints = channelEndpoints;
+        _worldFields = worldFields;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -698,7 +703,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             await session.SendAsync(_packets.EmployeeEnterField(merchant)).ConfigureAwait(false);
         }
 
-        await NotifyBuddiesOfPresenceAsync(character.Id, channel: 0).ConfigureAwait(false); // "came online"
+        await NotifyBuddiesOfPresenceAsync(character.Id, _channelId).ConfigureAwait(false); // "came online"
 
         // Guild window data + presence; a guild that no longer exists is scrubbed off the character.
         if (character.GuildId > 0)
@@ -4538,18 +4543,50 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// <summary>Tells everyone who lists this player as a buddy that their channel changed.</summary>
     private async ValueTask NotifyBuddiesOfPresenceAsync(int characterId, int channel)
     {
-        foreach (Field field in _fields.Fields)
+        foreach ((FieldRegistry fields, _) in WorldChannels())
         {
-            foreach (FieldPlayer player in field.Players)
+            foreach (Field field in fields.Fields)
             {
-                if (player.Character.Id != characterId
-                    && player.Character.Buddies.TryGetValue(characterId, out BuddyEntry? entry)
-                    && !entry.Hidden)
+                foreach (FieldPlayer player in field.Players)
                 {
-                    await TrySendAsync(player, _packets.BuddyChannelUpdate(characterId, channel)).ConfigureAwait(false);
+                    if (player.Character.Id != characterId
+                        && player.Character.Buddies.TryGetValue(characterId, out BuddyEntry? entry)
+                        && !entry.Hidden)
+                    {
+                        await TrySendAsync(player, _packets.BuddyChannelUpdate(characterId, channel)).ConfigureAwait(false);
+                    }
                 }
             }
         }
+    }
+
+    /// <summary>Every channel's fields when the world is known, else just this channel's.</summary>
+    private IEnumerable<(FieldRegistry Fields, int ChannelId)> WorldChannels()
+    {
+        if (_worldFields is null || _worldFields.Count == 0)
+        {
+            yield return (_fields, _channelId);
+            yield break;
+        }
+
+        for (int i = 0; i < _worldFields.Count; i++)
+        {
+            yield return (_worldFields[i], i);
+        }
+    }
+
+    /// <summary>Finds a player by name on any channel; returns them and their channel id.</summary>
+    private (FieldPlayer Player, int ChannelId)? FindWorldPlayerByName(string name)
+    {
+        foreach ((FieldRegistry fields, int channelId) in WorldChannels())
+        {
+            if (fields.FindPlayerByName(name) is { } player)
+            {
+                return (player, channelId);
+            }
+        }
+
+        return null;
     }
 
     // CP_GuildRequest ops (the reference GuildHandler's raw switch values).
@@ -5723,10 +5760,15 @@ public sealed class ChannelHandler : PacketHandlerBase
         if (op == WpLocationOp)
         {
             string targetName = packet.ReadString();
-            FieldPlayer? target = _fields.FindPlayerByName(targetName);
-            await session.SendAsync(
-                _packets.WhisperLocationResult(targetName, target?.Character.MapId ?? 0, target is not null))
-                .ConfigureAwait(false);
+            (FieldPlayer Player, int ChannelId)? found = FindWorldPlayerByName(targetName);
+            byte[] answer = found switch
+            {
+                null => _packets.WhisperLocationResult(targetName, 0, online: false),
+                var (target, channel) when channel == _channelId =>
+                    _packets.WhisperLocationResult(targetName, target.Character.MapId, online: true),
+                var (_, channel) => _packets.WhisperLocationOtherChannel(targetName, channel + 1),
+            };
+            await session.SendAsync(answer).ConfigureAwait(false);
             return;
         }
 
@@ -5734,7 +5776,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             string targetName = packet.ReadString();
             string message = packet.ReadString();
-            FieldPlayer? target = _fields.FindPlayerByName(targetName);
+            FieldPlayer? target = FindWorldPlayerByName(targetName)?.Player;
 
             // Ack the sender: was it delivered?
             await session.SendAsync(_packets.WhisperResult(targetName, target is not null))
