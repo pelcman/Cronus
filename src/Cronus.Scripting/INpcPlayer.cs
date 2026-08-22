@@ -121,4 +121,10 @@ public interface INpcPlayer
 
     /// <summary>Opens the player's account storage (the trunk).</summary>
     void openStorage();
+
+    /// <summary>The buddy list's current maximum size.</summary>
+    int getBuddyCapacity();
+
+    /// <summary>Grows the buddy list by <paramref name="amount"/> slots (capped at 100).</summary>
+    void gainBuddyCapacity(int amount);
 }

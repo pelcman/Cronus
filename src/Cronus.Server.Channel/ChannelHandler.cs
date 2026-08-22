@@ -4006,8 +4006,6 @@ public sealed class ChannelHandler : PacketHandlerBase
     private const byte FriendReqAccept = 2;
     private const byte FriendReqDelete = 3;
 
-    /// <summary>Max buddy-list size (the pre-BB default capacity).</summary>
-    private const int BuddyCapacity = 20;
 
     /// <summary>
     /// Handles <c>CP_FriendRequest</c> — the buddy list (ports <c>ReqSub_FriendRequest</c>): add a
@@ -4039,7 +4037,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                     tag = ChannelPackets.DefaultBuddyTag;
                 }
 
-                if (c.Buddies.Count >= BuddyCapacity)
+                if (c.Buddies.Count >= c.BuddyCapacity)
                 {
                     await session.SendAsync(_packets.BuddyMessage(ChannelPackets.FriendSetFullMe)).ConfigureAwait(false);
                     return;
@@ -4059,7 +4057,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                     return;
                 }
 
-                if (t.Buddies.Count >= BuddyCapacity)
+                if (t.Buddies.Count >= t.BuddyCapacity)
                 {
                     await session.SendAsync(_packets.BuddyMessage(ChannelPackets.FriendSetFullOther)).ConfigureAwait(false);
                     return;

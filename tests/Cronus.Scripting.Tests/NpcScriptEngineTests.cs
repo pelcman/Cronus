@@ -199,6 +199,9 @@ public class NpcScriptEngineTests
         public int Hair = 30030;
         public int Face = 20000;
         public int Skin;
+        public int BuddyCapacity = 20;
+        public int getBuddyCapacity() => BuddyCapacity;
+        public void gainBuddyCapacity(int amount) => BuddyCapacity = Math.Clamp(BuddyCapacity + amount, 20, 100);
         public int getHair() => Hair;
         public int getFace() => Face;
         public int getSkin() => Skin;

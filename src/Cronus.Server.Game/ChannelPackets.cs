@@ -738,6 +738,19 @@ public sealed class ChannelPackets
     public const byte FriendSetUnknownUser = 15;
     public const byte FriendDeleteDone = 18;
     public const byte FriendNotify = 20;
+    public const byte FriendIncMaxCountDone = 21;
+
+    /// <summary>
+    /// Builds <c>LP_FriendResult</c> FriendRes_IncMaxCount_Done — the buddy list grew to
+    /// <paramref name="capacity"/> slots (ports the <c>FriendRes_IncMaxCount_Done</c> body).
+    /// </summary>
+    public byte[] BuddyCapacityChanged(int capacity)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FriendResult);
+        w.WriteByte(FriendIncMaxCountDone);
+        w.WriteByte((byte)capacity);
+        return w.ToArray();
+    }
 
     /// <summary>One buddy row for the wire: id, entry data, and the channel (-1 = offline, 0-based online).</summary>
     public readonly record struct BuddyRow(int CharacterId, string Name, string Tag, bool Hidden, int Channel);

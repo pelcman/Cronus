@@ -145,4 +145,16 @@ public class BuddyTests
         Assert.False(bob.Buddies[alice.Id].Hidden);  // Bob's pending entry became visible on accept
         Assert.Equal("Alice", bob.Buddies[alice.Id].Name);
     }
+
+    [Fact]
+    public void BuddyCapacityChanged_HasIncMaxCountLayout()
+    {
+        var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
+
+        var r = new PacketReader(packets.BuddyCapacityChanged(25), ServerConfig.Jms186.CodePage);
+        Assert.Equal(ServerOps.Get(ServerOpcode.FriendResult), r.ReadHeader());
+        Assert.Equal(ChannelPackets.FriendIncMaxCountDone, r.ReadByte()); // 21
+        Assert.Equal(25, r.ReadByte());
+        Assert.Equal(0, r.Remaining);
+    }
 }

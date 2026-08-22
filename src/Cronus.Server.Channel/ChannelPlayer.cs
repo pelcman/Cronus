@@ -258,6 +258,15 @@ public sealed class ChannelPlayer : INpcPlayer
     public void openStorage()
         => _openStorage?.Invoke().AsTask().GetAwaiter().GetResult();
 
+    public int getBuddyCapacity() => _character.BuddyCapacity;
+
+    public void gainBuddyCapacity(int amount)
+    {
+        _character.BuddyCapacity = (short)Math.Clamp(_character.BuddyCapacity + amount, 20, 100);
+        _characters.Save(_character);
+        Send(_packets.BuddyCapacityChanged(_character.BuddyCapacity));
+    }
+
     private void Send(byte[] packet)
         => _session.SendAsync(packet).AsTask().GetAwaiter().GetResult();
 }

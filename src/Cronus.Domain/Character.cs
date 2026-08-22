@@ -73,6 +73,9 @@ public sealed class Character
     /// <summary>Buddy list: friend character id → entry (persisted as a JSON column).</summary>
     public Dictionary<int, BuddyEntry> Buddies { get; set; } = new();
 
+    /// <summary>Buddy list capacity (pre-BB default 20, expandable to 100 via NPC).</summary>
+    public short BuddyCapacity { get; set; } = 20;
+
     /// <summary>Skill macros: slot index (0-4) → macro (persisted as a JSON column).</summary>
     public Dictionary<int, SkillMacroEntry> SkillMacros { get; set; } = new();
 

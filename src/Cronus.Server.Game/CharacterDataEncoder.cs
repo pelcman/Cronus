@@ -14,7 +14,6 @@ namespace Cronus.Server.Game;
 /// </summary>
 public static class CharacterDataEncoder
 {
-    private const byte BuddyListCapacity = 20;
     private const int EmptyTeleportRock = 999999999;
     private const byte DefaultInventorySlots = 24;
 
@@ -32,7 +31,7 @@ public static class CharacterDataEncoder
 
         // [0x01] character stat + buddy capacity + bless of fairy
         CharacterEncoder.WriteStat(w, c);
-        w.WriteByte(BuddyListCapacity);
+        w.WriteByte((byte)c.BuddyCapacity);
         w.WriteByte(0);                   // bless of fairy: none
 
         // [0x02] money + pachinko
