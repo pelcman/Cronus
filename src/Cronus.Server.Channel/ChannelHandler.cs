@@ -6624,6 +6624,27 @@ public sealed class ChannelHandler : PacketHandlerBase
                 break;
             }
 
+            case "drop" when parts.Length >= 2 && int.TryParse(parts[1], out int dropItemId) && _field is not null:
+            {
+                // Spawns a real ground drop at the player's feet (item id, or 0 for a meso pile),
+                // so the full drop → pickup path can be exercised. Handy for client/bot testing.
+                int amount = parts.Length >= 3 && int.TryParse(parts[2], out int a) ? a : 1;
+                FieldPlayer dp = _player!;
+                if (dropItemId == 0)
+                {
+                    FieldDrop meso = _field.AddPlayerMesoDrop(Math.Max(1, amount), dp.X, dp.Y, dp.Character.Id);
+                    await _field.BroadcastAsync(_packets.DropEnterFieldMeso(meso)).ConfigureAwait(false);
+                }
+                else
+                {
+                    FieldDrop item = _field.AddItemDrop(dropItemId, (short)Math.Clamp(amount, 1, short.MaxValue), dp.X, dp.Y, source: null);
+                    await _field.BroadcastAsync(_packets.DropEnterFieldItem(item)).ConfigureAwait(false);
+                }
+
+                await ReplyAsync(session, $"dropped {dropItemId} x{amount}").ConfigureAwait(false);
+                break;
+            }
+
             case "shop" when parts.Length >= 2 && int.TryParse(parts[1], out int shopId):
             {
                 Shop? shop = _shops.GetShop(shopId);
@@ -6679,7 +6700,7 @@ public sealed class ChannelHandler : PacketHandlerBase
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
                     + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
+                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 

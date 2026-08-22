@@ -183,6 +183,154 @@ public sealed class Scenarios
             return "return scroll granted";
         }).ConfigureAwait(false);
 
+        await StepAsync(bot, "item-encode-audit", async () =>
+        {
+            // Grant one item of every encode path and parse each InventoryOperation body exactly
+            // as the client would — a mis-sized body is the "error code 38" crash class. Pickup
+            // uses this same encode, so a clean parse here means a clean pickup.
+            (int Id, string What)[] items =
+            {
+                (1302000, "equip:sword"),
+                (1002140, "equip:hat"),
+                (1082002, "equip:gloves"),
+                (2000000, "use:potion"),
+                (2070006, "use:throwing-star"),
+                (2340000, "use:white-scroll"),
+                (3010000, "setup:chair"),
+                (4000000, "etc"),
+                (4001017, "etc:eye-of-fire"),
+                (5000000, "cash:pet"),
+            };
+
+            var bad = new List<string>();
+            foreach ((int id, string what) in items)
+            {
+                await ChatAsync(bot, $"/item {id}").ConfigureAwait(false);
+                PacketReader r = await bot.ExpectAsync(ServerOpcode.InventoryOperation).ConfigureAwait(false);
+                try
+                {
+                    r.ReadByte();                 // unlock
+                    int count = r.ReadByte();
+                    for (int i = 0; i < count; i++)
+                    {
+                        int mode = r.ReadByte();
+                        r.ReadByte();             // tab
+                        if (mode == 0)            // Add
+                        {
+                            r.ReadShort();        // slot
+                            ItemBodyParser.Read(r);
+                        }
+                        else if (mode == 1)       // Update (stacked)
+                        {
+                            r.ReadShort();
+                            r.ReadShort();
+                        }
+                    }
+
+                    if (r.Remaining != 0)
+                    {
+                        bad.Add($"{what}(+{r.Remaining}b)");
+                    }
+                }
+                catch (Exception)
+                {
+                    bad.Add($"{what}(EOF)");
+                }
+            }
+
+            return bad.Count == 0 ? $"{items.Length} item types clean" : throw new InvalidOperationException("malformed: " + string.Join(", ", bad));
+        }).ConfigureAwait(false);
+
+        await StepAsync(bot, "drop-pickup-audit", async () =>
+        {
+            // Spawn a real ground drop and pick it up, validating the whole client-facing
+            // sequence (DropEnterField, DropLeaveField, InventoryOperation, pickup message) so a
+            // malformed drop/pickup packet — the "拾ったらクラッシュ" class — is caught here.
+            int opDropEnter = bot.ServerOps.Get(ServerOpcode.DropEnterField);
+            int opDropLeave = bot.ServerOps.Get(ServerOpcode.DropLeaveField);
+            int opInvOp = bot.ServerOps.Get(ServerOpcode.InventoryOperation);
+            int opMessage = bot.ServerOps.Get(ServerOpcode.Message);
+
+            (int Id, int Qty, string What)[] drops =
+            {
+                (2000000, 1, "potion"),
+                (1302000, 1, "equip:sword"),
+                (2070006, 200, "throwing-star"),
+                (4000000, 5, "etc"),
+                (0, 5000, "meso"),
+            };
+
+            var bad = new List<string>();
+            foreach ((int id, int qty, string what) in drops)
+            {
+                await ChatAsync(bot, $"/drop {id} {qty}").ConfigureAwait(false);
+                PacketReader enter = await bot.ExpectAsync(ServerOpcode.DropEnterField).ConfigureAwait(false);
+                int dropOid;
+                try
+                {
+                    enter.ReadByte();                // enter type
+                    dropOid = enter.ReadInt();       // object id
+                    ParseDropEnterTail(enter);
+                    if (enter.Remaining != 0)
+                    {
+                        bad.Add($"{what}:enter(+{enter.Remaining}b)");
+                        continue;
+                    }
+                }
+                catch (Exception)
+                {
+                    bad.Add($"{what}:enter(EOF)");
+                    continue;
+                }
+
+                // Pick it up.
+                PacketWriter pick = bot.NewPacket(ClientOpcode.DropPickUpRequest);
+                pick.WriteByte(0);
+                pick.WriteInt(0);
+                pick.WriteShort(0);
+                pick.WriteShort(0);
+                pick.WriteInt(dropOid);
+                await bot.SendAsync(pick).ConfigureAwait(false);
+
+                try
+                {
+                    // Item: DropLeaveField + InventoryOperation + pickup Message.
+                    // Meso: DropLeaveField + StatChanged + money Message.
+                    PacketReader leave = await bot.ExpectAsync(ServerOpcode.DropLeaveField).ConfigureAwait(false);
+                    leave.ReadByte(); leave.ReadInt(); leave.ReadInt(); // type, oid, pickerId
+                    if (leave.Remaining != 0)
+                    {
+                        bad.Add($"{what}:leave(+{leave.Remaining}b)");
+                    }
+
+                    if (id != 0)
+                    {
+                        PacketReader inv = await bot.ExpectAsync(ServerOpcode.InventoryOperation).ConfigureAwait(false);
+                        inv.ReadByte();
+                        int count = inv.ReadByte();
+                        for (int i = 0; i < count; i++)
+                        {
+                            int mode = inv.ReadByte();
+                            inv.ReadByte();
+                            if (mode == 0) { inv.ReadShort(); ItemBodyParser.Read(inv); }
+                            else if (mode == 1) { inv.ReadShort(); inv.ReadShort(); }
+                        }
+
+                        if (inv.Remaining != 0)
+                        {
+                            bad.Add($"{what}:inv(+{inv.Remaining}b)");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    bad.Add($"{what}:{ex.GetType().Name}");
+                }
+            }
+
+            return bad.Count == 0 ? $"{drops.Length} drop/pickup paths clean" : throw new InvalidOperationException("malformed: " + string.Join(", ", bad));
+        }).ConfigureAwait(false);
+
         await StepAsync(bot, "move", async () =>
         {
             PacketWriter w = bot.NewPacket(ClientOpcode.UserMove);
@@ -393,6 +541,68 @@ public sealed class Scenarios
     }
 
     // ---- shared helpers ------------------------------------------------------------------
+
+    /// <summary>
+    /// Sweeps every given item id: spawns each as a ground drop (/drop) and validates the
+    /// DropEnterField packet the client would render. Ground drops don't fill the inventory, so
+    /// the whole drop table can be swept in one pass. Returns the ids whose packet was malformed
+    /// or whose grant produced no drop packet.
+    /// </summary>
+    public async Task<List<string>> SweepDropsAsync(BotClient bot, IReadOnlyList<int> itemIds)
+    {
+        var bad = new List<string>();
+        int done = 0;
+        foreach (int id in itemIds)
+        {
+            await ChatAsync(bot, $"/drop {id} 1").ConfigureAwait(false);
+            try
+            {
+                PacketReader enter = await bot.ExpectAsync(ServerOpcode.DropEnterField, TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                enter.ReadByte();
+                enter.ReadInt();
+                ParseDropEnterTail(enter);
+                if (enter.Remaining != 0)
+                {
+                    bad.Add($"{id}(+{enter.Remaining}b)");
+                }
+            }
+            catch (Exception ex)
+            {
+                bad.Add($"{id}({ex.GetType().Name})");
+            }
+
+            if (++done % 500 == 0)
+            {
+                Console.WriteLine($"[{bot.Name}] swept {done}/{itemIds.Count} drops, {bad.Count} bad so far");
+            }
+        }
+
+        return bad;
+    }
+
+    /// <summary>Reads the rest of a DropEnterField packet (after enter-type + object id).</summary>
+    private static void ParseDropEnterTail(PacketReader r)
+    {
+        int isMeso = r.ReadByte();
+        r.ReadInt();                 // meso amount or item id
+        r.ReadInt();                 // owner
+        r.ReadByte();                // drop type
+        r.ReadShort(); r.ReadShort(); // landing x/y
+        r.ReadInt();                 // source object id
+        // ANIMATION drops (not on-ground) carry the drop-from point; a spawned /drop uses it.
+        if (r.Remaining > (isMeso == 0 ? 10 : 2))
+        {
+            r.ReadShort(); r.ReadShort(); r.ReadShort(); // drop-from x/y + pad
+        }
+
+        if (isMeso == 0)
+        {
+            r.ReadLong();            // item expiration (meso omits this)
+        }
+
+        r.ReadByte();                // player-drop flag
+        r.ReadByte();                // trailing
+    }
 
     private static async Task ChatAsync(BotClient bot, string text)
     {

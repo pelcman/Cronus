@@ -49,3 +49,31 @@ dotnet run --project src/Cronus.Debug.Bot -- 8       # 8 of each
   close the windows manually.
 - The bots exercise the server's real code paths; they found and pinned at least one server
   robustness bug (a short script answer over-reading and dropping the session).
+
+
+## Encoding audits (crash hunting)
+
+Two things crash the real client that a plain bot misses: a mis-sized item body or drop packet
+makes the client read past the end of the data ("error code 38"). The bot now parses these
+exactly as the client does:
+
+- **item-encode-audit** — grants one item of every encode path (`/item`) and parses each
+  `LP_InventoryOperation` body to the byte; pickup uses the same encode, so a clean parse means a
+  clean pickup.
+- **drop-pickup-audit** — spawns a ground drop (`/drop`) and picks it up, validating the whole
+  `DropEnterField → DropLeaveField → InventoryOperation → pickup message` sequence (item and meso).
+- **drop-sweep mode** — `CRONUS_BOT_AUDIT_DROPS=<file of item ids>` spawns *every* listed item as
+  a ground drop and validates its `DropEnterField`. Ground drops don't fill the inventory, so the
+  whole drop table sweeps in one pass:
+
+  ```powershell
+  $env:CRONUS_BOT_AUDIT_DROPS = "src/Cronus.Debug.Bot/dropids.txt"   # all 3714 drop-table items
+  dotnet run --project src/Cronus.Debug.Bot
+  ```
+
+`ItemBodyParser` mirrors the reference `DataGW_ItemSlotBase` read (an independent oracle, not our
+encoder), so a mismatch between our encoder and the client's schema is caught. This pinned the
+cash-equip trailing-serial bug (a cash item was 8 bytes too long → EOF crash).
+
+The `/drop <id> [qty]` GM command (0 = a meso pile) spawns a real ground drop at your feet — handy
+for reproducing drop/pickup issues by hand, too.

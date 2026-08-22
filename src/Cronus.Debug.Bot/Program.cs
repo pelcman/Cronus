@@ -49,7 +49,35 @@ if (launchClients)
 
 var results = new List<StepResult>();
 var scenarios = new Scenarios(loginEndpoint, results);
-using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(20));
+
+// Drop-sweep audit mode: CRONUS_BOT_AUDIT_DROPS=<file of item ids> logs one bot in and spawns
+// every listed item as a ground drop, validating each DropEnterField the client would render.
+string? sweepFile = Environment.GetEnvironmentVariable("CRONUS_BOT_AUDIT_DROPS");
+if (!string.IsNullOrWhiteSpace(sweepFile) && File.Exists(sweepFile))
+{
+    var ids = File.ReadAllLines(sweepFile)
+        .Select(l => int.TryParse(l.Trim().TrimEnd(','), out int v) ? v : -1)
+        .Where(v => v > 0)
+        .Distinct()
+        .ToList();
+    Console.WriteLine($"Cronus.Debug.Bot — drop-sweep of {ids.Count} item ids vs {loginEndpoint}");
+
+    var sweeper = new BotClient("Sweeper", config, clientOps, serverOps) { CharacterName = "CronusSweep" };
+    await scenarios.LoginAndEnterAsync(sweeper, 1, cts.Token);
+    await sweeper.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
+    List<string> bad = await scenarios.SweepDropsAsync(sweeper, ids);
+    await sweeper.DisposeAsync();
+
+    Console.WriteLine();
+    Console.WriteLine($"==== drop-sweep: {ids.Count - bad.Count}/{ids.Count} clean ====");
+    if (bad.Count > 0)
+    {
+        Console.WriteLine("malformed / missing: " + string.Join(", ", bad.Take(60)));
+    }
+
+    return bad.Count == 0 ? 0 : 1;
+}
 
 var bots = new List<BotClient>();
 for (int i = 1; i <= botCount; i++)

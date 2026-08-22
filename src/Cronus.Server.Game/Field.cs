@@ -728,7 +728,7 @@ public sealed class Field
     }
 
     /// <summary>Registers an item drop from a killed mob and returns it (assigns the object id).</summary>
-    public FieldDrop AddItemDrop(int itemId, short quantity, short x, short y, FieldMob source)
+    public FieldDrop AddItemDrop(int itemId, short quantity, short x, short y, FieldMob? source)
     {
         lock (_gate)
         {
@@ -739,9 +739,9 @@ public sealed class Field
                 Quantity = quantity < 1 ? (short)1 : quantity,
                 X = x,
                 Y = y,
-                SourceObjectId = source.ObjectId,
-                SourceX = source.X,
-                SourceY = source.Y,
+                SourceObjectId = source?.ObjectId ?? 0,
+                SourceX = source?.X ?? x,
+                SourceY = source?.Y ?? y,
                 DropAtTick = Environment.TickCount64,
                 IsPlayerDrop = false,
             };
