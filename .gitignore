@@ -5,6 +5,9 @@ obj/
 # SQLite save data (the default persistence file)
 cronus.db
 cronus.db-*
+
+# Local configuration (commit .env.example instead)
+.env
 [Dd]ebug/
 [Rr]elease/
 x64/

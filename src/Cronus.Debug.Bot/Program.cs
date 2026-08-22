@@ -12,6 +12,7 @@ using Cronus.Network.Packets;
 //   dotnet run --project src/Cronus.Debug.Bot -- 8       # 8 bots
 //   CRONUS_BOT_COUNT / CRONUS_BOT_HOST / CRONUS_BOT_PORT override the defaults.
 
+DotEnv.Load();                 // the repo-root .env feeds CRONUS_BOT_* like the server's vars
 CodePage.Register();
 ServerConfig config = ServerConfig.Jms186;
 

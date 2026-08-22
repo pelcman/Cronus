@@ -13,6 +13,13 @@ using Cronus.Server.Login;
 // JMS v186 server host: login server + one channel server in a single process.
 // Point a JMS v186 client (via EmuClient localhost redirect) at the login port.
 
+// Configuration comes from environment variables; a repo-root `.env` file feeds them
+// (Maple2's approach — see .env.example). Real environment variables override the file.
+string? envFile = DotEnv.Load();
+Console.WriteLine(envFile is null
+    ? "[env] no .env file found — using process environment only (see .env.example)."
+    : $"[env] loaded {envFile}");
+
 CodePage.Register();
 ServerConfig config = ServerConfig.Jms186;
 

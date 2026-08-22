@@ -266,7 +266,8 @@ Detailed progress and the task board live in [AGENTS.md](AGENTS.md) ("Roadmap", 
   In-game commands use the `/` prefix (docs/COMMANDS.md, EN/JA). Persistence defaults to a
   SQLite file (zero setup; EF Core), with MySQL (Pomelo) for production via `CRONUS_DB`; deploy
   is env-driven (`CRONUS_HOST`/`CRONUS_DB`/`CRONUS_WZ`/`CRONUS_SCRIPTS`/`CRONUS_DROPS`/
-  `CRONUS_SHOPS`/`CRONUS_RATE_*`).
+  `CRONUS_SHOPS`/`CRONUS_RATE_*`), fed by a repo-root `.env` file (Maple2-style; see
+  `.env.example` — real environment variables override it).
 - **Deferred**: guild BBS (its LP opcode is unresolved even in the reference), alliances,
   mastery books (skills level to wz max directly — an intentional simplification), mob stat
   buffs/player diseases (dead code in the reference), mini-game invites via the game UI.

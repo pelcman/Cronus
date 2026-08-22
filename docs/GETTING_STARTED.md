@@ -27,7 +27,10 @@ Accounts auto-register on first login. Press Ctrl+C to stop.
 With nothing else configured the server persists accounts/characters to a SQLite file
 (`cronus.db` next to the executable) and has no map/NPC data (you can still log in, create a
 character, enter the game, and walk around — the client renders the map from its own wz
-files). To enable maps/NPCs/mobs and scripts, or change storage, set:
+files). Configuration is by environment variables — the easy way is to copy
+[`.env.example`](../.env.example) to `.env` at the repo root and edit it (loaded at startup;
+real environment variables override the file). To enable maps/NPCs/mobs and scripts, or
+change storage, set:
 
 | Env var | Effect |
 |---|---|
@@ -38,9 +41,13 @@ files). To enable maps/NPCs/mobs and scripts, or change storage, set:
 | `CRONUS_SHOPS` | a `shops`+`shopitems` SQL dump → vendor NPCs open shops (buy/sell) |
 | `CRONUS_RATE_EXP` / `_DROP` / `_MESO` | rate multipliers (default 1.0) |
 
+```ini
+# .env (see .env.example for every option; absolute paths are safest)
+CRONUS_WZ=data/sample-wz
+CRONUS_SCRIPTS=scripts
+```
+
 ```powershell
-$env:CRONUS_WZ = "data/sample-wz"
-$env:CRONUS_SCRIPTS = "scripts"
 dotnet run --project src/Cronus.Server.Host
 ```
 

@@ -74,8 +74,12 @@ Confirm it works locally first (Part 4/5 with `127.0.0.1`) before going remote.
 
 ## Part 2 — Configure it for friends
 
-The server is configured entirely through **environment variables**. The one that
-matters most for remote play is `CRONUS_HOST`.
+The server is configured through **environment variables**, and the easiest way to set
+them is a **`.env` file at the repo root** (the Maple2 approach): copy
+[`.env.example`](../.env.example) to `.env`, edit, done — the server and the debug bot
+load it at startup (`[env] loaded …` in the log), and any variable set in the real
+environment overrides the file. The one that matters most for remote play is
+`CRONUS_HOST`.
 
 | Variable | What it does | Example |
 |---|---|---|
@@ -94,11 +98,15 @@ matters most for remote play is `CRONUS_HOST`.
 | *(args)* | `dotnet run --project src/Cronus.Server.Host <loginPort> <channelPort>` overrides the ports. | `8484 7575` |
 
 Find your **public IP** by visiting e.g. https://ifconfig.me from the server PC.
-Then, for example (PowerShell):
+Then edit `.env`:
+
+```ini
+CRONUS_HOST=203.0.113.9     # <-- your public IP
+```
+
+and run the server (PowerShell alternative: `$env:CRONUS_HOST = "..."` before the run):
 
 ```powershell
-$env:CRONUS_HOST = "203.0.113.9"     # <-- your public IP
-# $env:CRONUS_DB = "server=localhost;database=cronus;user=root;password=YOURPW"
 dotnet run --project src/Cronus.Server.Host
 ```
 
