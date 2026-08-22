@@ -1024,6 +1024,32 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await GrantKillExpAsync(mob.Exp).ConfigureAwait(false);
                 await UpdateQuestKillsAsync(session, mob.TemplateId).ConfigureAwait(false);
                 await DropLootAsync(mob).ConfigureAwait(false);
+                await SpawnRevivesAsync(mob).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Spawns a dead boss's next phase in place (ports <c>MapleMonster.spawnRevives</c> — the wz
+    /// <c>info/revive</c> list): Zakum's body chain, Papulatus' second clock, and the like.
+    /// </summary>
+    private async ValueTask SpawnRevivesAsync(FieldMob dead)
+    {
+        if (_field is null || _fields.MobProvider?.GetMob(dead.TemplateId) is not { } stats
+            || stats.Revives.Count == 0)
+        {
+            return;
+        }
+
+        foreach (int reviveId in stats.Revives)
+        {
+            MobData? reviveStats = _fields.MobProvider?.GetMob(reviveId);
+            FieldMob phase = _field.SpawnMob(reviveId, reviveStats, dead.X, dead.Y, dead.Foothold);
+            await _field.BroadcastAsync(_packets.MobEnterField(phase)).ConfigureAwait(false);
+            if (_player is not null)
+            {
+                phase.ControllerId = _player.Character.Id;
+                await TrySendAsync(_player, _packets.MobChangeController(phase)).ConfigureAwait(false);
             }
         }
     }
@@ -1884,6 +1910,7 @@ public sealed class ChannelHandler : PacketHandlerBase
                 await GrantKillExpAsync(mob.Exp).ConfigureAwait(false);
                 await UpdateQuestKillsAsync(session, mob.TemplateId).ConfigureAwait(false);
                 await DropLootAsync(mob).ConfigureAwait(false);
+                await SpawnRevivesAsync(mob).ConfigureAwait(false);
             }
         }
     }
@@ -6724,7 +6751,27 @@ public sealed class ChannelHandler : PacketHandlerBase
             ? f.BroadcastAsync(_packets.UserAvatarModified(_player!.Character), exceptCharacterId: _player!.Character.Id)
             : ValueTask.CompletedTask,
         hasMerchant: () => _merchants.GetByOwner(_player!.Character.Id) is not null,
-        retrieveMerchant: RetrieveMerchantAsync);
+        retrieveMerchant: RetrieveMerchantAsync,
+        spawnMob: (mobId, count) => ScriptSpawnMobAsync(mobId, count),
+        mobCount: () => _field?.Mobs.Count(m => !m.IsDead) ?? 0);
+
+    /// <summary>Spawns mobs at the scripting player's feet (boss altars, event NPCs).</summary>
+    private async ValueTask ScriptSpawnMobAsync(int mobId, int count)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        MobData? stats = _fields.MobProvider?.GetMob(mobId);
+        for (int i = 0; i < Math.Clamp(count, 1, 20); i++)
+        {
+            FieldMob mob = _field.SpawnMob(mobId, stats, _player.X, _player.Y, foothold: 0);
+            await _field.BroadcastAsync(_packets.MobEnterField(mob)).ConfigureAwait(false);
+            mob.ControllerId = _player.Character.Id;
+            await TrySendAsync(_player, _packets.MobChangeController(mob)).ConfigureAwait(false);
+        }
+    }
 
     /// <summary>
     /// Packs up the player's hired merchant from afar (the Fredrick service): visitors are shown

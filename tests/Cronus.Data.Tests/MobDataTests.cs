@@ -67,4 +67,26 @@ public class MobDataTests
         Assert.Equal(25, provider.GetMob(100100)!.Exp);
         Assert.Null(provider.GetMob(999));
     }
+
+    [Fact]
+    public void ParsesReviveChain()
+    {
+        const string zakumXml = """
+            <imgdir name="8800000.img">
+              <imgdir name="info">
+                <int name="maxHP" value="8000000"/>
+                <imgdir name="revive">
+                  <int name="0" value="8800001"/>
+                </imgdir>
+              </imgdir>
+            </imgdir>
+            """;
+        WzData wz = WzData.Parse(new MemoryStream(Encoding.UTF8.GetBytes(zakumXml)));
+        MobData body = MobData.FromWz(8800000, wz);
+        Assert.Equal(new[] { 8800001 }, body.Revives);
+
+        // No revive node -> empty.
+        WzData plain = WzData.Parse(new MemoryStream(Encoding.UTF8.GetBytes(MobXml)));
+        Assert.Empty(MobData.FromWz(100100, plain).Revives);
+    }
 }

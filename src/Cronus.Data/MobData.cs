@@ -27,6 +27,9 @@ public sealed class MobData
     /// <summary>The mob's castable skills (<c>info/skill/{n}</c>); empty for plain mobs.</summary>
     public IReadOnlyList<MobSkillEntry> Skills { get; init; } = Array.Empty<MobSkillEntry>();
 
+    /// <summary>Mobs spawned in place when this one dies (<c>info/revive</c> — boss phases).</summary>
+    public IReadOnlyList<int> Revives { get; init; } = Array.Empty<int>();
+
     /// <summary>Parses a Mob <c>.img</c> WZ document's <c>info</c> subtree.</summary>
     public static MobData FromWz(int templateId, WzData mobImg)
     {
@@ -41,7 +44,27 @@ public sealed class MobData
             TagColor = info?.GetInt("hpTagColor") ?? 0,
             TagBgColor = info?.GetInt("hpTagBgcolor") ?? 0,
             Skills = ParseSkills(info?.Child("skill")),
+            Revives = ParseRevives(info?.Child("revive")),
         };
+    }
+
+    private static IReadOnlyList<int> ParseRevives(WzData? reviveDir)
+    {
+        if (reviveDir is null)
+        {
+            return Array.Empty<int>();
+        }
+
+        var revives = new List<int>();
+        foreach (WzData entry in reviveDir.Children.Values)
+        {
+            if (entry.AsInt(0) > 0)
+            {
+                revives.Add(entry.AsInt(0));
+            }
+        }
+
+        return revives;
     }
 
     private static IReadOnlyList<MobSkillEntry> ParseSkills(WzData? skillDir)

@@ -128,6 +128,12 @@ public interface INpcPlayer
     /// <summary>Opens the player's account storage (the trunk).</summary>
     void openStorage();
 
+    /// <summary>Spawns a mob at the player's position (boss altars, event NPCs).</summary>
+    void spawnMob(int mobId, int count);
+
+    /// <summary>How many mobs are alive in the player's current map.</summary>
+    int mobCount();
+
     /// <summary>True if the player's hired merchant is standing somewhere.</summary>
     bool hasMerchant();
 

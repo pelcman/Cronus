@@ -28,6 +28,8 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<ValueTask>? _avatarModified;
     private readonly Func<bool>? _hasMerchant;
     private readonly Func<ValueTask<bool>>? _retrieveMerchant;
+    private readonly Func<int, int, ValueTask>? _spawnMob;
+    private readonly Func<int>? _mobCount;
 
     public ChannelPlayer(
         Character character,
@@ -43,7 +45,9 @@ public sealed class ChannelPlayer : INpcPlayer
         IStyleProvider? styles = null,
         Func<ValueTask>? avatarModified = null,
         Func<bool>? hasMerchant = null,
-        Func<ValueTask<bool>>? retrieveMerchant = null)
+        Func<ValueTask<bool>>? retrieveMerchant = null,
+        Func<int, int, ValueTask>? spawnMob = null,
+        Func<int>? mobCount = null)
     {
         _character = character;
         _characters = characters;
@@ -59,6 +63,8 @@ public sealed class ChannelPlayer : INpcPlayer
         _avatarModified = avatarModified;
         _hasMerchant = hasMerchant;
         _retrieveMerchant = retrieveMerchant;
+        _spawnMob = spawnMob;
+        _mobCount = mobCount;
     }
 
     public string getName() => _character.Name;
@@ -276,6 +282,11 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void openStorage()
         => _openStorage?.Invoke().AsTask().GetAwaiter().GetResult();
+
+    public void spawnMob(int mobId, int count)
+        => _spawnMob?.Invoke(mobId, count).AsTask().GetAwaiter().GetResult();
+
+    public int mobCount() => _mobCount?.Invoke() ?? 0;
 
     public bool hasMerchant() => _hasMerchant?.Invoke() ?? false;
 

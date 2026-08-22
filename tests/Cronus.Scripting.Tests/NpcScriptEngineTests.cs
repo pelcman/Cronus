@@ -205,6 +205,9 @@ public class NpcScriptEngineTests
         public int Skin;
         public bool hasMerchant() => false;
         public bool retrieveMerchant() => false;
+        public int SpawnedMob;
+        public void spawnMob(int mobId, int count) => SpawnedMob = mobId;
+        public int mobCount() => 0;
         public int BuddyCapacity = 20;
         public int getBuddyCapacity() => BuddyCapacity;
         public void gainBuddyCapacity(int amount) => BuddyCapacity = Math.Clamp(BuddyCapacity + amount, 20, 100);
