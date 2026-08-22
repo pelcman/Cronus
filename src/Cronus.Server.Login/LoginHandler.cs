@@ -198,8 +198,8 @@ public sealed class LoginHandler : PacketHandlerBase
         //   [name:str][jobType:int][jobDualblade:short][face:int][hair:int]
         //   [top:int][bottom:int][shoes:int][weapon:int]
         string name = packet.ReadString();
-        packet.ReadInt();           // job type (0 = Adventurers for v186)
-        packet.ReadShort();         // job sub-type (dual blade / cannoneer)
+        int jobType = packet.ReadInt(); // pre-BB: 0 = Knights of Cygnus, 1 = Adventurer, 2 = Aran
+        packet.ReadShort();             // job sub-type (dual blade / cannoneer)
         int face = packet.ReadInt();
         int hair = packet.ReadInt();
         int top = packet.ReadInt();
@@ -229,7 +229,7 @@ public sealed class LoginHandler : PacketHandlerBase
             Face = face,
             Hair = hair,
             Level = 1,
-            Job = 0,
+            Job = (short)(jobType switch { 0 => 1000, 2 => 2000, _ => 0 }), // Noblesse / Legend / Beginner
             Str = 12,
             Dex = 5,
             Int = 4,

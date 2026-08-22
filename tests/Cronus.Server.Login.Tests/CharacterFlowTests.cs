@@ -93,7 +93,7 @@ public class CharacterFlowTests
                 // JMS v186 CP_CreateNewCharacter layout.
                 var w = NewPacket(session, ClientOpcode.CreateNewCharacter);
                 w.WriteString("Kaede");
-                w.WriteInt(0);           // job type
+                w.WriteInt(1);           // job type (pre-BB: 0 = Cygnus, 1 = Adventurer, 2 = Aran)
                 w.WriteShort(0);         // job sub-type
                 w.WriteInt(20000);       // face
                 w.WriteInt(30000);       // hair

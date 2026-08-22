@@ -135,8 +135,28 @@ public static class CharacterProgression
         return stat | StatFlag.Ap;
     }
 
+    /// <summary>
+    /// Collapses a job to its explorer archetype for the growth tables: Knights of Cygnus
+    /// (11xx–15xx) and Aran (21xx) grow like their explorer counterparts, and the whole
+    /// beginner family (0 / 1000 / 2000) shares the beginner rates.
+    /// </summary>
+    private static int GrowthJob(int job) => job switch
+    {
+        >= 1100 and < 1200 => 100,
+        >= 1200 and < 1300 => 200,
+        >= 1300 and < 1400 => 300,
+        >= 1400 and < 1500 => 400,
+        >= 1500 and < 1600 => 500,
+        >= 2100 and < 2200 => 100, // Aran fights like a warrior
+        1000 or 2000 or 2001 => 0,
+        _ => job,
+    };
+
+    /// <summary>True for the beginner family (Beginner / Noblesse / Legend): no SP, no death loss.</summary>
+    public static bool IsBeginnerJob(int job) => job % 1000 == 0 || job == 2001;
+
     /// <summary>HP an AP point buys (job-scaled; ports the CS_MHP table).</summary>
-    private static int ApHpGain(Character c, EffectResolver? effectOf) => c.Job switch
+    private static int ApHpGain(Character c, EffectResolver? effectOf) => GrowthJob(c.Job) switch
     {
         0 => Rand(8, 12),
         >= 100 and <= 132 => Rand(20, 25) + (Learned(c, ImprovedHpIncrease, effectOf)?.X ?? 0),
@@ -147,7 +167,7 @@ public static class CharacterProgression
     };
 
     /// <summary>MP an AP point buys (job-scaled; ports the CS_MMP table).</summary>
-    private static int ApMpGain(Character c, EffectResolver? effectOf) => c.Job switch
+    private static int ApMpGain(Character c, EffectResolver? effectOf) => GrowthJob(c.Job) switch
     {
         0 => Rand(6, 8),
         >= 100 and <= 132 => Rand(2, 4),
@@ -209,7 +229,7 @@ public static class CharacterProgression
     {
         c.Level++;
 
-        (int hpLo, int hpHi, int mpLo, int mpHi) = c.Job switch
+        (int hpLo, int hpHi, int mpLo, int mpHi) = GrowthJob(c.Job) switch
         {
             0 => (12, 16, 10, 12),                                          // Beginner
             >= 100 and <= 132 => (24, 28, 4, 6),                            // Warrior
@@ -223,13 +243,13 @@ public static class CharacterProgression
         int mpGain = Rand(mpLo, mpHi);
 
         // Growth passives: Improved Max HP (warrior x / pirate x) and Improved Max MP (mage x*2).
-        hpGain += c.Job switch
+        hpGain += GrowthJob(c.Job) switch
         {
             >= 100 and <= 132 => Learned(c, ImprovedHpIncrease, effectOf)?.X ?? 0,
             >= 500 and <= 522 => Learned(c, ImprovedPirateHp, effectOf)?.X ?? 0,
             _ => 0,
         };
-        if (c.Job is >= 200 and <= 232)
+        if (GrowthJob(c.Job) is >= 200 and <= 232)
         {
             mpGain += (Learned(c, ImprovedMpIncrease, effectOf)?.X ?? 0) * 2;
         }
@@ -241,7 +261,7 @@ public static class CharacterProgression
         c.Hp = c.MaxHp;
         c.Mp = c.MaxMp;
         c.Ap = (short)Math.Min(short.MaxValue, c.Ap + ApPerLevel);
-        if (c.Job != 0)
+        if (!IsBeginnerJob(c.Job))
         {
             c.Sp = (short)Math.Min(short.MaxValue, c.Sp + SpPerLevel);
         }
@@ -254,14 +274,14 @@ public static class CharacterProgression
     /// </summary>
     public static int DeathExpLoss(Character c, bool inTown)
     {
-        if (c.Job == 0)
+        if (IsBeginnerJob(c.Job))
         {
             return 0;
         }
 
         double rate = inTown
             ? 0.01
-            : (c.Job / 100 == 3 ? 0.08 : 0.2) / Math.Max((short)1, c.Luk) + 0.05;
+            : (GrowthJob(c.Job) / 100 == 3 ? 0.08 : 0.2) / Math.Max((short)1, c.Luk) + 0.05;
         return (int)Math.Min(int.MaxValue, (long)(ExpTable.ExpForLevel(c.Level) * rate));
     }
 

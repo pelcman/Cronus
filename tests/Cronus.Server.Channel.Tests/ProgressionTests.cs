@@ -178,6 +178,31 @@ public class ProgressionTests
     }
 
     [Fact]
+    public void CygnusAndAran_GrowLikeTheirArchetypes()
+    {
+        // A Dawn Warrior (1110) levels with warrior HP rates; a Noblesse (1000) like a beginner.
+        var dawn = new Character { Name = "D", Level = 10, Job = 1110, MaxHp = 500, MaxMp = 200 };
+        CharacterProgression.ForceLevelUps(dawn, 1);
+        Assert.InRange(dawn.MaxHp, 500 + 24, 500 + 28);
+        Assert.Equal(3, dawn.Sp); // Cygnus jobs earn SP
+
+        var noblesse = new Character { Name = "N", Level = 1, Job = 1000, MaxHp = 50, MaxMp = 5 };
+        CharacterProgression.ForceLevelUps(noblesse, 1);
+        Assert.InRange(noblesse.MaxHp, 50 + 12, 50 + 16);
+        Assert.Equal(0, noblesse.Sp); // the beginner family gets none
+
+        // An Aran (2100) grows like a warrior and takes the warrior death-loss rate.
+        var aran = new Character { Name = "A", Level = 30, Job = 2100, MaxHp = 700, Luk = 4 };
+        CharacterProgression.ForceLevelUps(aran, 1);
+        Assert.InRange(aran.MaxHp, 700 + 24, 700 + 28);
+        Assert.Equal((int)(ExpTable.ExpForLevel(31) * (0.2 / 4 + 0.05)),
+            CharacterProgression.DeathExpLoss(aran, inTown: false));
+
+        // Legends (2000) lose nothing on death.
+        Assert.Equal(0, CharacterProgression.DeathExpLoss(new Character { Name = "L", Job = 2000, Level = 20 }, inTown: false));
+    }
+
+    [Fact]
     public void DeathExpLoss_FollowsReferenceFormula()
     {
         // Beginners lose nothing.
