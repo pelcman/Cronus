@@ -74,24 +74,13 @@ public sealed partial class ChannelHandler
             return; // already taken
         }
 
-        byte[] leave = petSlot >= 0
-            ? _packets.DropLeaveFieldPetPickup(dropOid, _player!.Character.Id, petSlot)
-            : _packets.DropLeaveFieldPickup(dropOid, _player!.Character.Id);
-        await _field.BroadcastAsync(leave).ConfigureAwait(false);
-
         Character c = _player.Character;
-        if (drop.IsMeso)
-        {
-            c.Meso = (int)Math.Clamp((long)c.Meso + drop.Meso, 0, int.MaxValue);
-            _characters.Save(c);
-            await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
-            await session.SendAsync(_packets.IncMoneyMessage(drop.Meso)).ConfigureAwait(false); // "+N mesos"
-            return;
-        }
 
-        // Monster cards (238xxxx) register into the Monster Book instead of the inventory (ports
-        // ReqCDropPool's consumeOnPickup card branch): bump the count (cap 5), flash the
-        // card-get effect, and show the card message — never an InventoryOperation.
+        // Monster cards (238xxxx) register into the Monster Book instead of the inventory,
+        // in the reference's EXACT packet order (ports ReqCDropPool's consumeOnPickup card
+        // branch): the book update + effects first, then the drop's leave, then the standard
+        // pickup message, and finally the empty InventoryOperation that RELEASES the client's
+        // exclusive-request lock (updateInv) — without it the client dies after the pickup.
         if (drop.ItemId / 10_000 == 238)
         {
             int count = c.MonsterCards.TryGetValue(drop.ItemId, out int have) ? have : 0;
@@ -102,6 +91,7 @@ public sealed partial class ChannelHandler
                 _characters.Save(c);
                 await session.SendAsync(_packets.MonsterBookSetCard(added: true, drop.ItemId, count)).ConfigureAwait(false);
                 await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectMonsterBookCardGet)).ConfigureAwait(false);
+                await session.SendAsync(_packets.ShowCardGain(drop.ItemId)).ConfigureAwait(false);
                 await _field.BroadcastAsync(
                     _packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectMonsterBookCardGet),
                     exceptCharacterId: c.Id).ConfigureAwait(false);
@@ -111,7 +101,26 @@ public sealed partial class ChannelHandler
                 await session.SendAsync(_packets.MonsterBookSetCard(added: false, 0, 0)).ConfigureAwait(false);
             }
 
-            await session.SendAsync(_packets.ShowCardGain(drop.ItemId)).ConfigureAwait(false);
+            byte[] cardLeave = petSlot >= 0
+                ? _packets.DropLeaveFieldPetPickup(dropOid, c.Id, petSlot)
+                : _packets.DropLeaveFieldPickup(dropOid, c.Id);
+            await _field.BroadcastAsync(cardLeave).ConfigureAwait(false);
+            await session.SendAsync(_packets.ShowItemGain(drop.ItemId, drop.Quantity)).ConfigureAwait(false);
+            await session.SendAsync(_packets.InventoryOperation(Array.Empty<InventoryChange>())).ConfigureAwait(false); // unlock
+            return;
+        }
+
+        byte[] leave = petSlot >= 0
+            ? _packets.DropLeaveFieldPetPickup(dropOid, _player!.Character.Id, petSlot)
+            : _packets.DropLeaveFieldPickup(dropOid, _player!.Character.Id);
+        await _field.BroadcastAsync(leave).ConfigureAwait(false);
+
+        if (drop.IsMeso)
+        {
+            c.Meso = (int)Math.Clamp((long)c.Meso + drop.Meso, 0, int.MaxValue);
+            _characters.Save(c);
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+            await session.SendAsync(_packets.IncMoneyMessage(drop.Meso)).ConfigureAwait(false); // "+N mesos"
             return;
         }
 

@@ -40,7 +40,9 @@ public class MonsterBookTests
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource<int> CardMessage { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public bool SawInventoryOperation { get; private set; }
+
+        /// <summary>Op counts of every InventoryOperation seen (the unlock form has zero ops).</summary>
+        public List<int> InventoryOperationOpCounts { get; } = new();
 
         public override async ValueTask OnConnectedAsync(MapleSession session)
         {
@@ -83,7 +85,8 @@ public class MonsterBookTests
             }
             else if (opcode == _opInvOp)
             {
-                SawInventoryOperation = true;
+                p.ReadByte();                             // unlock flag
+                InventoryOperationOpCounts.Add(p.ReadByte()); // op count (0 = pure unlock)
             }
         }
     }
@@ -117,7 +120,8 @@ public class MonsterBookTests
         Assert.Equal(2380000, messageCard);
         Assert.Equal(1, hero.MonsterCards[2380000]);                       // registered server-side
         Assert.DoesNotContain(hero.EquippedItems, i => i.ItemId == 2380000); // never itemized
-        Assert.False(client.SawInventoryOperation);
+        Assert.All(client.InventoryOperationOpCounts, n => Assert.Equal(0, n)); // only the unlock form
+        Assert.Contains(0, client.InventoryOperationOpCounts);                  // and it WAS sent (updateInv)
         Assert.Empty(fields.Get(100000000).Drops);
     }
 
