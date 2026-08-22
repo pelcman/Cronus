@@ -9,7 +9,7 @@ FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app .
 
-# Login and channel ports (see Program.cs; overridable via args).
-EXPOSE 8484 7575
+# Login, channels (7575..), and the cash shop (first port after the channels).
+EXPOSE 8484 7575 7576 7577
 
 ENTRYPOINT ["dotnet", "Cronus.Server.Host.dll"]

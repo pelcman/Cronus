@@ -198,6 +198,24 @@ In-game commands use the `/` prefix — `/map <id>`, `/meso <n>`, `/notice <msg>
 
 ---
 
+## Backing up the save data
+
+With the default SQLite storage, everything (accounts, characters, items, guilds,
+storage, keymaps) lives in **one file**: `cronus.db` next to the server executable
+(or wherever `CRONUS_DB_FILE` points; the `cronus-save` volume in Docker).
+
+- **Back up**: stop the server (Ctrl+C), copy `cronus.db` somewhere safe, restart.
+  Copying while stopped is the safe way — a copy taken mid-write can be torn.
+- **Restore**: stop the server, put the backup copy back as `cronus.db`, restart.
+- **Reset the world**: stop the server and delete `cronus.db` — a fresh one is
+  created on the next start.
+- Upgrading the server never requires touching the file: new tables/columns are
+  added in place at startup (`[db] migrated: …` lines).
+
+With MySQL, use your normal `mysqldump` routine instead.
+
+---
+
 ## Configuration quick reference
 
 ```powershell
