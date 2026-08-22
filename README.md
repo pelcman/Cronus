@@ -55,7 +55,7 @@ A playable in-group server (all through the real encrypted protocol):
 - **Scripts & data** — NPC / portal / quest scripts (JavaScript, Jint), wz_xml game data,
   the reference's SQL drop/shop tables, env-driven rates (`CRONUS_RATE_*`)
 
-411 tests, all green. See the roadmap and design notes in
+414 tests, all green. See the roadmap and design notes in
 [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md), and the real-client runbook in
 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
@@ -76,6 +76,7 @@ A playable in-group server (all through the real encrypted protocol):
 | `Cronus.Server.Login` | login server |
 | `Cronus.Server.Channel` | channel / in-game server |
 | `Cronus.Server.Host` | runnable host (login + channel) |
+| `Cronus.Debug.Bot` | content debugger: launches real client windows + headless verification bots |
 
 ## Build & run
 

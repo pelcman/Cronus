@@ -491,6 +491,17 @@ Each milestone means adding one "working vertical slice".
         declined like the reference; gifts/coupons are out of scope. End-to-end test: migrate
         in → buy a pet → move it into the inventory with its cash id.
 
+  - [x] **M10aj: Cronus.Debug.Bot — content debugger** — a new console project that launches
+        real client windows (the localhost-patched client, best-effort) *and* runs N headless
+        bots (default 4), each a genuine encrypted JMS v186 session. Bots walk the content
+        checklist end to end (login/auto-register → entry → commands → taxi dialog → salon
+        `askAvatar` → whisper → Zakum door → full cash-shop round trip → channel change) and
+        pair up for cross-bot whisper + party invite/accept, printing a per-bot OK/NG report.
+        58/58 across 4 bots on the live server. It immediately surfaced a real server bug:
+        `HandleScriptAnswer` over-read a short/escape answer (`action != 0` with no payload)
+        and crash-disconnected the session — now the payload reads are length-guarded and
+        `action > 0`-gated (regression test added). Docs: docs/DEBUG_BOT.md.
+
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated

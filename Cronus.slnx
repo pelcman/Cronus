@@ -3,6 +3,7 @@
     <Project Path="src/Cronus.Common/Cronus.Common.csproj" />
     <Project Path="src/Cronus.Data/Cronus.Data.csproj" />
     <Project Path="src/Cronus.Database/Cronus.Database.csproj" />
+    <Project Path="src/Cronus.Debug.Bot/Cronus.Debug.Bot.csproj" />
     <Project Path="src/Cronus.Domain/Cronus.Domain.csproj" />
     <Project Path="src/Cronus.Network/Cronus.Network.csproj" />
     <Project Path="src/Cronus.Scripting/Cronus.Scripting.csproj" />

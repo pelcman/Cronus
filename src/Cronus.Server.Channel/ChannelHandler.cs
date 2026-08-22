@@ -6893,21 +6893,24 @@ public sealed class ChannelHandler : PacketHandlerBase
         int selection = -1;
         string text = string.Empty;
 
-        if (action != 0)
+        // Only a positive action carries a payload; escape (0xFF/-1) and plain-end (0) do not.
+        // Guard every read against the packet's remaining length so a short/hand-crafted answer
+        // ends the conversation instead of crash-disconnecting the session.
+        if (action > 0)
         {
             switch (messageType)
             {
                 case 5:  // SM_ASKMENU
-                    selection = packet.ReadInt();
+                    if (packet.Remaining >= 4) { selection = packet.ReadInt(); }
                     break;
                 case 3:  // SM_ASKTEXT
-                    text = packet.ReadString();
+                    if (packet.Remaining >= 2) { text = packet.ReadString(); }
                     break;
                 case 8:  // SM_ASKAVATAR
-                    selection = packet.ReadByte();
+                    if (packet.Remaining >= 1) { selection = packet.ReadByte(); }
                     break;
                 case 15: // SM_ASKSLIDEMENU
-                    selection = packet.ReadInt();
+                    if (packet.Remaining >= 4) { selection = packet.ReadInt(); }
                     break;
             }
         }

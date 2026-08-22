@@ -124,6 +124,16 @@ public class NpcDialogFlowTests
             await Session!.SendAsync(w.ToArray());
         }
 
+        /// <summary>Sends a deliberately truncated answer (action claims a payload that isn't
+        /// there) — the server must not over-read and drop the session.</summary>
+        public async ValueTask AnswerTruncatedAsync(int messageType, int action)
+        {
+            var w = NewPacket(Session!, ClientOpcode.UserScriptMessageAnswer);
+            w.WriteByte(messageType);
+            w.WriteByte((byte)action); // no payload follows despite action != 0
+            await Session!.SendAsync(w.ToArray());
+        }
+
         private static PacketWriter NewPacket(MapleSession session, string opcodeName)
             => new(ClientOps.Get(opcodeName), session.Config.PacketHeaderSize, session.Config.CodePage);
     }
@@ -173,6 +183,54 @@ public class NpcDialogFlowTests
         Assert.Equal(0, ok.MessageType);
         Assert.Equal("You chose yes.", ok.Text);
         Assert.False(ok.Next);
+    }
+
+    [Fact]
+    public async Task TruncatedMenuAnswer_DoesNotCrashSession()
+    {
+        // A menu answer claiming action=1 but with the selection int missing (the crash the
+        // debug bot surfaced). The session must survive: the dialog ends and a fresh NPC
+        // selection still gets a prompt.
+        const int npcId = 9010000;
+        const string script = """
+            function start() {
+                var pick = cm.askMenu("Menu:\r\n#L0#A#l\r\n#L1#B#l");
+                cm.sendOk("done " + pick);
+            }
+            """;
+
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Truncator", MapId = 100000000 });
+
+        var scripts = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+
+        var client = new NpcClient(hero.Id, npcId);
+        var handler = new ChannelHandler(
+            ClientOps, ServerOps, repo, ServerConfig.Jms186, npcScripts: scripts);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        ScriptPrompt menu = client.Prompts.Take(cts.Token);
+        Assert.Equal(5, menu.MessageType);
+
+        // The malformed answer (action claims a selection int that isn't there) would previously
+        // over-read and disconnect the session. Now the read is guarded, so the script advances
+        // with no selection (-1) and the session survives: its next prompt still arrives.
+        await client.AnswerTruncatedAsync(messageType: 5, action: 1);
+
+        ScriptPrompt next = client.Prompts.Take(cts.Token);
+        Assert.Equal(0, next.MessageType);       // the sendOk line, not a dropped connection
+        Assert.Equal("done -1", next.Text);      // no selection was read
     }
 
     /// <summary>Enters, selects an NPC, and signals when a second SetField (the warp) arrives.</summary>
