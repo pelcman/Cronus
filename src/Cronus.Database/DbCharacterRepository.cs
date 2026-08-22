@@ -69,7 +69,25 @@ public sealed class DbCharacterRepository : ICharacterRepository
     public void Save(Character character)
     {
         using CronusDbContext db = _contextFactory();
+
+        // Update() upserts the character and every item still on the entity, but it cannot know
+        // about rows the entity NO LONGER holds — a consumed potion or dropped equip would
+        // resurrect on the next load. Reconcile: delete any stored item row whose id is absent
+        // from the in-memory list.
+        var keep = character.EquippedItems.Select(i => i.Id).Where(id => id != 0).ToHashSet();
+        List<int> stale = db.Items
+            .Where(i => i.CharacterId == character.Id)
+            .Select(i => i.Id)
+            .ToList()
+            .Where(id => !keep.Contains(id))
+            .ToList();
+
         db.Characters.Update(character);
+        foreach (int id in stale)
+        {
+            db.Entry(new InventoryItem { Id = id, ItemId = 0, CharacterId = character.Id }).State = EntityState.Deleted;
+        }
+
         db.SaveChanges();
     }
 

@@ -66,6 +66,11 @@ public static class Inventory
             for (int i = 0; i < quantity; i++)
             {
                 short slot = NextFreeSlot(c, tab);
+                if (slot == 0)
+                {
+                    break; // tab full: grant what fits
+                }
+
                 var item = new InventoryItem
                 {
                     ItemId = itemId,
@@ -104,6 +109,11 @@ public static class Inventory
         while (remaining > 0)
         {
             short slot = NextFreeSlot(c, tab);
+            if (slot == 0)
+            {
+                break; // tab full: grant what fits
+            }
+
             int add = Math.Min(remaining, max);
             var item = new InventoryItem { ItemId = itemId, Position = slot, Quantity = (short)add, CharacterId = c.Id };
             c.EquippedItems.Add(item);
@@ -112,6 +122,28 @@ public static class Inventory
         }
 
         return changes;
+    }
+
+    /// <summary>
+    /// True when the whole <paramref name="quantity"/> of an item fits (existing stacks' headroom
+    /// plus free slots) — the pre-check pickups use so a full tab leaves the drop on the ground.
+    /// </summary>
+    public static bool CanAdd(Character c, int itemId, int quantity, int slotMax)
+    {
+        int tab = Tab(itemId);
+        int max = Math.Max(1, slotMax);
+        int free = GameConstants.InventorySlotsPerTab
+            - c.EquippedItems.Count(i => i.Position > 0 && Tab(i.ItemId) == tab);
+
+        if (tab == 1 || itemId / 10_000 == 500)
+        {
+            return free >= quantity; // equips and pets take one slot each
+        }
+
+        int headroom = c.EquippedItems
+            .Where(i => i.Position > 0 && i.ItemId == itemId && i.Quantity < max)
+            .Sum(i => max - i.Quantity);
+        return headroom + (long)free * max >= quantity;
     }
 
     /// <summary>
@@ -249,6 +281,10 @@ public static class Inventory
         while (used.Contains(slot))
         {
             slot++;
+            if (slot > GameConstants.InventorySlotsPerTab)
+            {
+                return 0; // tab full
+            }
         }
 
         return slot;

@@ -163,8 +163,22 @@ public sealed class BotClient : PacketHandlerBase, IAsyncDisposable
             _waiters.Add(new Pending(opcode, tcs, match));
         }
 
-        byte[] packet = await tcs.Task.WaitAsync(timeout ?? TimeSpan.FromSeconds(10)).ConfigureAwait(false);
-        return ReaderFor(packet);
+        try
+        {
+            byte[] packet = await tcs.Task.WaitAsync(timeout ?? TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+            return ReaderFor(packet);
+        }
+        catch (TimeoutException)
+        {
+            // Deregister the abandoned waiter, or the NEXT matching packet would feed this dead
+            // task instead of the caller's next ExpectAsync.
+            lock (_gate)
+            {
+                _waiters.RemoveAll(p => ReferenceEquals(p.Tcs, tcs));
+            }
+
+            throw;
+        }
     }
 
     private PacketReader ReaderFor(byte[] packet)

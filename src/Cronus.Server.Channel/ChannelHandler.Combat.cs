@@ -39,9 +39,9 @@ public sealed partial class ChannelHandler
 
     private async ValueTask HandleMeleeAttackAsync(MapleSession session, PacketReader packet)
     {
-        if (_player is null || _field is null)
+        if (_player is null || _field is null || _player.Character.Hp <= 0)
         {
-            return;
+            return; // the dead don't swing
         }
 
         AttackInfo attack = AttackParser.ParseMelee(packet);
@@ -100,9 +100,9 @@ public sealed partial class ChannelHandler
 
     private async ValueTask HandleMagicAttackAsync(MapleSession session, PacketReader packet)
     {
-        if (_player is null || _field is null)
+        if (_player is null || _field is null || _player.Character.Hp <= 0)
         {
-            return;
+            return; // the dead don't cast
         }
 
         AttackInfo attack = AttackParser.ParseMagic(packet); // v186: same layout as melee
@@ -115,9 +115,9 @@ public sealed partial class ChannelHandler
 
     private async ValueTask HandleShootAttackAsync(MapleSession session, PacketReader packet)
     {
-        if (_player is null || _field is null)
+        if (_player is null || _field is null || _player.Character.Hp <= 0)
         {
-            return;
+            return; // the dead don't shoot
         }
 
         AttackInfo attack = AttackParser.ParseShoot(packet);

@@ -15,7 +15,7 @@ namespace Cronus.Server.Game;
 public static class CharacterDataEncoder
 {
     private const int EmptyTeleportRock = 999999999;
-    private const byte DefaultInventorySlots = 24;
+    private const byte DefaultInventorySlots = GameConstants.InventorySlotsPerTab;
 
     /// <summary>Windows FILETIME for the current instant (100ns ticks since 1601-01-01).</summary>
     public static long FileTimeNow() => DateTime.UtcNow.ToFileTimeUtc();

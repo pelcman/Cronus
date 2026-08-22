@@ -221,6 +221,32 @@ public sealed partial class ChannelHandler
                 break;
             }
 
+            case "clearinv":
+            {
+                // Empties inventory tabs (positive slots only — worn equips stay): /clearinv wipes
+                // all five tabs, /clearinv <1-5> just one. Sends the per-slot removes so the
+                // client's grid clears live.
+                Character cc = _player!.Character;
+                int? onlyTab = parts.Length >= 2 && int.TryParse(parts[1], out int t) && t is >= 1 and <= 5 ? t : null;
+                var removed = new List<InventoryChange>();
+                foreach (InventoryItem item in cc.EquippedItems
+                             .Where(i => i.Position > 0 && (onlyTab is null || Inventory.Tab(i.ItemId) == onlyTab))
+                             .ToList())
+                {
+                    cc.EquippedItems.Remove(item);
+                    removed.Add(new InventoryChange(InvMode.Remove, Inventory.Tab(item.ItemId), item.Position, null, 0));
+                }
+
+                _characters.Save(cc);
+                foreach (InventoryChange[] chunk in removed.Chunk(32)) // keep packets small
+                {
+                    await session.SendAsync(_packets.InventoryOperation(chunk)).ConfigureAwait(false);
+                }
+
+                await ReplyAsync(session, $"cleared {removed.Count} item(s)").ConfigureAwait(false);
+                break;
+            }
+
             case "questreset" when parts.Length >= 2 && int.TryParse(parts[1], out int resetQuestId):
             {
                 // Clears one quest from both records (debug/bot use: makes quest flows re-runnable).
@@ -367,7 +393,7 @@ public sealed partial class ChannelHandler
             case "help":
                 await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
                     + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /gender [m|f], /beauty, /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
+                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /gender [m|f], /beauty, /clearinv [tab], /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
                     .ConfigureAwait(false);
                 break;
 
@@ -803,12 +829,9 @@ public sealed partial class ChannelHandler
         await NotifyPartyOfMyHpAsync(_player!).ConfigureAwait(false); // party sees the revive
     }
 
-    /// <summary>
-    /// The pre-BB death penalty (ports <c>MapleCharacter.playerDead</c>): a share of the level's
-    /// exp requirement — 1% when dying in a town, else <c>0.2/LUK + 0.05</c> (archers use 0.08).
-    /// Beginners lose nothing. The safety-charm absorb is not implemented (no cash shop).
-    /// The updated exp reaches the client with the revive's SetField.
-    /// </summary>
+    // The death exp penalty itself is applied at the moment of death
+    // (CharacterProgression.ApplyDeathPenalty in HandleUserHitAsync), not here.
+
     /// <summary>
     /// Moves the bound player to another map: leave + announce, switch fields, SetField
     /// (map-change branch), then exchange enter-field packets in the new map.

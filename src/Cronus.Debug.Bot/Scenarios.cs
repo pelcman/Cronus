@@ -176,6 +176,29 @@ public sealed class Scenarios
             return "";
         }).ConfigureAwait(false);
 
+        await StepAsync(bot, "cmd:/clearinv", async () =>
+        {
+            // Persistent accounts accumulate items across suite runs; start from a clean bag so
+            // the capacity-bounded inventory never rejects the audits below.
+            await ChatAsync(bot, "/clearinv").ConfigureAwait(false);
+            await bot.ExpectAsync(ServerOpcode.UserChat).ConfigureAwait(false); // the reply line
+
+            // Swallow the remove batches so later audits' InventoryOperation waits stay clean.
+            while (true)
+            {
+                try
+                {
+                    await bot.ExpectAsync(ServerOpcode.InventoryOperation, TimeSpan.FromMilliseconds(300)).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    break;
+                }
+            }
+
+            return "";
+        }).ConfigureAwait(false);
+
         await StepAsync(bot, "cmd:/item", async () =>
         {
             await ChatAsync(bot, "/item 2030004").ConfigureAwait(false);

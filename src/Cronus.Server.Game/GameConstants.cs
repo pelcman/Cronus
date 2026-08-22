@@ -26,6 +26,11 @@ public static class GameConstants
     /// <summary>Buddy-list starting capacity (reference: 20, expandable to 100).</summary>
     public const short BuddyDefaultCapacity = 20;
 
+    // ---- Inventory ----------------------------------------------------------------------
+
+    /// <summary>Slots per inventory tab (reference default: 24; the client renders this many).</summary>
+    public const int InventorySlotsPerTab = 24;
+
     // ---- Economy ------------------------------------------------------------------------
 
     /// <summary>Smallest meso amount a player may throw on the ground (reference: 10).</summary>

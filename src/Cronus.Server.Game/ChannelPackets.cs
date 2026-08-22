@@ -1723,6 +1723,20 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds the "inventory is full" toast (<c>LP_Message</c> / MS_DropPickUpMessage with the
+    /// 0xFF status form: two zero ints — ports <c>ResWrapper.getShowInventoryFull</c>).
+    /// </summary>
+    public byte[] ShowInventoryFull()
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Message);
+        w.WriteByte(MsgDropPickUp);
+        w.WriteByte(0xFF);          // PICKUP_INVENTORY_FULL
+        w.WriteInt(0);
+        w.WriteInt(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_CharacterInfo</c> — another player's info window (ports
     /// <c>ResCWvsContext.CharacterInfo</c>, JMS v186 path). Carries id/level/job/fame, then the
     /// community/pet/mount/wishlist/monster-book/medal/chair blocks. Cronus models none of the latter

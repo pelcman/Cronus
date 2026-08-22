@@ -56,4 +56,36 @@ public sealed class SqliteDatabaseTests
             File.Delete(dbFile);
         }
     }
+
+    [Fact]
+    public void RemovedItems_StayRemovedAfterAReload()
+    {
+        string dbFile = Path.Combine(Path.GetTempPath(), $"cronus-sqlite-{Guid.NewGuid()}.db");
+        try
+        {
+            Func<CronusDbContext> factory = SqliteDatabase.CreateFactory(dbFile);
+            SqliteDatabase.EnsureCreated(factory);
+
+            var repo = new DbCharacterRepository(factory);
+            Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Consumer", MapId = 100000000 });
+            hero.EquippedItems.Add(new InventoryItem { ItemId = 2000000, Position = 1, Quantity = 10 });
+            hero.EquippedItems.Add(new InventoryItem { ItemId = 4000000, Position = 1, Quantity = 5 });
+            repo.Save(hero);
+
+            // "Consume" the potion stack: remove it from the entity and save again.
+            Character loaded = repo.Find(hero.Id)!;
+            loaded.EquippedItems.RemoveAll(i => i.ItemId == 2000000);
+            repo.Save(loaded);
+
+            // The row must NOT resurrect on reload (the dupe/leak bug).
+            Character reloaded = repo.Find(hero.Id)!;
+            InventoryItem survivor = Assert.Single(reloaded.EquippedItems);
+            Assert.Equal(4000000, survivor.ItemId);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            File.Delete(dbFile);
+        }
+    }
 }

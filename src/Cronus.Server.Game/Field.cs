@@ -778,6 +778,15 @@ public sealed class Field
         }
     }
 
+    /// <summary>The drop with this object id, still on the ground, or null (does not remove).</summary>
+    public FieldDrop? FindDrop(int objectId)
+    {
+        lock (_gate)
+        {
+            return _drops.TryGetValue(objectId, out FieldDrop? drop) ? drop : null;
+        }
+    }
+
     /// <summary>Removes a drop by object id (e.g. on pickup); returns it if it was present.</summary>
     public FieldDrop? RemoveDrop(int objectId)
     {

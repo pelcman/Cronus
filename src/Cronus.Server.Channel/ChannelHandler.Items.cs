@@ -52,6 +52,22 @@ public sealed partial class ChannelHandler
     /// carries the pet slot when a pet did the looting (LeaveType 5).</summary>
     private async ValueTask PickUpDropAsync(MapleSession session, int dropOid, int petSlot)
     {
+        if (_player!.Character.Hp <= 0)
+        {
+            return; // the dead don't loot
+        }
+
+        // Full-tab check BEFORE taking the drop off the field, so a full inventory leaves the
+        // item on the ground with the "inventory full" toast instead of eating it.
+        if (_field!.FindDrop(dropOid) is { IsMeso: false } peek
+            && peek.ItemId / 10_000 != 238
+            && !Inventory.CanAdd(_player.Character, peek.ItemId, peek.Quantity,
+                    _items.GetConsume(peek.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax))
+        {
+            await session.SendAsync(_packets.ShowInventoryFull()).ConfigureAwait(false);
+            return;
+        }
+
         FieldDrop? drop = _field!.RemoveDrop(dropOid);
         if (drop is null)
         {
@@ -209,9 +225,9 @@ public sealed partial class ChannelHandler
     /// </summary>
     private async ValueTask HandleUseItemAsync(MapleSession session, PacketReader packet)
     {
-        if (_player is null)
+        if (_player is null || _player.Character.Hp <= 0)
         {
-            return;
+            return; // the dead don't drink
         }
 
         packet.ReadInt();                 // timestamp
@@ -586,6 +602,13 @@ public sealed partial class ChannelHandler
             return;
         }
 
+        // No room for the whole purchase: decline before any meso/token changes hands.
+        if (!Inventory.CanAdd(c, itemId, quantity, _items.GetConsume(itemId)?.SlotMax ?? Inventory.DefaultSlotMax))
+        {
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.BuyUnknown)).ConfigureAwait(false);
+            return;
+        }
+
         // Token-currency entries: pay ReqItemQ of the ReqItem too (ports MapleShop.buy — one
         // bundle per purchase, and the meso price still applies on top).
         List<InventoryChange>? tokenChanges = null;
@@ -839,6 +862,13 @@ public sealed partial class ChannelHandler
         }
 
         InventoryItem item = categoryItems[index];
+        if (!Inventory.CanAdd(c, item.ItemId, item.Quantity,
+                _items.GetConsume(item.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax))
+        {
+            await session.SendAsync(_packets.TrunkError(TrunkOp.GetFailInventoryFull)).ConfigureAwait(false);
+            return; // the item stays in storage
+        }
+
         storage.Items.Remove(item);
         InventoryChange addChange = Inventory.Place(c, item); // preserves equip stats / quantity
         _characters.Save(c);
