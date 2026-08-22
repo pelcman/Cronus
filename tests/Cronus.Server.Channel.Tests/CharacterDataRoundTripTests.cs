@@ -47,6 +47,10 @@ public class CharacterDataRoundTripTests
         c.EquippedItems.Add(new InventoryItem { ItemId = 5000000, Position = 3, Quantity = 1, PetName = "ペット" });   // pet (cash tab)
         c.EquippedItems.Add(new InventoryItem { ItemId = 2070000, Position = 2, Quantity = 800 });                   // throwing stars (207 tail)
 
+        // Monster Book cards ride in the blob tail as [shortId:2][level:1] entries.
+        c.MonsterCards[2380000] = 1;
+        c.MonsterCards[2380100] = 5;
+
         var w = new PacketWriter(encoding: ServerConfig.Jms186.CodePage);
         CharacterDataEncoder.WriteAllData(w, c);
         byte[] blob = w.ToArray();
@@ -97,7 +101,11 @@ public class CharacterDataRoundTripTests
         r.ReadShort();                // minigame
         r.ReadShort(); r.ReadShort(); r.ReadShort(); // rings
         for (int i = 0; i < 15; i++) r.ReadInt();    // teleport rocks
-        r.ReadShort(); r.ReadInt(); r.ReadByte(); r.ReadShort(); r.ReadShort(); r.ReadShort(); r.ReadShort();
+        r.ReadShort();                               // presents
+        r.ReadInt(); r.ReadByte();                   // monster book cover + shrink flag
+        int cards = r.ReadShort();                   // registered card entries
+        for (int i = 0; i < cards; i++) { r.ReadShort(); r.ReadByte(); }
+        r.ReadShort(); r.ReadShort(); r.ReadShort(); // quest info / pre-BB extra / visitor log
 
         return blob.Length - r.Remaining;
     }

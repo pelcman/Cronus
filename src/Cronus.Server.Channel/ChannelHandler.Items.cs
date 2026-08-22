@@ -73,6 +73,32 @@ public sealed partial class ChannelHandler
             return;
         }
 
+        // Monster cards (238xxxx) register into the Monster Book instead of the inventory (ports
+        // ReqCDropPool's consumeOnPickup card branch): bump the count (cap 5), flash the
+        // card-get effect, and show the card message — never an InventoryOperation.
+        if (drop.ItemId / 10_000 == 238)
+        {
+            int count = c.MonsterCards.TryGetValue(drop.ItemId, out int have) ? have : 0;
+            if (count < 5)
+            {
+                count = Math.Min(5, count + Math.Max(1, (int)drop.Quantity));
+                c.MonsterCards[drop.ItemId] = count;
+                _characters.Save(c);
+                await session.SendAsync(_packets.MonsterBookSetCard(added: true, drop.ItemId, count)).ConfigureAwait(false);
+                await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectMonsterBookCardGet)).ConfigureAwait(false);
+                await _field.BroadcastAsync(
+                    _packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectMonsterBookCardGet),
+                    exceptCharacterId: c.Id).ConfigureAwait(false);
+            }
+            else
+            {
+                await session.SendAsync(_packets.MonsterBookSetCard(added: false, 0, 0)).ConfigureAwait(false);
+            }
+
+            await session.SendAsync(_packets.ShowCardGain(drop.ItemId)).ConfigureAwait(false);
+            return;
+        }
+
         // Item drop: stack it into the inventory and update the client's slot + show the gain message.
         List<InventoryChange> changes;
         if (drop.ItemInstance is { } instance)

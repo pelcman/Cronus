@@ -97,7 +97,14 @@ public static class CharacterDataEncoder
         w.WriteShort(0);                  // [0x7C] presents (none)
         w.WriteInt(0);                    // [0x20000] monster book cover
         w.WriteByte(0);                   // [0x10000] monster book: not shrunk
-        w.WriteShort(0);                  //           card count 0
+        w.WriteShort((short)c.MonsterCards.Count);
+        foreach (KeyValuePair<int, int> card in c.MonsterCards)
+        {
+            // GW_MonsterBookCode entries: the short card id (item id % 10000) + its level (count).
+            w.WriteShort((short)(card.Key % 10_000));
+            w.WriteByte((byte)card.Value);
+        }
+
         w.WriteShort(0);                  // [0x40000] quest info records (none)
         w.WriteShort(0);                  // [0x80000] (pre-BB extra)
         w.WriteShort(0);                  // [0x200000] visitor quest log (JMS >= 186)

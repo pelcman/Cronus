@@ -129,7 +129,13 @@ public static class CharacterDataParser
         r.ReadShort();                 // presents
         r.ReadInt();                   // monster book cover
         r.ReadByte();                  // monster book shrink
-        r.ReadShort();                 // card count
+        int cards = r.ReadShort();     // card count
+        for (int i = 0; i < cards; i++)
+        {
+            r.ReadShort();             // short card id
+            r.ReadByte();              // card level
+        }
+
         r.ReadShort();                 // quest info
         r.ReadShort();                 // pre-BB extra
         r.ReadShort();                 // visitor quest log

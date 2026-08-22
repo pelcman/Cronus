@@ -40,7 +40,7 @@ public class CharacterInfoTests
         Assert.Equal(0, r.ReadByte());      // pet info: empty slot 0
         Assert.Equal(0, r.ReadByte());      // taming enabled
         Assert.Equal(0, r.ReadByte());      // wishlist size
-        Assert.Equal(0, r.ReadInt());       // monster book: level
+        Assert.Equal(1, r.ReadInt());       // monster book: level (1 even when empty, per TacosMonsterBook)
         Assert.Equal(0, r.ReadInt());       // normal
         Assert.Equal(0, r.ReadInt());       // special
         Assert.Equal(0, r.ReadInt());       // total

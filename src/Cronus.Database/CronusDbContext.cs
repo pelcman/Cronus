@@ -73,6 +73,7 @@ public sealed class CronusDbContext : DbContext
         MapJsonDictionary(character, c => c.CompletedQuests); // questId -> completion time
         MapJsonDictionary(character, c => c.Buddies);         // friendId -> buddy entry
         MapJsonDictionary(character, c => c.SkillMacros);     // slot -> skill macro
+        MapJsonDictionary(character, c => c.MonsterCards);    // card item id -> count 1..5
 
         var item = modelBuilder.Entity<InventoryItem>();
         item.ToTable("items");

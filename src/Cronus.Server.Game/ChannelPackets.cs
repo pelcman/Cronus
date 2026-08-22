@@ -1746,12 +1746,27 @@ public sealed class ChannelPackets
         w.WriteByte(0);              // taming-mob enabled
         w.WriteByte(0);              // wishlist size
 
-        // MonsterBookInfo (level, normal, special, total, coverMobId) — all zero.
-        w.WriteInt(0);
-        w.WriteInt(0);
-        w.WriteInt(0);
-        w.WriteInt(0);
-        w.WriteInt(0);
+        // MonsterBookInfo (ports TacosMonsterBook.update): level from total cards, then the
+        // normal / special split (special cards are ids >= 2388000), total, and no cover mob.
+        int total = c.MonsterCards.Count;
+        int special = c.MonsterCards.Keys.Count(id => id >= 2_388_000);
+        int bookLevel = 1;
+        for (int cumulative = 0, lvl = 1; lvl < 8; lvl++)
+        {
+            cumulative += lvl * 10;
+            if (total <= cumulative)
+            {
+                break;
+            }
+
+            bookLevel++;
+        }
+
+        w.WriteInt(bookLevel);
+        w.WriteInt(total - special);
+        w.WriteInt(special);
+        w.WriteInt(total);
+        w.WriteInt(0);               // cover mob id (no cover set)
 
         // Medal / achievement (JMS >= 180): equipped medal id, then the medal-quest count.
         w.WriteInt(0);
@@ -2519,8 +2534,12 @@ public sealed class ChannelPackets
     /// <summary>User effect type: the level-up show (ports <c>OpsUserEffect.UserEffect_LevelUp</c>).</summary>
     public const byte UserEffectLevelUp = 0x00;
 
-    /// <summary>User effect type: the quest-complete jingle (JMS v186 <c>OpsUserEffect</c> = 10).</summary>
-    public const byte UserEffectQuestComplete = 10;
+    /// <summary>User effect type: the quest-complete jingle. JMS v186 takes <c>OpsUserEffect</c>'s
+    /// DEFAULT table (neither the ≤147 nor the ≥302 init branch), where QuestComplete = 0x0B.</summary>
+    public const byte UserEffectQuestComplete = 0x0B;
+
+    /// <summary>User effect type: the Monster Book card-registered flash (default table, 0x0F).</summary>
+    public const byte UserEffectMonsterBookCardGet = 0x0F;
 
     /// <summary>Builds <c>LP_UserEffectLocal</c> — plays an effect for the player themself (ports
     /// <c>ResCUserLocal.EffectData</c>; simple effects carry only the type byte).</summary>
@@ -2528,6 +2547,39 @@ public sealed class ChannelPackets
     {
         PacketWriter w = NewPacket(ServerOpcode.UserEffectLocal);
         w.WriteByte(effectType);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_MonsterBookSetCard</c> — registers a card in the client's Monster Book (ports
+    /// <c>ResCWvsContext.MonsterBookSetCard</c>): added flag, then the card item id and its new
+    /// count (1..5). <paramref name="added"/> false = the "already full" no-op form.
+    /// </summary>
+    public byte[] MonsterBookSetCard(bool added, int cardItemId, int cardCount)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MonsterBookSetCard);
+        w.WriteBool(added);
+        if (added)
+        {
+            w.WriteInt(cardItemId);
+            w.WriteInt(cardCount);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the "got a monster card" floating message (<c>LP_Message</c> / MS_DropPickUpMessage /
+    /// PICKUP_MONSTER_CARD, ports <c>ResWrapper.showGainCard</c>): just the card item id.
+    /// </summary>
+    public byte[] ShowCardGain(int cardItemId)
+    {
+        const byte pickUpMonsterCard = 2; // OpsDropPickUpMessage.PICKUP_MONSTER_CARD
+
+        PacketWriter w = NewPacket(ServerOpcode.Message);
+        w.WriteByte(MsgDropPickUp);
+        w.WriteByte(pickUpMonsterCard);
+        w.WriteInt(cardItemId);
         return w.ToArray();
     }
 

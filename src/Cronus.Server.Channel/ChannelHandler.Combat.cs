@@ -270,6 +270,15 @@ public sealed partial class ChannelHandler
         int dropped = 0;
         foreach (DropEntry entry in entries)
         {
+            // Monster cards stop dropping once the killer has the mob's card registered in the
+            // Monster Book (the reference gates at count 5; this server registers a card on the
+            // first pickup and gates from then on).
+            if (entry.ItemId / 10_000 == 238
+                && _player?.Character.MonsterCards.ContainsKey(entry.ItemId) == true)
+            {
+                continue;
+            }
+
             // Quest-locked drops only fall for a killer who is on that quest (the reference gates
             // them by quest status; per-viewer visibility is simplified to the killer's status).
             if (entry.QuestId > 0 && _player?.Character.StartedQuests.ContainsKey(entry.QuestId) != true)

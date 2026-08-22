@@ -85,6 +85,9 @@ public sealed class Character
     /// <summary>Skill macros: slot index (0-4) → macro (persisted as a JSON column).</summary>
     public Dictionary<int, SkillMacroEntry> SkillMacros { get; set; } = new();
 
+    /// <summary>Monster Book: card item id (238xxxx) → registered count 1..5 (JSON column).</summary>
+    public Dictionary<int, int> MonsterCards { get; set; } = new();
+
     /// <summary>The guild this character belongs to, or 0.</summary>
     public int GuildId { get; set; }
 
