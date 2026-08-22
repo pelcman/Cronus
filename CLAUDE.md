@@ -203,10 +203,11 @@ dotnet build Cronus.sln -c Debug
 dotnet test tests/Cronus.Network.Tests
 
 # Run the host (login server; default port 8484, or pass a port)
-dotnet run --project src/Cronus.Server.Host          # in-memory accounts
+dotnet run --project src/Cronus.Server.Host          # persists to cronus.db (SQLite) by default
 dotnet run --project src/Cronus.Server.Host 9595     # custom port
 
-# Persist accounts in MySQL: set a connection string (else it uses in-memory)
+# Storage backends: unset = SQLite file (CRONUS_DB_FILE overrides the path);
+# a MySQL connection string switches to MySQL; "memory" = in-process only.
 $env:CRONUS_DB = "server=localhost;database=cronus;user=root;password=..."
 dotnet run --project src/Cronus.Server.Host
 ```
@@ -262,9 +263,10 @@ Detailed progress and the task board live in [AGENTS.md](AGENTS.md) ("Roadmap", 
   macros, key bindings), and a complete **social layer**: whisper/`/find`, emotes, chairs,
   messenger, parties, buddy list (offline adds), guilds (+guild/party/friend chat), megaphones,
   trade, Omok/match-card rooms, personal shops, and hired merchants that persist across restarts.
-  In-game commands use the `/` prefix (docs/COMMANDS.md, EN/JA). Persistence is MySQL
-  (Pomelo/EF Core); deploy is env-driven (`CRONUS_HOST`/`CRONUS_DB`/`CRONUS_WZ`/`CRONUS_SCRIPTS`/
-  `CRONUS_DROPS`/`CRONUS_SHOPS`/`CRONUS_RATE_*`).
+  In-game commands use the `/` prefix (docs/COMMANDS.md, EN/JA). Persistence defaults to a
+  SQLite file (zero setup; EF Core), with MySQL (Pomelo) for production via `CRONUS_DB`; deploy
+  is env-driven (`CRONUS_HOST`/`CRONUS_DB`/`CRONUS_WZ`/`CRONUS_SCRIPTS`/`CRONUS_DROPS`/
+  `CRONUS_SHOPS`/`CRONUS_RATE_*`).
 - **Deferred**: guild BBS (its LP opcode is unresolved even in the reference), alliances,
   mastery books (skills level to wz max directly — an intentional simplification), mob stat
   buffs/player diseases (dead code in the reference), mini-game invites via the game UI.

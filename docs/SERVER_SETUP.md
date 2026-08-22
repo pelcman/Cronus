@@ -36,9 +36,9 @@ only basic PC knowledge. For a quick *localhost-only* try-out first, see
   (check: `dotnet --version` prints `10.x`). Get it from
   https://dotnet.microsoft.com/download .
 - The Cronus source (this repo).
-- *(Optional but recommended)* **MySQL 8** if you want accounts/characters to persist
-  across restarts. Without it, the server keeps everything in memory (wiped on
-  restart) — fine for a first test.
+- *(Optional)* **MySQL 8** for multi-process / production deployments. Without it the
+  server persists accounts/characters to a **SQLite file** (`cronus.db` next to the
+  executable) automatically — nothing to install, and restarts keep everything.
 
 **On each player's PC (you and friends):**
 - A **JMS v186** client (the exact 1.86 version).
@@ -80,7 +80,8 @@ matters most for remote play is `CRONUS_HOST`.
 | Variable | What it does | Example |
 |---|---|---|
 | `CRONUS_HOST` | **The IP the server tells clients to use for the channel.** Set this to your **public IP** (or LAN IP for a LAN party). If unset it's `127.0.0.1` = localhost only. | `203.0.113.9` |
-| `CRONUS_DB` | MySQL connection string → persistent accounts/characters. Unset = in-memory (wiped on restart). The schema is created automatically, and upgrades add any new tables/columns in place — each addition is logged as `[db] migrated: …` at startup. If a migration ever fails, dropping and recreating the database is the safe fallback. | `server=localhost;database=cronus;user=root;password=...` |
+| `CRONUS_DB` | Storage backend. **Unset = SQLite file** (`cronus.db` next to the exe, or `CRONUS_DB_FILE` to relocate) — persistent with zero setup. A MySQL connection string switches to MySQL. `memory` keeps everything in process (wiped on restart). Schemas are created automatically, and upgrades add new tables/columns in place — each addition is logged as `[db] migrated: …` at startup. If a migration ever fails, dropping and recreating the database is the safe fallback. | `server=localhost;database=cronus;user=root;password=...` |
+| `CRONUS_DB_FILE` | Path of the SQLite database file when `CRONUS_DB` is unset. | `D:\cronus\save.db` |
 | `CRONUS_WZ` | Path to a `wz_xml` data tree → NPC/mob/portal spawns. Unset = empty maps (you can still walk around; the client draws the map from its own wz). | `data/sample-wz` |
 | `CRONUS_SCRIPTS` | Script root (`{root}/npc/{id}.js`, `{root}/portal/{name}.js`) → NPC dialogs and portal scripts. | `scripts` |
 | `CRONUS_DROPS` | Path to a `drop_data.sql` dump → mobs drop items/meso from their drop tables. Unset = mobs drop a small placeholder meso pile only. | `drop_data.sql` |
@@ -181,8 +182,9 @@ In-game commands use the `/` prefix — `/map <id>`, `/meso <n>`, `/notice <msg>
 - **Client won't start / "不正なプログラム"** → don't use DLL-injection tools
   (dgVoodoo2 etc.); this client's anti-cheat rejects them. The WZ patch is a safe
   2-byte edit and is fine.
-- **Accounts/characters vanish after restart** → you're on in-memory storage; set
-  `CRONUS_DB` (Part 2) to a MySQL connection string.
+- **Accounts/characters vanish after restart** → you set `CRONUS_DB=memory`, or the
+  startup log shows a `[db] SQLite unavailable`/`MySQL unavailable` fallback — check
+  that line. The default (no `CRONUS_DB`) persists to `cronus.db` automatically.
 - **Deeper packet issues** → see [VALIDATION.md](VALIDATION.md) and compare bytes with
   [RirePE](https://github.com/Riremito/RirePE) against the Java reference server.
 
@@ -191,13 +193,16 @@ In-game commands use the `/` prefix — `/map <id>`, `/meso <n>`, `/notice <msg>
 ## Configuration quick reference
 
 ```powershell
-# Minimal local test (in-memory, localhost)
+# Minimal local test (persists to cronus.db automatically, localhost)
 dotnet run --project src/Cronus.Server.Host
 
-# Friends over the internet, persistent, with map/NPC data
+# Friends over the internet, with map/NPC data (still on the SQLite default)
 $env:CRONUS_HOST    = "203.0.113.9"     # your public IP or a DDNS hostname
-$env:CRONUS_DB      = "server=localhost;database=cronus;user=root;password=YOURPW"
 $env:CRONUS_WZ      = "data/sample-wz"
 $env:CRONUS_STARTMAP= "100000000"
 dotnet run --project src/Cronus.Server.Host 8484 7575
+
+# Optional: switch storage to MySQL (production) or pure memory (throwaway tests)
+# $env:CRONUS_DB = "server=localhost;database=cronus;user=root;password=YOURPW"
+# $env:CRONUS_DB = "memory"
 ```

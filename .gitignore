@@ -1,6 +1,10 @@
 # .NET build output
 bin/
 obj/
+
+# SQLite save data (the default persistence file)
+cronus.db
+cronus.db-*
 [Dd]ebug/
 [Rr]elease/
 x64/

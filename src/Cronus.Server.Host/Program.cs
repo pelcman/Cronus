@@ -477,28 +477,54 @@ static void WarnUnresolved(string which, OpcodeTable table)
 static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?, IHiredMerchantRepository?) CreateRepositories()
 {
     string? connectionString = Environment.GetEnvironmentVariable("CRONUS_DB");
-    if (string.IsNullOrWhiteSpace(connectionString))
+
+    // Explicit opt-out: CRONUS_DB=memory keeps everything in process (wiped on restart).
+    if (string.Equals(connectionString, "memory", StringComparison.OrdinalIgnoreCase))
     {
-        Console.WriteLine("[db] CRONUS_DB not set — using in-memory stores (not persistent).");
+        Console.WriteLine("[db] CRONUS_DB=memory — using in-memory stores (not persistent).");
         return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null);
     }
 
+    // A connection string selects MySQL (multi-process / production deployments).
+    if (!string.IsNullOrWhiteSpace(connectionString))
+    {
+        try
+        {
+            Func<CronusDbContext> factory = MySqlDatabase.CreateFactory(connectionString);
+            MySqlDatabase.EnsureCreated(factory);
+            Console.WriteLine("[db] Connected to MySQL; accounts, characters, storage, keymaps, and guilds are persistent.");
+            return DbRepositories(factory);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory stores.");
+            return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null);
+        }
+    }
+
+    // Default: a SQLite file next to the host — zero-setup persistence, so a plain
+    // `Cronus.Server.Host.exe` run survives restarts. CRONUS_DB_FILE overrides the path.
+    string dbFile = Environment.GetEnvironmentVariable("CRONUS_DB_FILE")
+        ?? Path.Combine(AppContext.BaseDirectory, "cronus.db");
     try
     {
-        Func<CronusDbContext> factory = MySqlDatabase.CreateFactory(connectionString);
-        MySqlDatabase.EnsureCreated(factory);
-        Console.WriteLine("[db] Connected to MySQL; accounts, characters, storage, keymaps, and guilds are persistent.");
-        return (
-            new DbAccountRepository(factory),
-            new DbCharacterRepository(factory),
-            new DbStorageRepository(factory),
-            new DbKeymapRepository(factory),
-            new DbGuildRepository(factory),
-            new DbHiredMerchantRepository(factory));
+        Func<CronusDbContext> factory = SqliteDatabase.CreateFactory(dbFile);
+        SqliteDatabase.EnsureCreated(factory);
+        Console.WriteLine($"[db] SQLite at {dbFile} — accounts, characters, storage, keymaps, and guilds are persistent.");
+        return DbRepositories(factory);
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory stores.");
+        Console.WriteLine($"[db] SQLite unavailable ({ex.Message}); falling back to in-memory stores.");
         return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null);
     }
 }
+
+static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?, IHiredMerchantRepository?) DbRepositories(Func<CronusDbContext> factory)
+    => (
+        new DbAccountRepository(factory),
+        new DbCharacterRepository(factory),
+        new DbStorageRepository(factory),
+        new DbKeymapRepository(factory),
+        new DbGuildRepository(factory),
+        new DbHiredMerchantRepository(factory));

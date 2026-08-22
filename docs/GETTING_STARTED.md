@@ -24,13 +24,14 @@ Cronus — JMS v186, region Jms
 Accounts auto-register on first login. Press Ctrl+C to stop.
 ```
 
-With nothing else configured the server uses in-memory storage and has no map/NPC data (you
-can still log in, create a character, enter the game, and walk around — the client renders the
-map from its own wz files). To enable persistence, maps/NPCs/mobs, and scripts, set:
+With nothing else configured the server persists accounts/characters to a SQLite file
+(`cronus.db` next to the executable) and has no map/NPC data (you can still log in, create a
+character, enter the game, and walk around — the client renders the map from its own wz
+files). To enable maps/NPCs/mobs and scripts, or change storage, set:
 
 | Env var | Effect |
 |---|---|
-| `CRONUS_DB` | MySQL connection string → persistent accounts/characters/items |
+| `CRONUS_DB` | unset = SQLite file (persistent, zero setup); a MySQL connection string switches to MySQL; `memory` = in-process only |
 | `CRONUS_WZ` | a wz_xml tree → NPC/mob/portal spawns (try the bundled `data/sample-wz`) |
 | `CRONUS_SCRIPTS` | script root (`{root}/npc/{id}.js`) → NPC dialogs (try `scripts`) |
 | `CRONUS_DROPS` | a `drop_data.sql` dump → mobs drop items/meso (else placeholder meso only) |
