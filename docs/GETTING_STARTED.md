@@ -19,8 +19,8 @@ You should see:
 
 ```
 Cronus — JMS v186, region Jms
-  login   : 0.0.0.0:8484
-  channel : 0.0.0.0:7575
+  login   : listening on 0.0.0.0:8484
+  channels: 2 — ports 7575..7576, advertised to clients as 127.0.0.1
 Accounts auto-register on first login. Press Ctrl+C to stop.
 ```
 

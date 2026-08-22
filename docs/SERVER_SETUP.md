@@ -14,14 +14,15 @@ only basic PC knowledge. For a quick *localhost-only* try-out first, see
 
 ## What you'll end up with
 
-- One PC (yours) runs the **server**. It listens on two TCP ports (login + channel).
+- One PC (yours) runs the **server**. It listens on a login port plus one port per game
+  channel (default 2 channels).
 - You open those ports so friends can reach your PC's public IP.
 - Each friend runs a **JMS v186 client** pointed at your IP, with a small WZ patch
   applied (fixes the game-entry crash). They log in and play together.
 
 ```
  friend's PC ──(internet)──▶ your public IP :8484 (login)
-                                            :7575 (channel)
+                                            :7575 :7576 (channels)
                                      ▲
                                   Cronus server (your PC)
 ```
@@ -62,7 +63,7 @@ You should see:
 ```
 Cronus — JMS v186, region Jms
   login   : listening on 0.0.0.0:8484
-  channel : listening on 0.0.0.0:7575, advertised to clients as 127.0.0.1:7575
+  channels: 2 — ports 7575..7576, advertised to clients as 127.0.0.1
   (localhost only — set CRONUS_HOST=<your LAN/public IP> so friends can connect)
 Accounts auto-register on first login. Press Ctrl+C to stop.
 ```
@@ -99,7 +100,7 @@ $env:CRONUS_HOST = "203.0.113.9"     # <-- your public IP
 dotnet run --project src/Cronus.Server.Host
 ```
 
-The startup log should now show `advertised to clients as 203.0.113.9:7575`.
+The startup log should now show `advertised to clients as 203.0.113.9`.
 
 > Note: a home public IP usually changes over time. For a stable address use a free
 > **Dynamic DNS** hostname (e.g. DuckDNS) — `CRONUS_HOST` accepts a hostname too
@@ -112,10 +113,10 @@ The startup log should now show `advertised to clients as 203.0.113.9:7575`.
 Friends' clients must reach the login port **8484** and **every channel port** on your
 public IP — with the default 2 channels that's **7575 and 7576**, TCP.
 
-1. **Windows Firewall** on the server PC: allow inbound TCP 8484 and 7575
+1. **Windows Firewall** on the server PC: allow inbound TCP 8484, 7575, and 7576
    (Control Panel → Windows Defender Firewall → Advanced → Inbound Rules → New Rule →
-   Port → TCP → `8484,7575` → Allow).
-2. **Router port-forwarding**: forward external TCP 8484 and 7575 to your server PC's
+   Port → TCP → `8484,7575-7576` → Allow).
+2. **Router port-forwarding**: forward external TCP 8484, 7575, and 7576 to your server PC's
    **LAN IP** (find it with `ipconfig`). This is done in your router's admin page
    (search "port forwarding" for your router model).
 3. **Test** from outside your network (e.g. a friend, or a phone on mobile data):
@@ -161,7 +162,7 @@ Every player (you included) does this once, to their own JMS v186 client:
 5. **Play together** — move, chat, fight mobs, pick up drops, use portals. Other
    players in the same map appear and their movement/chat is relayed.
 
-GM/debug chat: `!map <id>`, `!meso <n>`, `!notice <msg>`, `!pos`, `!help`.
+In-game commands use the `/` prefix — `/map <id>`, `/meso <n>`, `/notice <msg>`, `/help`, … — see [COMMANDS.md](COMMANDS.md) ([日本語](COMMANDS.ja.md)).
 
 ---
 
