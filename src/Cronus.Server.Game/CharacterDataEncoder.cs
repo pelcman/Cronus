@@ -42,14 +42,20 @@ public static class CharacterDataEncoder
 
         WriteInventoryInfo(w, c);
 
-        // [0x100] skills: id, level, expiration (JMS >= 180). Master-level-only 4th-job skills
-        // are not modeled, so no master-level field is written.
+        // [0x100] skills: id, level, expiration (JMS >= 180), then a master-level int for skills
+        // that carry one (4th-job skills raised by mastery books). Omitting that int for a
+        // master-level skill slips every following byte and crashes the client (EOF) — which is
+        // exactly what a /maxskills'd advanced character hit on re-entry.
         w.WriteShort((short)c.Skills.Count);
         foreach (KeyValuePair<int, int> skill in c.Skills)
         {
             w.WriteInt(skill.Key);
             w.WriteInt(skill.Value);
             w.WriteLong(NoExpiration);
+            if (NeedsMasterLevel(skill.Key))
+            {
+                w.WriteInt(skill.Value); // master level = the learned (maxed) level
+            }
         }
 
         // [0x8000] cooldowns (none)
@@ -95,6 +101,38 @@ public static class CharacterDataEncoder
         w.WriteShort(0);                  // [0x40000] quest info records (none)
         w.WriteShort(0);                  // [0x80000] (pre-BB extra)
         w.WriteShort(0);                  // [0x200000] visitor quest log (JMS >= 186)
+    }
+
+    /// <summary>
+    /// True when a skill carries a master-level field in the skill record (ports the pre-BB path of
+    /// <c>Structure.is_skill_need_master_level</c>): 4th-job skills, plus the Evan/Dual-Blade
+    /// special cases. The beginner families never do. Getting this wrong shifts the skill list and
+    /// crashes the client with EOF.
+    /// </summary>
+    public static bool NeedsMasterLevel(int skillId)
+    {
+        int jobId = skillId / 10000;
+
+        // Evan (2200–2218): master level from the 7th tier up.
+        if (jobId is >= 2200 and <= 2218)
+        {
+            return jobId % 10 >= 7;
+        }
+
+        // Dual Blade (430–434): from the 4th tier up.
+        if (jobId is >= 430 and <= 434)
+        {
+            return jobId % 10 >= 4;
+        }
+
+        // Beginner families never carry a master level.
+        if (jobId is 0 or 1000 or 2000 or 2001 or 3000)
+        {
+            return false;
+        }
+
+        // Otherwise the 4th-job skills (job tier digit >= 2).
+        return jobId % 10 >= 2;
     }
 
     /// <summary>

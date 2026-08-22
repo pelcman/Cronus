@@ -475,6 +475,30 @@ public sealed class Scenarios
             await bot.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
             return $"now on {ip}:{port}";
         }).ConfigureAwait(false);
+
+        await StepAsync(bot, "chardata:maxed-4th-job-reentry", async () =>
+        {
+            // The re-login crash class: an advanced, /maxskills'd character's full CharacterData.
+            // Become a 4th-job mage, max skills, then re-enter (channel 0) and parse the whole
+            // blob the way the client does — a mis-sized skill/inventory section is caught here.
+            await ChatAsync(bot, "/job 222").ConfigureAwait(false);
+            await bot.ExpectAsync(ServerOpcode.StatChanged).ConfigureAwait(false);
+            await ChatAsync(bot, "/maxskills").ConfigureAwait(false);
+            await Task.Delay(400).ConfigureAwait(false); // let the skill-record acks flush
+
+            PacketWriter w = bot.NewPacket(ClientOpcode.UserTransferChannelRequest);
+            w.WriteByte(0); // back to channel 0 (the bot is on channel 1 after the previous step)
+            await bot.SendAsync(w).ConfigureAwait(false);
+            PacketReader mig = await bot.ExpectAsync(ServerOpcode.MigrateCommand).ConfigureAwait(false);
+            mig.ReadByte();
+            var ip = new IPAddress(mig.ReadBytes(4));
+            int port = (ushort)mig.ReadShort();
+            await MigrateAsync(bot, new IPEndPoint(ip, port), bot.CharacterId, ct).ConfigureAwait(false);
+
+            PacketReader field = await bot.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
+            int leftover = CharacterDataParser.ValidateSetField(field);
+            return leftover == 0 ? "full CharacterData parsed clean (79+ skills, 4th job)" : throw new InvalidOperationException($"CharacterData mis-sized (leftover {leftover}b) — client would EOF-crash");
+        }).ConfigureAwait(false);
     }
 
     // ---- paired scenarios ----------------------------------------------------------------
