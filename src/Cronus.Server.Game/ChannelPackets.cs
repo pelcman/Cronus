@@ -2548,12 +2548,16 @@ public sealed class ChannelPackets
     /// <summary>User effect type: the level-up show (ports <c>OpsUserEffect.UserEffect_LevelUp</c>).</summary>
     public const byte UserEffectLevelUp = 0x00;
 
-    /// <summary>User effect type: the quest-complete jingle. JMS v186 takes <c>OpsUserEffect</c>'s
-    /// DEFAULT table (neither the ≤147 nor the ≥302 init branch), where QuestComplete = 0x0B.</summary>
-    public const byte UserEffectQuestComplete = 0x0B;
+    // Effect ids use the PRE-BIG-BANG table (OpsUserEffect's ≤KMS65/≤JMS147 init values, which
+    // is the pre-BB client layout: ...JobChanged=8, QuestComplete=9, IncDecHP=10, BuffItem=11,
+    // Squib=12, MonsterBookCardGet=13). The enum's declaration defaults are the GMS v95 POST-BB
+    // table — sending its CardGet (0x0F) crashed the live v186 client (out of range).
 
-    /// <summary>User effect type: the Monster Book card-registered flash (default table, 0x0F).</summary>
-    public const byte UserEffectMonsterBookCardGet = 0x0F;
+    /// <summary>User effect type: the quest-complete jingle (pre-BB table: 9).</summary>
+    public const byte UserEffectQuestComplete = 9;
+
+    /// <summary>User effect type: the Monster Book card-registered flash (pre-BB table: 13).</summary>
+    public const byte UserEffectMonsterBookCardGet = 13;
 
     /// <summary>Builds <c>LP_UserEffectLocal</c> — plays an effect for the player themself (ports
     /// <c>ResCUserLocal.EffectData</c>; simple effects carry only the type byte).</summary>
