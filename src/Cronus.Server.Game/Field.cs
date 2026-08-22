@@ -269,10 +269,13 @@ public sealed class Field
     private const int MobObjectIdBase = 2_000_000;
     private const int DropObjectIdBase = 3_000_000;
     private const int ReactorObjectIdBase = 4_000_000;
+    private const int SummonObjectIdBase = 5_000_000;
 
     private readonly Dictionary<int, FieldPlayer> _players = new();
     private readonly Dictionary<int, FieldDrop> _drops = new();
+    private readonly Dictionary<int, FieldSummon> _summons = new();
     private int _nextDropOid = DropObjectIdBase;
+    private int _nextSummonOid = SummonObjectIdBase;
     private readonly object _gate = new();
 
     public Field(int mapId, MapData? mapData = null, IMobProvider? mobs = null)
@@ -540,6 +543,97 @@ public sealed class Field
             {
                 return _drops.Values.ToList();
             }
+        }
+    }
+
+    /// <summary>The summons standing in this field (for enter-field replay).</summary>
+    public IReadOnlyList<FieldSummon> Summons
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _summons.Values.ToList();
+            }
+        }
+    }
+
+    /// <summary>Registers a freshly cast summon (assigns the object id).</summary>
+    public FieldSummon AddSummon(int ownerId, int skillId, int skillLevel, int ownerLevel, short x, short y, short foothold, int hp, DateTime expiresAt)
+    {
+        lock (_gate)
+        {
+            var summon = new FieldSummon
+            {
+                ObjectId = _nextSummonOid++,
+                OwnerId = ownerId,
+                SkillId = skillId,
+                SkillLevel = skillLevel,
+                OwnerLevel = ownerLevel,
+                X = x,
+                Y = y,
+                Foothold = foothold,
+                Hp = hp,
+                ExpiresAt = expiresAt,
+            };
+            _summons[summon.ObjectId] = summon;
+            return summon;
+        }
+    }
+
+    public FieldSummon? FindSummon(int objectId)
+    {
+        lock (_gate)
+        {
+            return _summons.TryGetValue(objectId, out FieldSummon? s) ? s : null;
+        }
+    }
+
+    /// <summary>Removes one summon; returns it, or null when it was already gone.</summary>
+    public FieldSummon? RemoveSummon(int objectId)
+    {
+        lock (_gate)
+        {
+            return _summons.Remove(objectId, out FieldSummon? s) ? s : null;
+        }
+    }
+
+    /// <summary>Removes and returns every summon belonging to a player (map change / logout).</summary>
+    public IReadOnlyList<FieldSummon> RemoveSummonsOf(int ownerId)
+    {
+        lock (_gate)
+        {
+            var removed = _summons.Values.Where(s => s.OwnerId == ownerId).ToList();
+            foreach (FieldSummon s in removed)
+            {
+                _summons.Remove(s.ObjectId);
+            }
+
+            return removed;
+        }
+    }
+
+    /// <summary>The player's summon cast from this skill, or null.</summary>
+    public FieldSummon? FindSummonBySkill(int ownerId, int skillId)
+    {
+        lock (_gate)
+        {
+            return _summons.Values.FirstOrDefault(s => s.OwnerId == ownerId && s.SkillId == skillId);
+        }
+    }
+
+    /// <summary>Removes and returns the summons whose time is up.</summary>
+    public IReadOnlyList<FieldSummon> TakeExpiredSummons(DateTime now)
+    {
+        lock (_gate)
+        {
+            var expired = _summons.Values.Where(s => s.ExpiresAt <= now).ToList();
+            foreach (FieldSummon s in expired)
+            {
+                _summons.Remove(s.ObjectId);
+            }
+
+            return expired;
         }
     }
 

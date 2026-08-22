@@ -422,6 +422,20 @@ Each milestone means adding one "working vertical slice".
         color / skin NPCs in every town (Henesys, Kerning, Orbis, Ludi, Mu Lung, Ariant,
         Showa, and the CMS/visitor salons in the JMS data).
 
+  - [x] **M10ad: player summons** — the full summon pool for 3rd/4th-job play:
+        `LP_SummonedEnterField/LeaveField/Move/Attack/Hit` builders (byte-layout tested against
+        `ResCSummonedPool` + `DataCSummoned.Init`, JMS v186 path), the pre-BB skill tables
+        (puppets/octopus = stationary, hawks/dragon/phoenix/frostprey = fly, gaviota =
+        fly-random + departs after striking, beholder/ifrit/elquines/bahamut/KoC = walk), and
+        the CP handlers: move relays the raw CMovePath, attack validates damage through the
+        99,999 cap and shares the kill flow (exp/quests/loot), puppet hits track HP and fade it
+        at 0. Casting spawns it (recast replaces), cancel dismisses, expiry sweeps on the buff
+        tick, entrants get standing summons replayed at their owner's position, and map
+        change/logout despawns (the reference re-spawns across maps — documented
+        simplification). End-to-end test: a priest's cast reaches the other client in the map.
+        Also this batch: buddy capacity (+5 via NPC, entry-blob byte now per-character), the
+        Fredrick remote merchant pack-up, and the wz map recovery rate driving sauna regen.
+
 - [x] **M11: World tick — mob respawn** — a server `MobRespawnService` (`PeriodicTimer`) brings
       dead mobs back after a delay (`FieldMob.RespawnAtTick`, set on kill), announcing
       `LP_MobEnterField` and handing control to a player present. Keeps hunting maps populated

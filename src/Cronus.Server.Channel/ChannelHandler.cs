@@ -102,6 +102,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opAbilityUp;
     private readonly int _opAbilityMassUp;
     private readonly int _opMobMove;
+    private readonly int _opSummonedMove;
+    private readonly int _opSummonedAttack;
+    private readonly int _opSummonedHit;
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
@@ -233,6 +236,9 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opAbilityUp = clientOpcodes.Get(ClientOpcode.UserAbilityUpRequest);
         _opAbilityMassUp = clientOpcodes.Get(ClientOpcode.UserAbilityMassUpRequest);
         _opMobMove = clientOpcodes.Get(ClientOpcode.MobMove);
+        _opSummonedMove = clientOpcodes.Get(ClientOpcode.SummonedMove);
+        _opSummonedAttack = clientOpcodes.Get(ClientOpcode.SummonedAttack);
+        _opSummonedHit = clientOpcodes.Get(ClientOpcode.SummonedHit);
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
@@ -428,6 +434,18 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             await HandleMobMoveAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opSummonedMove)
+        {
+            await HandleSummonedMoveAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opSummonedAttack)
+        {
+            await HandleSummonedAttackAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opSummonedHit)
+        {
+            await HandleSummonedHitAsync(packet).ConfigureAwait(false);
+        }
         else if (opcode == _opTransferField)
         {
             await HandleTransferFieldAsync(session, packet).ConfigureAwait(false);
@@ -554,6 +572,12 @@ public sealed class ChannelHandler : PacketHandlerBase
             if (party is not null)
             {
                 await LeavePartyAsync(party, _player, byDisconnect: true).ConfigureAwait(false);
+            }
+
+            // Their summons vanish with them.
+            foreach (FieldSummon summon in _field.RemoveSummonsOf(_player.Character.Id))
+            {
+                await _field.BroadcastAsync(_packets.SummonedLeaveField(summon, animated: false)).ConfigureAwait(false);
             }
 
             _field.Leave(_player.Character.Id);
@@ -733,6 +757,19 @@ public sealed class ChannelHandler : PacketHandlerBase
         foreach (FieldDrop drop in field.Drops)
         {
             await session.SendAsync(_packets.DropEnterField(drop, onGround: true)).ConfigureAwait(false);
+        }
+
+        // Standing summons appear in place; assist summons show at their owner (they follow).
+        foreach (FieldSummon summon in field.Summons)
+        {
+            if (!summon.IsPuppet
+                && field.Players.FirstOrDefault(p => p.Character.Id == summon.OwnerId) is { } owner)
+            {
+                summon.X = owner.X;
+                summon.Y = owner.Y;
+            }
+
+            await session.SendAsync(_packets.SummonedEnterField(summon, animated: true)).ConfigureAwait(false);
         }
     }
 
@@ -1330,6 +1367,12 @@ public sealed class ChannelHandler : PacketHandlerBase
             await session.SendAsync(_packets.StatChanged(c, StatFlag.Mp)).ConfigureAwait(false);
         }
 
+        // A summon skill also spawns its summon in the field.
+        if (_field is not null && SummonSkills.IsSummon(skillId))
+        {
+            await SpawnSummonAsync(c, skillId, level, effect).ConfigureAwait(false);
+        }
+
         List<BuffStat> buffs = SkillBuff.FromEffect(skillId, effect);
         if (buffs.Count == 0)
         {
@@ -1386,6 +1429,163 @@ public sealed class ChannelHandler : PacketHandlerBase
         {
             _buffs.Remove(c.Id, skillId);
             await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
+        }
+
+        // Cancelling a summon skill dismisses the summon too.
+        if (_field is not null && SummonSkills.IsSummon(skillId)
+            && _field.FindSummonBySkill(c.Id, skillId) is { } summon)
+        {
+            _field.RemoveSummon(summon.ObjectId);
+            await _field.BroadcastAsync(_packets.SummonedLeaveField(summon, animated: false)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Spawns the summon a cast produces and shows it to the field (ports the
+    /// <c>MapleStatEffect.applyTo</c> summon branch). Recasting replaces the standing one.
+    /// </summary>
+    private async ValueTask SpawnSummonAsync(Character c, int skillId, int level, SkillEffect effect)
+    {
+        Field field = _field!;
+        FieldPlayer player = _player!;
+
+        if (field.FindSummonBySkill(c.Id, skillId) is { } old)
+        {
+            field.RemoveSummon(old.ObjectId);
+            await field.BroadcastAsync(_packets.SummonedLeaveField(old, animated: false)).ConfigureAwait(false);
+        }
+
+        int durationMs = effect.DurationMs > 0 ? effect.DurationMs : 60_000;
+        int hp = effect.X + (skillId == SummonSkills.Beholder ? 1 : 0); // puppet HP comes from x
+        FieldSummon summon = field.AddSummon(
+            c.Id, skillId, level, c.Level, player.X, player.Y, foothold: 0, hp,
+            DateTime.UtcNow.AddMilliseconds(durationMs));
+        await field.BroadcastAsync(_packets.SummonedEnterField(summon, animated: false)).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleSummonedMoveAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_SummonedMove: [summonOid:4][raw CMovePath] — relayed verbatim like UserMove.
+        int summonOid = packet.ReadInt();
+        FieldSummon? summon = _field.FindSummon(summonOid);
+        if (summon is null || summon.OwnerId != _player.Character.Id
+            || summon.MoveAbility == SummonSkills.MoveStop)
+        {
+            return; // not theirs, or a stationary puppet (the reference rejects those moves too)
+        }
+
+        byte[] movePath = packet.ReadRemaining();
+        await _field.BroadcastAsync(
+            _packets.SummonedMove(summon, movePath),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+    }
+
+    private async ValueTask HandleSummonedAttackAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_SummonedAttack (ports ReqCSummonedPool.OnAttack, the >= 164/186 branches):
+        // [summonOid:4][skip:20][animation:1][skip:8][count:1][attack rect:8] then per hit
+        // [mobOid:4][mobTemplateId:4][skip:15][damage:4].
+        int summonOid = packet.ReadInt();
+        FieldSummon? summon = _field.FindSummon(summonOid);
+        if (summon is null || summon.OwnerId != _player.Character.Id || packet.Remaining < 38)
+        {
+            return;
+        }
+
+        packet.Skip(20);
+        byte animation = packet.ReadByte();
+        packet.Skip(8);
+        int count = packet.ReadByte();
+        packet.Skip(8);
+
+        var hits = new List<(int MobObjectId, int Damage)>();
+        for (int i = 0; i < count && packet.Remaining >= 27; i++)
+        {
+            int mobOid = packet.ReadInt();
+            packet.ReadInt(); // mob template id
+            packet.Skip(15);
+            hits.Add((mobOid, DamageValidator.ClampLine(packet.ReadInt())));
+        }
+
+        await _field.BroadcastAsync(
+            _packets.SummonedAttack(summon, animation, hits),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+        await ApplySummonDamageAsync(session, hits).ConfigureAwait(false);
+
+        // Gaviota departs after its single strike.
+        if (summon.SkillId == SummonSkills.Gaviota && _field.RemoveSummon(summon.ObjectId) is not null)
+        {
+            await _field.BroadcastAsync(_packets.SummonedLeaveField(summon, animated: true)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Applies a summon's validated hits to the mobs (kill flow shared with player attacks).</summary>
+    private async ValueTask ApplySummonDamageAsync(MapleSession session, IReadOnlyList<(int MobObjectId, int Damage)> hits)
+    {
+        foreach ((int mobOid, int damage) in hits)
+        {
+            FieldMob? mob = _field!.FindMob(mobOid);
+            if (mob is null || mob.IsDead)
+            {
+                continue;
+            }
+
+            mob.Damage(damage);
+            if (mob.IsBoss)
+            {
+                await _field.BroadcastAsync(_packets.MobHpTag(mob)).ConfigureAwait(false);
+            }
+
+            if (mob.IsDead)
+            {
+                mob.ControllerId = -1;
+                mob.RespawnAtTick = MobRespawnService.NextRespawnTick(mob.MobTime);
+                await _field.BroadcastAsync(_packets.MobLeaveField(mob.ObjectId)).ConfigureAwait(false);
+                await GrantKillExpAsync(mob.Exp).ConfigureAwait(false);
+                await UpdateQuestKillsAsync(session, mob.TemplateId).ConfigureAwait(false);
+                await DropLootAsync(mob).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async ValueTask HandleSummonedHitAsync(PacketReader packet)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        // JMS v186 CP_SummonedHit: [summonOid:4][attackAction:1][damage:4][mobTemplateIdFrom:4]
+        // (ports ReqCSummonedPool.OnHit — only puppets take hits).
+        int summonOid = packet.ReadInt();
+        FieldSummon? summon = _field.FindSummon(summonOid);
+        if (summon is null || summon.OwnerId != _player.Character.Id || !summon.IsPuppet)
+        {
+            return;
+        }
+
+        byte attackAction = packet.ReadByte();
+        int damage = packet.ReadInt();
+        int mobTemplateFrom = packet.ReadInt();
+
+        summon.Hp -= damage;
+        await _field.BroadcastAsync(
+            _packets.SummonedHit(summon, attackAction, damage, mobTemplateFrom),
+            exceptCharacterId: _player.Character.Id).ConfigureAwait(false);
+
+        if (summon.Hp <= 0 && _field.RemoveSummon(summon.ObjectId) is not null)
+        {
+            await _field.BroadcastAsync(_packets.SummonedLeaveField(summon, animated: true)).ConfigureAwait(false);
         }
     }
 
@@ -6295,6 +6495,12 @@ public sealed class ChannelHandler : PacketHandlerBase
     {
         FieldPlayer player = _player!;
         Field oldField = _field!;
+
+        // Summons don't cross maps (a documented simplification — the reference re-spawns them).
+        foreach (FieldSummon summon in oldField.RemoveSummonsOf(player.Character.Id))
+        {
+            await oldField.BroadcastAsync(_packets.SummonedLeaveField(summon, animated: false)).ConfigureAwait(false);
+        }
 
         oldField.Leave(player.Character.Id);
         await oldField.BroadcastAsync(_packets.UserLeaveField(player.Character.Id)).ConfigureAwait(false);

@@ -44,6 +44,9 @@ public static class ClientOpcode
     public const string UserAbilityUpRequest = "CP_UserAbilityUpRequest";
     public const string UserAbilityMassUpRequest = "CP_UserAbilityMassUpRequest";
     public const string MobMove = "CP_MobMove";
+    public const string SummonedMove = "CP_SummonedMove";
+    public const string SummonedAttack = "CP_SummonedAttack";
+    public const string SummonedHit = "CP_SummonedHit";
     public const string UserTransferFieldRequest = "CP_UserTransferFieldRequest";
     public const string UserSelectNpc = "CP_UserSelectNpc";
     public const string UserShopRequest = "CP_UserShopRequest";
@@ -148,6 +151,11 @@ public static class ServerOpcode
     public const string MobChangeController = "LP_MobChangeController";
     public const string MobMove = "LP_MobMove";
     public const string MobCtrlAck = "LP_MobCtrlAck";
+    public const string SummonedEnterField = "LP_SummonedEnterField";
+    public const string SummonedLeaveField = "LP_SummonedLeaveField";
+    public const string SummonedMove = "LP_SummonedMove";
+    public const string SummonedAttack = "LP_SummonedAttack";
+    public const string SummonedHit = "LP_SummonedHit";
     public const string DropEnterField = "LP_DropEnterField";
     public const string DropLeaveField = "LP_DropLeaveField";
     public const string GuildResult = "LP_GuildResult";

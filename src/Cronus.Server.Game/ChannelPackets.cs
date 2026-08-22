@@ -150,6 +150,90 @@ public sealed class ChannelPackets
     }
 
     /// <summary>
+    /// Builds <c>LP_SummonedEnterField</c> (ports <c>ResCSummonedPool.SummonedEnterField</c> +
+    /// <c>DataCSummoned.Init</c>, JMS v186 path). <paramref name="animated"/> false plays the
+    /// create animation (a fresh cast); true drops it in place (enter-field replay).
+    /// </summary>
+    public byte[] SummonedEnterField(FieldSummon s, bool animated)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SummonedEnterField);
+        w.WriteInt(s.OwnerId);                // m_dwCharacterId
+        w.WriteInt(s.ObjectId);               // m_dwSummonedID
+        w.WriteInt(s.SkillId);                // m_nSkillID
+        w.WriteByte((byte)(s.OwnerLevel - 1)); // m_nCharLevel (JMS >= 186)
+        w.WriteByte((byte)s.SkillLevel);      // m_nSLV
+
+        // CSummoned::Init
+        w.WriteShort(s.X);
+        w.WriteShort(s.Y);
+        w.WriteByte(4);                       // m_nMoveAction = MA_ALERT
+        w.WriteShort(s.Foothold);
+        w.WriteByte(s.MoveAbility);           // m_nMoveAbility
+        w.WriteByte(s.AssistType);            // m_nAssistType
+        w.WriteByte(animated ? 0 : 1);        // nEnterType (0 default / 1 create)
+        w.WriteByte(0);                       // avatar-look flag (JMS >= 186; dual-blade only)
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_SummonedLeaveField</c> (ports <c>ResCSummonedPool.SummonedLeaveField</c>):
+    /// <paramref name="animated"/> true fades it out (dead / expired), false removes it flat.
+    /// </summary>
+    public byte[] SummonedLeaveField(FieldSummon s, bool animated)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SummonedLeaveField);
+        w.WriteInt(s.OwnerId);
+        w.WriteInt(s.ObjectId);
+        w.WriteByte(animated ? 4 : 1); // LEAVE_TYPE_SUMMONED_DEAD / LEAVE_TYPE_LEAVE_FIELD
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_SummonedMove</c> relaying the raw CMovePath verbatim.</summary>
+    public byte[] SummonedMove(FieldSummon s, byte[] movePath)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SummonedMove);
+        w.WriteInt(s.OwnerId);
+        w.WriteInt(s.ObjectId);
+        w.WriteBytes(movePath);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_SummonedAttack</c> (ports <c>ResCSummonedPool.SummonedAttack</c>, JMS v186:
+    /// level byte present, per-hit filler 7).
+    /// </summary>
+    public byte[] SummonedAttack(FieldSummon s, byte animation, IReadOnlyList<(int MobObjectId, int Damage)> hits)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SummonedAttack);
+        w.WriteInt(s.OwnerId);
+        w.WriteInt(s.SkillId);
+        w.WriteByte((byte)(s.OwnerLevel - 1));
+        w.WriteByte(animation);
+        w.WriteByte((byte)hits.Count);
+        foreach ((int mobObjectId, int damage) in hits)
+        {
+            w.WriteInt(mobObjectId);
+            w.WriteByte(7);
+            w.WriteInt(damage);
+        }
+
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_SummonedHit</c> — a puppet takes a hit (ports <c>SummonedHit</c>).</summary>
+    public byte[] SummonedHit(FieldSummon s, byte attackAction, int damage, int mobTemplateIdFrom)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SummonedHit);
+        w.WriteInt(s.OwnerId);
+        w.WriteInt(s.SkillId);
+        w.WriteByte(attackAction);
+        w.WriteInt(damage);
+        w.WriteInt(mobTemplateIdFrom);
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>
     /// Builds <c>LP_NpcEnterField</c> spawning an NPC (ports <c>ResCNpcPool.NpcEnterField</c> +
     /// <c>CNpc_Init</c>, JMS v186 path — no JMS &gt;= 194 trailing byte).
     /// </summary>

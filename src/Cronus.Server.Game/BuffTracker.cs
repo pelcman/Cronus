@@ -161,6 +161,13 @@ public sealed class BuffExpiryService
         int sent = 0;
         foreach (Field field in _fields.Fields)
         {
+            // Summons whose time is up fade out for the whole field.
+            foreach (FieldSummon summon in field.TakeExpiredSummons(now))
+            {
+                await field.BroadcastAsync(_packets.SummonedLeaveField(summon, animated: true)).ConfigureAwait(false);
+                sent++;
+            }
+
             foreach (FieldPlayer player in field.Players)
             {
                 List<ActiveBuff> expired = _buffs.TakeExpired(player.Character.Id, now);
