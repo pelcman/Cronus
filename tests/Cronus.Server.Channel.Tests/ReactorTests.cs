@@ -151,4 +151,129 @@ public class ReactorTests
         Assert.False(reactor.IsDead);
         Assert.Equal(0, reactor.State);
     }
+
+    [Fact]
+    public void SqlReactorDropProvider_ReadsOnlyTheReactordropsTuples()
+    {
+        // The dump holds many tables; only the reactordrops INSERT rows must be read, and the
+        // 5-column tuple maps as (reactordropid, reactorid, itemid, chance, questid).
+        const string sql = """
+            INSERT INTO `drop_data` (`id`, `dropperid`, `itemid`, `minimum_quantity`, `maximum_quantity`, `questid`, `chance`) VALUES
+            (1, 100100, 2000000, 1, 1, 0, 400);
+            INSERT INTO `reactordrops` (`reactordropid`, `reactorid`, `itemid`, `chance`, `questid`) VALUES
+            (1, 2001, 4031161, 1, 1008),
+            (3, 2001, 2010009, 2, -1);
+            INSERT INTO `shopitems` (`shopitemid`, `shopid`, `itemid`, `price`, `position`) VALUES
+            (9, 9999, 2000000, 50, 1);
+            """;
+
+        SqlReactorDropProvider drops = SqlReactorDropProvider.Parse(sql);
+
+        Assert.Equal(2, drops.GetDrops(2001).Count);
+        Assert.Equal(new ReactorDropEntry(4031161, 1, 1008), drops.GetDrops(2001)[0]);
+        Assert.Equal(new ReactorDropEntry(2010009, 2, -1), drops.GetDrops(2001)[1]);
+        Assert.Empty(drops.GetDrops(100100)); // drop_data / shopitems rows must not leak in
+        Assert.Empty(drops.GetDrops(9999));
+    }
+
+    /// <summary>Smashes the reactor and records every DropEnterField item id.</summary>
+    private sealed class DropWatcher : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly int _opEnter = ServerOps.Get(ServerOpcode.ReactorEnterField);
+        private readonly int _opChange = ServerOps.Get(ServerOpcode.ReactorChangeState);
+        private readonly int _opDrop = ServerOps.Get(ServerOpcode.DropEnterField);
+        private int _objectId;
+
+        public DropWatcher(int characterId) => _characterId = characterId;
+
+        public TaskCompletionSource<List<int>> Drops { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly List<int> _itemIds = new();
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opEnter)
+            {
+                _objectId = p.ReadInt();
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.ReactorHit), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(_objectId);
+                w.WriteInt(0);
+                w.WriteShort(0);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opChange)
+            {
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.ReactorHit), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(_objectId);
+                w.WriteInt(0);
+                w.WriteShort(0);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opDrop)
+            {
+                p.ReadByte();               // enter type
+                p.ReadInt();                // drop oid
+                p.ReadByte();               // meso flag (0 = item)
+                _itemIds.Add(p.ReadInt());  // item id
+                if (_itemIds.Count == 2)
+                {
+                    Drops.TrySetResult(_itemIds);
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task BreakingAReactor_SpawnsItsTableDrops_QuestGated()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Smash", MapId = 100000000 });
+        hero.StartedQuests[1008] = string.Empty; // the quest-gated row's quest is active
+        repo.Save(hero);
+
+        var map = new MapData
+        {
+            MapId = 100000000,
+            Portals = Array.Empty<PortalData>(),
+            Reactors = new[] { new ReactorSpawn { ReactorId = 2001, X = 100, Y = 50, ReactorTime = 3 } },
+        };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var reactors = new InMemoryReactorProvider(new Dictionary<int, ReactorData> { [2001] = Box() });
+        var reactorDrops = new InMemoryReactorDropProvider(new Dictionary<int, IReadOnlyList<ReactorDropEntry>>
+        {
+            [2001] = new[]
+            {
+                new ReactorDropEntry(4031161, 1, 1008),   // chance 1 = always; quest active -> drops
+                new ReactorDropEntry(2000000, 1, -1),     // chance 1, no gate -> drops
+                new ReactorDropEntry(4031162, 1, 9999),   // gated on a quest the breaker lacks
+            },
+        });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new DropWatcher(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields,
+            reactors: reactors, reactorDrops: reactorDrops);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        List<int> drops = await client.Drops.Task.WaitAsync(cts.Token);
+
+        Assert.Equal(new[] { 4031161, 2000000 }, drops);   // gated-in + ungated, in table order
+        Assert.DoesNotContain(4031162, drops);             // the missing quest's row stayed out
+    }
 }

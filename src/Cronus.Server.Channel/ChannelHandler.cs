@@ -45,6 +45,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly PlayerShopRegistry _playerShops;
     private readonly HiredMerchantRegistry _merchants;
     private readonly IReactorProvider? _reactors;
+    private readonly IReactorDropProvider _reactorDrops;
     private readonly PortalScriptEngine? _reactorScripts;
     private readonly INpcNameProvider? _npcNames;
 
@@ -171,6 +172,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         PlayerShopRegistry? playerShops = null,
         HiredMerchantRegistry? merchants = null,
         IReactorProvider? reactors = null,
+        IReactorDropProvider? reactorDrops = null,
         PortalScriptEngine? reactorScripts = null,
         INpcNameProvider? npcNames = null,
         IStyleProvider? styles = null,
@@ -197,6 +199,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _playerShops = playerShops ?? new PlayerShopRegistry();
         _merchants = merchants ?? new HiredMerchantRegistry();
         _reactors = reactors;
+        _reactorDrops = reactorDrops ?? new InMemoryReactorDropProvider(new Dictionary<int, IReadOnlyList<ReactorDropEntry>>());
         _reactorScripts = reactorScripts;
         _npcNames = npcNames;
         _styles = styles;
@@ -5452,6 +5455,8 @@ public sealed class ChannelHandler : PacketHandlerBase
             await _field.BroadcastAsync(_packets.ReactorChangeState(reactor, stance)).ConfigureAwait(false);
             await _field.BroadcastAsync(_packets.ReactorLeaveField(reactor)).ConfigureAwait(false);
 
+            await SpawnReactorDropsAsync(reactor).ConfigureAwait(false);
+
             if (_reactorScripts is not null)
             {
                 ChannelPlayer scriptPlayer = CreateScriptPlayer(_player.Session);
@@ -5462,6 +5467,39 @@ public sealed class ChannelHandler : PacketHandlerBase
         else
         {
             await _field.BroadcastAsync(_packets.ReactorChangeState(reactor, stance)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Rolls the broken reactor's <c>reactordrops</c> table and spawns the winners as ground drops
+    /// (ports <c>OdinReactorActionManager.dropItems</c>): each row lands with probability
+    /// 1/<c>chance</c>, quest-gated rows only while the breaker has that quest started, and the
+    /// items fan out around the reactor (x − 12·n, stepping +25) the way the reference spreads them.
+    /// </summary>
+    private async ValueTask SpawnReactorDropsAsync(FieldReactor reactor)
+    {
+        if (_player is null || _field is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        var won = new List<ReactorDropEntry>();
+        foreach (ReactorDropEntry entry in _reactorDrops.GetDrops(reactor.ReactorId))
+        {
+            bool questOk = entry.QuestId <= 0 || c.StartedQuests.ContainsKey(entry.QuestId);
+            if (questOk && Random.Shared.NextDouble() < 1.0 / Math.Max(1, entry.Chance))
+            {
+                won.Add(entry);
+            }
+        }
+
+        short x = (short)(reactor.X - 12 * won.Count);
+        foreach (ReactorDropEntry entry in won)
+        {
+            FieldDrop drop = _field.AddItemDrop(entry.ItemId, 1, x, reactor.Y, source: null);
+            await _field.BroadcastAsync(_packets.DropEnterFieldItem(drop)).ConfigureAwait(false);
+            x += 25;
         }
     }
 

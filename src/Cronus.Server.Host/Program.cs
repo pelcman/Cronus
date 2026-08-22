@@ -111,6 +111,7 @@ IDropProvider drops = CreateDropProvider();
 IShopProvider shops = CreateShopProvider();
 IQuestProvider quests = CreateQuestProvider();
 IReactorProvider? reactorProvider = CreateReactorProvider();
+IReactorDropProvider reactorDrops = CreateReactorDropProvider();
 INpcNameProvider? npcNames = CreateNpcNameProvider();
 IStyleProvider? styles = CreateStyleProvider();
 ICommodityProvider? commodities = CreateCommodityProvider();
@@ -142,7 +143,7 @@ for (int i = 0; i < channelCount; i++)
         new IPEndPoint(IPAddress.Any, channelPort + i),
         config,
         () => new LoggingHandler(
-            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
+            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
             $"channel{channelId}", verbose: wireDebug),
         keepAlive));
 }
@@ -361,6 +362,20 @@ static IShopProvider CreateShopProvider()
 
     SqlShopProvider provider = SqlShopProvider.LoadFile(shopFile);
     Console.WriteLine($"[shops] loaded shops from {shopFile}");
+    return provider;
+}
+
+// Reactor drop tables ride in the same init_data_set.sql dump the shops come from.
+static IReactorDropProvider CreateReactorDropProvider()
+{
+    string? shopFile = Environment.GetEnvironmentVariable("CRONUS_SHOPS");
+    if (string.IsNullOrWhiteSpace(shopFile) || !File.Exists(shopFile))
+    {
+        return new InMemoryReactorDropProvider(new Dictionary<int, IReadOnlyList<ReactorDropEntry>>());
+    }
+
+    SqlReactorDropProvider provider = SqlReactorDropProvider.LoadFile(shopFile);
+    Console.WriteLine("[reactor] reactor drop tables loaded (reactordrops).");
     return provider;
 }
 
