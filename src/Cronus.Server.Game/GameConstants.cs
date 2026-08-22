@@ -18,6 +18,12 @@ public static class GameConstants
     /// </summary>
     public const int MonsterCardStopDropCount = 1;
 
+    // Monster-Book packet switches (mutable: the /booktest command flips them live to bisect
+    // a client crash — the LP_MonsterBookSetCard opcode is unverified against the real client).
+    public static bool SendMonsterBookSetCard { get; set; } = true;
+    public static bool SendMonsterBookCardEffect { get; set; } = true;
+    public static bool SendMonsterBookCardMessage { get; set; } = true;
+
     // ---- Social -------------------------------------------------------------------------
 
     /// <summary>Minimum level to give fame (reference: 15).</summary>

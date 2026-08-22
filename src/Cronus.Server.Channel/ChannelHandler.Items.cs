@@ -89,14 +89,26 @@ public sealed partial class ChannelHandler
                 count = Math.Min(GameConstants.MonsterCardMaxCount, count + Math.Max(1, (int)drop.Quantity));
                 c.MonsterCards[drop.ItemId] = count;
                 _characters.Save(c);
-                await session.SendAsync(_packets.MonsterBookSetCard(added: true, drop.ItemId, count)).ConfigureAwait(false);
-                await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectMonsterBookCardGet)).ConfigureAwait(false);
-                await session.SendAsync(_packets.ShowCardGain(drop.ItemId)).ConfigureAwait(false);
+                if (GameConstants.SendMonsterBookSetCard)
+                {
+                    await session.SendAsync(_packets.MonsterBookSetCard(added: true, drop.ItemId, count)).ConfigureAwait(false);
+                }
+
+                if (GameConstants.SendMonsterBookCardEffect)
+                {
+                    await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectMonsterBookCardGet)).ConfigureAwait(false);
+                }
+
+                if (GameConstants.SendMonsterBookCardMessage)
+                {
+                    await session.SendAsync(_packets.ShowCardGain(drop.ItemId)).ConfigureAwait(false);
+                }
+
                 await _field.BroadcastAsync(
                     _packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectMonsterBookCardGet),
                     exceptCharacterId: c.Id).ConfigureAwait(false);
             }
-            else
+            else if (GameConstants.SendMonsterBookSetCard)
             {
                 await session.SendAsync(_packets.MonsterBookSetCard(added: false, 0, 0)).ConfigureAwait(false);
             }

@@ -221,6 +221,28 @@ public sealed partial class ChannelHandler
                 break;
             }
 
+            case "booktest" when parts.Length >= 2:
+            {
+                // Live bisect for the card-pickup crash: choose WHICH monster-book packets the
+                // next pickup sends. No restart needed. "reset" clears this character's
+                // registered cards so the same mob drops its card again.
+                string mode = parts[1].ToLowerInvariant();
+                if (mode == "reset")
+                {
+                    _player!.Character.MonsterCards.Clear();
+                    _characters.Save(_player.Character);
+                    await ReplyAsync(session, "monster book cleared — cards will drop again").ConfigureAwait(false);
+                    break;
+                }
+
+                GameConstants.SendMonsterBookSetCard = mode is "set" or "all";
+                GameConstants.SendMonsterBookCardEffect = mode is "effect" or "all";
+                GameConstants.SendMonsterBookCardMessage = mode is "msg" or "all";
+                await ReplyAsync(session,
+                    $"book packets: set={GameConstants.SendMonsterBookSetCard} effect={GameConstants.SendMonsterBookCardEffect} msg={GameConstants.SendMonsterBookCardMessage}").ConfigureAwait(false);
+                break;
+            }
+
             case "clearinv":
             {
                 // Empties inventory tabs (positive slots only — worn equips stay): /clearinv wipes
