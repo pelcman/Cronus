@@ -6528,8 +6528,9 @@ public sealed class ChannelHandler : PacketHandlerBase
     /// </summary>
     private static IEnumerable<int> JobSkillBooks(int job)
     {
-        yield return 0; // beginner skills
-        if (job <= 0)
+        // The family's beginner book: 0 (explorer), 1000 (Noblesse), 2000 (Legend).
+        yield return job >= 2000 ? 2000 : job >= 1000 ? 1000 : 0;
+        if (job <= 0 || job is 1000 or 2000)
         {
             yield break;
         }
