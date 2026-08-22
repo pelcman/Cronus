@@ -1013,6 +1013,11 @@ public sealed class ChannelHandler : PacketHandlerBase
             // Server authority: bound the client-reported damage to what a legit pre-BB client
             // can produce (per-line cap) rather than trusting target.TotalDamage verbatim.
             long damage = DamageValidator.ValidatedDamage(target);
+            if (ZakumGate.IsBody(mob.TemplateId) && ZakumGate.BodyProtected(_field.Mobs))
+            {
+                continue; // the body ignores everything while an arm still stands
+            }
+
             mob.Damage(damage > int.MaxValue ? int.MaxValue : (int)damage);
 
             // Bosses show an HP gauge to the whole field as they're whittled down.
@@ -1916,6 +1921,11 @@ public sealed class ChannelHandler : PacketHandlerBase
             if (mob is null || mob.IsDead)
             {
                 continue;
+            }
+
+            if (ZakumGate.IsBody(mob.TemplateId) && ZakumGate.BodyProtected(_field.Mobs))
+            {
+                continue; // the body ignores everything while an arm still stands
             }
 
             mob.Damage(damage);

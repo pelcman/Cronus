@@ -108,6 +108,24 @@ public class SummonTests
         Assert.False(SummonSkills.IsSummon(1301006)); // iron will is a plain buff
     }
 
+    [Fact]
+    public void ZakumGate_BodyProtectedWhileAnyArmStands()
+    {
+        Assert.True(ZakumGate.IsBody(8800000));
+        Assert.True(ZakumGate.IsBody(8800002));
+        Assert.True(ZakumGate.IsArm(8800003));
+        Assert.True(ZakumGate.IsArm(8800010));
+        Assert.False(ZakumGate.IsBody(8800003));
+        Assert.False(ZakumGate.IsArm(100100));
+
+        var liveArm = new FieldMob { ObjectId = 1, TemplateId = 8800005, MaxHp = 100, Hp = 100 };
+        var deadArm = new FieldMob { ObjectId = 2, TemplateId = 8800006, MaxHp = 100, Hp = 0 };
+        var body = new FieldMob { ObjectId = 3, TemplateId = 8800000, MaxHp = 100, Hp = 100 };
+
+        Assert.True(ZakumGate.BodyProtected(new[] { liveArm, deadArm, body }));
+        Assert.False(ZakumGate.BodyProtected(new[] { deadArm, body })); // all arms down -> body opens
+    }
+
     /// <summary>Provides the summon skill's effect so the cast passes the server checks.</summary>
     private sealed class SummonSkillProvider : ISkillProvider
     {
