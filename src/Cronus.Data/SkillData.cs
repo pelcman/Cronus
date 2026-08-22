@@ -14,6 +14,9 @@ public sealed record SkillEffect
     /// <summary>Buff duration in ms (wz <c>time</c> seconds ×1000); 0 = not a timed buff.</summary>
     public int DurationMs { get; init; }
 
+    /// <summary>Cooldown in seconds (wz <c>cooltime</c>); 0 = no cooldown.</summary>
+    public int CooltimeSec { get; init; }
+
     public int Pad { get; init; }
     public int Pdd { get; init; }
     public int Mad { get; init; }
@@ -143,6 +146,7 @@ public sealed class WzSkillProvider : ISkillProvider
             {
                 MpCon = lvl.GetInt("mpCon"),
                 DurationMs = lvl.GetInt("time") * 1000, // skill time is seconds
+                CooltimeSec = lvl.GetInt("cooltime"),
                 Pad = lvl.GetInt("pad"),
                 Pdd = lvl.GetInt("pdd"),
                 Mad = lvl.GetInt("mad"),

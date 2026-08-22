@@ -90,6 +90,7 @@ public sealed class ChannelHandler : PacketHandlerBase
     private readonly int _opActivatePet;
     private readonly int _opPetMove;
     private readonly int _opPetAction;
+    private readonly int _opPetDropPickUp;
     private readonly int _opPetFood;
     private readonly int _opAdBoardClose;
     private readonly int _opCancelBuff;
@@ -228,6 +229,7 @@ public sealed class ChannelHandler : PacketHandlerBase
         _opActivatePet = clientOpcodes.Get(ClientOpcode.UserActivatePetRequest);
         _opPetMove = clientOpcodes.Get(ClientOpcode.PetMove);
         _opPetAction = clientOpcodes.Get(ClientOpcode.PetAction);
+        _opPetDropPickUp = clientOpcodes.Get(ClientOpcode.PetDropPickUpRequest);
         _opPetFood = clientOpcodes.Get(ClientOpcode.UserPetFoodItemUseRequest);
         _opAdBoardClose = clientOpcodes.Get(ClientOpcode.UserAdBoardClose);
         _opReactorHit = clientOpcodes.Get(ClientOpcode.ReactorHit);
@@ -392,6 +394,10 @@ public sealed class ChannelHandler : PacketHandlerBase
         else if (opcode == _opPetAction)
         {
             await HandlePetActionAsync(packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opPetDropPickUp)
+        {
+            await HandlePetDropPickUpAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opPetFood)
         {
@@ -1406,6 +1412,12 @@ public sealed class ChannelHandler : PacketHandlerBase
             await session.SendAsync(_packets.StatChanged(c, StatFlag.Mp)).ConfigureAwait(false);
         }
 
+        // A cooldown skill starts the client's cooldown timer (the client blocks recasts).
+        if (effect.CooltimeSec > 0)
+        {
+            await session.SendAsync(_packets.SkillCooltimeSet(skillId, effect.CooltimeSec)).ConfigureAwait(false);
+        }
+
         // A summon skill also spawns its summon in the field.
         if (_field is not null && SummonSkills.IsSummon(skillId))
         {
@@ -1804,14 +1816,43 @@ public sealed class ChannelHandler : PacketHandlerBase
         packet.ReadShort();
         int dropOid = packet.ReadInt();
 
-        FieldDrop? drop = _field.RemoveDrop(dropOid);
+        await PickUpDropAsync(session, dropOid, petSlot: -1).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles <c>CP_PetDropPickUpRequest</c> — the pet loots for its owner (ports
+    /// <c>ReqCUser_Pet.OnPetDropPickUpRequest</c>, JMS ≥ 148 body). The loot lands on the owner;
+    /// the field sees the pet-pickup animation.
+    /// </summary>
+    private async ValueTask HandlePetDropPickUpAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || _field is null || packet.Remaining < 17)
+        {
+            return;
+        }
+
+        // [petIndex:4][unk:1][updateTime:4][x:2][y:2][dropOid:4][crc:4][unk:2](+trap fields)
+        int petSlot = packet.ReadInt();
+        packet.Skip(9);
+        int dropOid = packet.ReadInt();
+
+        await PickUpDropAsync(session, dropOid, petSlot).ConfigureAwait(false);
+    }
+
+    /// <summary>Takes a drop off the field into the player's purse/inventory; the leave broadcast
+    /// carries the pet slot when a pet did the looting (LeaveType 5).</summary>
+    private async ValueTask PickUpDropAsync(MapleSession session, int dropOid, int petSlot)
+    {
+        FieldDrop? drop = _field!.RemoveDrop(dropOid);
         if (drop is null)
         {
             return; // already taken
         }
 
-        await _field.BroadcastAsync(_packets.DropLeaveFieldPickup(dropOid, _player.Character.Id))
-            .ConfigureAwait(false);
+        byte[] leave = petSlot >= 0
+            ? _packets.DropLeaveFieldPetPickup(dropOid, _player!.Character.Id, petSlot)
+            : _packets.DropLeaveFieldPickup(dropOid, _player!.Character.Id);
+        await _field.BroadcastAsync(leave).ConfigureAwait(false);
 
         Character c = _player.Character;
         if (drop.IsMeso)

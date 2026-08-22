@@ -604,6 +604,19 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>A pet loots the drop for its owner (LeaveType.PICK_UP_PET = 5 + the pet slot).</summary>
+    public byte[] DropLeaveFieldPetPickup(int dropObjectId, int pickerCharacterId, int petSlot)
+    {
+        const int pickUpPet = 5;
+
+        PacketWriter w = NewPacket(ServerOpcode.DropLeaveField);
+        w.WriteByte(pickUpPet);
+        w.WriteInt(dropObjectId);
+        w.WriteInt(pickerCharacterId);
+        w.WriteInt(petSlot);
+        return w.ToArray();
+    }
+
     /// <summary>
     /// Builds <c>LP_DropLeaveField</c> for an expired drop that fades on its own (LeaveType.TIMEOUT
     /// = 0 — no owner, so no trailing character id).
@@ -681,6 +694,18 @@ public sealed class ChannelPackets
         w.WriteByte(level);
         w.WriteShort(action); // JMS >= 186: two bytes
         w.WriteByte(actionSpeed);
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// Builds <c>LP_SkillCooltimeSet</c> — starts the client's cooldown timer for a skill (ports
+    /// <c>ResCUserLocal.SkillCooltimeSet</c>; JMS &lt; 302 sends the seconds as 2 bytes).
+    /// </summary>
+    public byte[] SkillCooltimeSet(int skillId, int seconds)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SkillCooltimeSet);
+        w.WriteInt(skillId);
+        w.WriteShort((short)seconds);
         return w.ToArray();
     }
 
