@@ -36,6 +36,24 @@ public static class CharacterDataParser
         return r.Remaining;
     }
 
+    /// <summary>Reads the cash-shop entry packet (<c>LP_SetCashShop</c>), which embeds the same
+    /// full CharacterData blob followed by the account name and the (empty) sale tables. Throws or
+    /// returns leftover-byte count — a maxed character crashed here for the same reason as entry.</summary>
+    public static int ValidateSetCashShop(PacketReader r)
+    {
+        ReadCharacterData(r);
+
+        r.ReadString();               // maple id / account name
+        r.ReadShort();                // sale-info: no overridden commodities
+        r.ReadShort();                // modified-commodity count (JMS >= 180)
+        r.ReadByte();                 // discount-rate count
+        r.ReadBytes(1080);            // best items table
+        r.ReadShort();                // stock
+        r.ReadShort();                // limit goods
+        r.ReadByte();                 // event flag
+        return r.Remaining;
+    }
+
     private static void ReadCharacterData(PacketReader r)
     {
         r.ReadLong();                  // statmask

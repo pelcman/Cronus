@@ -399,7 +399,13 @@ public sealed class Scenarios
             int csPort = (ushort)r.ReadShort();
 
             await MigrateAsync(bot, new IPEndPoint(csIp, csPort), bot.CharacterId, ct).ConfigureAwait(false);
-            await bot.ExpectAsync(ServerOpcode.SetCashShop).ConfigureAwait(false);
+            PacketReader setShop = await bot.ExpectAsync(ServerOpcode.SetCashShop).ConfigureAwait(false);
+            int shopLeftover = CharacterDataParser.ValidateSetCashShop(setShop);
+            if (shopLeftover != 0)
+            {
+                throw new InvalidOperationException($"SetCashShop CharacterData mis-sized (leftover {shopLeftover}b)");
+            }
+
             PacketReader cash = await bot.ExpectAsync(ServerOpcode.CashShopQueryCashResult).ConfigureAwait(false);
             int nx = cash.ReadInt();
 
@@ -497,7 +503,26 @@ public sealed class Scenarios
 
             PacketReader field = await bot.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
             int leftover = CharacterDataParser.ValidateSetField(field);
-            return leftover == 0 ? "full CharacterData parsed clean (79+ skills, 4th job)" : throw new InvalidOperationException($"CharacterData mis-sized (leftover {leftover}b) — client would EOF-crash");
+            if (leftover != 0)
+            {
+                throw new InvalidOperationException($"SetField CharacterData mis-sized (leftover {leftover}b) — client would EOF-crash");
+            }
+
+            // The cash shop embeds the same blob; a maxed character crashed entering it too.
+            await bot.SendAsync(bot.NewPacket(ClientOpcode.UserMigrateToCashShopRequest)).ConfigureAwait(false);
+            PacketReader cs = await bot.ExpectAsync(ServerOpcode.MigrateCommand).ConfigureAwait(false);
+            cs.ReadByte();
+            var csIp2 = new IPAddress(cs.ReadBytes(4));
+            int csPort2 = (ushort)cs.ReadShort();
+            await MigrateAsync(bot, new IPEndPoint(csIp2, csPort2), bot.CharacterId, ct).ConfigureAwait(false);
+            PacketReader shop = await bot.ExpectAsync(ServerOpcode.SetCashShop).ConfigureAwait(false);
+            int shopLeftover = CharacterDataParser.ValidateSetCashShop(shop);
+            if (shopLeftover != 0)
+            {
+                throw new InvalidOperationException($"SetCashShop CharacterData mis-sized (leftover {shopLeftover}b) — client would EOF-crash");
+            }
+
+            return "SetField + SetCashShop both parsed clean (79 skills, 9 with master level, 4th job)";
         }).ConfigureAwait(false);
     }
 
