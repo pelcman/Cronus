@@ -276,6 +276,33 @@ public sealed class Scenarios
                 throw new InvalidOperationException($"buy result 0x{resType:X2}");
             }
 
+            long boughtCashId = res.ReadLong();
+
+            // Move it into the character's inventory, then back to the locker — the exact path a
+            // player takes, and the one that produced the malformed cash-item CharacterData blob.
+            PacketWriter toInv = bot.NewPacket(ClientOpcode.CashShopCashItemRequest);
+            toInv.WriteByte(0x0E);           // CashItemReq_MoveLtoS
+            toInv.WriteLong(boughtCashId);
+            toInv.WriteByte(1);              // inv type (equip)
+            toInv.WriteShort(0);
+            await bot.SendAsync(toInv).ConfigureAwait(false);
+            PacketReader lToS = await bot.ExpectAsync(ServerOpcode.CashShopCashItemResult).ConfigureAwait(false);
+            if (lToS.ReadByte() != 0x6B) // CashItemRes_MoveLtoS_Done
+            {
+                throw new InvalidOperationException("move locker->inventory failed");
+            }
+
+            PacketWriter toLocker = bot.NewPacket(ClientOpcode.CashShopCashItemRequest);
+            toLocker.WriteByte(0x0F);        // CashItemReq_MoveStoL
+            toLocker.WriteLong(boughtCashId);
+            toLocker.WriteByte(1);
+            await bot.SendAsync(toLocker).ConfigureAwait(false);
+            PacketReader sToL = await bot.ExpectAsync(ServerOpcode.CashShopCashItemResult).ConfigureAwait(false);
+            if (sToL.ReadByte() != 0x6D) // CashItemRes_MoveStoL_Done
+            {
+                throw new InvalidOperationException("move inventory->locker failed");
+            }
+
             // Back to the game.
             await bot.SendAsync(bot.NewPacket(ClientOpcode.UserTransferFieldRequest)).ConfigureAwait(false);
             PacketReader back = await bot.ExpectAsync(ServerOpcode.MigrateCommand).ConfigureAwait(false);

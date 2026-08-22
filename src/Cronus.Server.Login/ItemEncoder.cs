@@ -143,7 +143,14 @@ public static class ItemEncoder
         w.WriteShort(0);                // socket 1
         w.WriteShort(0);                // socket 2
 
-        w.WriteLong(0);                 // no-unique-id tail
+        // The reference writes this 8-byte "no serial" filler ONLY when the item has no unique id.
+        // A cash item already carried its 8-byte id up front in RawEncode; writing it again here
+        // would push every following item 8 bytes out of alignment and crash the client (EOF).
+        if (e.CashId == 0)
+        {
+            w.WriteLong(0);             // liSN placeholder (only when hasUniqueId == false)
+        }
+
         // JMS >= 164 tail.
         w.WriteLong(0);
         w.WriteInt(-1);

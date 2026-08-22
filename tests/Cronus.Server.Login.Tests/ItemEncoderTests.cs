@@ -113,4 +113,52 @@ public class ItemEncoderTests
         Assert.Equal(0xFF, r.ReadByte()); // end visible
         Assert.Equal(0xFF, r.ReadByte()); // end masked
     }
+
+    [Fact]
+    public void CashEquip_WritesUniqueIdUpFront_AndOmitsTheTrailingSerial()
+    {
+        // A cash equip carries its 8-byte unique id at the front (hasUniqueId = 1). The reference
+        // then OMITS the trailing "no serial" long, so a cash equip's body is exactly 8 bytes
+        // shorter than the same non-cash equip — otherwise the client's parse of the next item
+        // slips 8 bytes and crashes with EOF (error 38).
+        var cashHat = new InventoryItem { ItemId = 1002077, Position = 1, CashId = 0x1122334455667788L };
+        var plainHat = new InventoryItem { ItemId = 1002077, Position = 1 };
+
+        byte[] cashBytes = EncodeToArray(cashHat);
+        byte[] plainBytes = EncodeToArray(plainHat);
+
+        // +8 for the up-front unique id, -8 for the omitted trailing serial => same total length.
+        Assert.Equal(plainBytes.Length, cashBytes.Length);
+
+        PacketReader r = Encode(cashHat);
+        r.ReadShort();                                   // slot
+        Assert.Equal(1, r.ReadByte());                   // type = equip
+        Assert.Equal(1002077, r.ReadInt());              // item id
+        Assert.Equal(1, r.ReadByte());                   // hasUniqueId = 1
+        Assert.Equal(0x1122334455667788L, r.ReadLong()); // the cash unique id, up front
+        Assert.Equal(ItemEncoder.NoExpiration, r.ReadLong());
+
+        // Body: skip to the tail and confirm it ends cleanly (no stray 8-byte serial).
+        r.ReadByte(); r.ReadByte();                      // upgrade slots, level
+        for (int i = 0; i < 15; i++) { r.ReadShort(); }  // 15 stat shorts
+        r.ReadString();                                  // owner
+        r.ReadShort();                                   // flag
+        r.ReadByte(); r.ReadByte(); r.ReadInt();         // reverse-weapon block
+        r.ReadInt(); r.ReadInt();                        // durability, vicious hammer
+        r.ReadByte(); r.ReadByte();                      // potential rank, enhance
+        r.ReadShort(); r.ReadShort(); r.ReadShort();     // potentials
+        r.ReadShort(); r.ReadShort();                    // sockets
+        // No trailing no-serial long here (that's the fix).
+        Assert.Equal(0, r.ReadLong());                   // JMS>=164 tail
+        Assert.Equal(-1, r.ReadInt());
+        Assert.Equal(0, r.Remaining);                    // exact — no extra 8 bytes
+    }
+
+    private static byte[] EncodeToArray(InventoryItem item)
+    {
+        var w = new PacketWriter(encoding: ServerConfig.Jms186.CodePage);
+        ItemEncoder.WriteSlot(w, item);
+        ItemEncoder.WriteItem(w, item);
+        return w.ToArray();
+    }
 }
