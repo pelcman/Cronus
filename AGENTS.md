@@ -794,8 +794,12 @@ restart).
 - [ ] Mini-game invites via the game UI.
 
 **E. Architecture / tech debt**
-- [ ] Split `Cronus.Server.Channel` into a channel (session/network) layer and a game
-      (world logic) layer, per the Maple2 alignment; `ChannelHandler` is ~7k lines.
+- [~] Maple2-alignment split, step 1 done (2026-08-22): the 7.3k-line `ChannelHandler`
+      is now 9 domain partials (core/combat/transfer/items/quests/rooms/social/players/
+      commands), moved mechanically with the full suite green. Step 2 (peeling world
+      logic out of the partials into `Cronus.Server.Game` services with a
+      compute-then-send separation) remains open — do it subsystem by subsystem when a
+      partial is next touched for a feature.
 - [ ] Structured logging (Serilog) to replace Console writes; keep CRONUS_DEBUG hex taps.
 - [x] Password hashing (BCrypt, work factor 10) with transparent in-place upgrade of
       legacy plaintext rows on their next successful login; auto-register stays for the
