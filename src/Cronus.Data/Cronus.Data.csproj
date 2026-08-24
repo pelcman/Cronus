@@ -6,7 +6,7 @@
 
   <!-- No project dependencies. Microsoft.Data.Sqlite backs the gamedata.db wz store. -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.19" />
   </ItemGroup>
 
 </Project>

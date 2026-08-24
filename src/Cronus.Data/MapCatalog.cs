@@ -128,7 +128,7 @@ public sealed class WzMapCatalog : IMapCatalog
     /// </summary>
     private static IReadOnlyList<MapStreet> StreetsInRegion(string xml, string region, HashSet<int> real)
     {
-        Match start = RegionGroup.Matches(xml).FirstOrDefault(m => m.Groups[1].Value == region);
+        Match? start = RegionGroup.Matches(xml).FirstOrDefault(m => m.Groups[1].Value == region);
         if (start is null)
         {
             return Array.Empty<MapStreet>();

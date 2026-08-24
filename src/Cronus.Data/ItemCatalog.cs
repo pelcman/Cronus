@@ -154,7 +154,7 @@ public sealed class WzItemCatalog : IItemCatalog
     /// <summary>The item ids inside one Eqp sub-category (up to the next sub-category header).</summary>
     private static IReadOnlyList<int> IdsInEquipGroup(string xml, string group)
     {
-        Match start = EqpGroup.Matches(xml).FirstOrDefault(m => m.Groups[1].Value == group);
+        Match? start = EqpGroup.Matches(xml).FirstOrDefault(m => m.Groups[1].Value == group);
         if (start is null)
         {
             return Array.Empty<int>();
