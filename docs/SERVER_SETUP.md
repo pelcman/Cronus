@@ -124,9 +124,13 @@ Friends' clients must reach the login port **8484**, **every channel port**, and
 **cash-shop port** on your public IP — with the default 2 channels that's
 **7575, 7576, and 7577**, TCP.
 
-1. **Windows Firewall** on the server PC: allow inbound TCP 8484, 7575, and 7576
-   (Control Panel → Windows Defender Firewall → Advanced → Inbound Rules → New Rule →
-   Port → TCP → `8484,7575-7577` → Allow).
+1. **Windows Firewall** on the server PC: double-click **`port_open.bat`** in the repo root.
+   It reads `CRONUS_CHANNELS` from your `.env`, works out the exact ports, asks for
+   administrator rights, and creates a single inbound TCP rule named `Cronus JMSv186`.
+   Re-run it after changing the channel count — it replaces the old rule. **`port_close.bat`**
+   removes it again when you are done hosting.
+   (By hand: Control Panel → Windows Defender Firewall → Advanced → Inbound Rules → New Rule →
+   Port → TCP → `8484,7575-7577` → Allow.)
 2. **Router port-forwarding**: forward external TCP 8484 and 7575-7577 to your server PC's
    **LAN IP** (find it with `ipconfig`). This is done in your router's admin page
    (search "port forwarding" for your router model).
@@ -220,6 +224,7 @@ With MySQL, use your normal `mysqldump` routine instead.
 
 ```powershell
 # Windows: just double-click run-server.bat (builds + runs + shows errors)
+#          port_open.bat / port_close.bat open and remove the firewall rule
 
 # Minimal local test (persists to cronus.db automatically, localhost)
 dotnet run --project src/Cronus.Server.Host
