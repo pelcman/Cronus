@@ -51,11 +51,18 @@ only basic PC knowledge. For a quick *localhost-only* try-out first, see
 
 ## Part 1 — Build and first run (local test)
 
-From the repo root:
+**The short way (Windows):** double-click **`setup.bat`** in the repo root. It checks the
+.NET SDK, creates `.env`, asks for your client folder (or drag the folder onto the script),
+builds everything, and ingests the client's `.wz` files into `gamedata.db`. When it finishes,
+`run-server.bat` starts the server. Re-run **`ingest.bat`** whenever the client's data files
+change (the old database is simply replaced — stop the server first).
+
+By hand, from the repo root:
 
 ```powershell
 dotnet build Cronus.slnx -c Release
-dotnet run --project src/Cronus.Server.Host        # login 8484, channel 7575
+dotnet run --project src/Cronus.Ingest -- <client dir>   # -> gamedata.db (once)
+dotnet run --project src/Cronus.Server.Host              # login 8484, channel 7575
 ```
 
 You should see:
@@ -225,8 +232,9 @@ With MySQL, use your normal `mysqldump` routine instead.
 ## Configuration quick reference
 
 ```powershell
-# Windows: just double-click run-server.bat (builds + runs + shows errors)
-#          port_open.bat / port_close.bat open and remove the firewall rule
+# Windows: setup.bat once (SDK check + .env + build + client ingest), then
+#          run-server.bat to play; ingest.bat rebuilds gamedata.db after a
+#          client change; port_open.bat / port_close.bat manage the firewall
 
 # Minimal local test (persists to cronus.db automatically, localhost)
 dotnet run --project src/Cronus.Server.Host

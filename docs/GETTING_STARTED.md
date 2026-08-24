@@ -9,8 +9,10 @@ To host a server **friends can join over the internet**, see
 
 ## 1. Run the server
 
-On Windows, double-click **`run-server.bat`** in the repo root — it builds, starts the
-server, and keeps the window open with the error if anything fails. Or from a shell:
+On Windows, the first time run **`setup.bat`** in the repo root (SDK check, `.env`,
+build, and the client-data ingest in one go), then double-click **`run-server.bat`** — it
+builds, starts the server, and keeps the window open with the error if anything fails.
+Or from a shell:
 
 ```powershell
 # From the repo root
