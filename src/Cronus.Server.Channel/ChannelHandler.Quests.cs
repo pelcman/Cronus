@@ -188,8 +188,11 @@ public sealed partial class ChannelHandler
         string progress = InitialQuestProgress(quest);
         c.StartedQuests[questId] = progress;
         _characters.Save(c);
-        await session.SendAsync(_packets.UserQuestResult(questId, npcId)).ConfigureAwait(false);
+
+        // Oracle order (MapleCharacter.updateQuest): the quest record first, THEN the
+        // UserQuestResult(Act_Success) — and the result packet exists only for the START side.
         await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted, progress)).ConfigureAwait(false);
+        await session.SendAsync(_packets.UserQuestResult(questId, npcId)).ConfigureAwait(false);
     }
 
     private async ValueTask CompleteQuestAsync(MapleSession session, Character c, int questId, int npcId, int selection = -1)
@@ -214,11 +217,19 @@ public sealed partial class ChannelHandler
         c.CompletedQuests[questId] = CharacterDataEncoder.FileTimeNow();
         _characters.Save(c);
 
-        // nextQuest chains the client straight into the follow-up quest's dialog — the
-        // tutorial/beginner lines (1000 -> 1001 -> ...) flow through this.
-        short nextQuest = (short)(quest.EndAct?.NextQuest ?? 0);
-        await session.SendAsync(_packets.UserQuestResult(questId, npcId, nextQuest)).ConfigureAwait(false);
+        // Completion sends the record and the effect — NOT LP_UserQuestResult. The oracle emits
+        // that packet on completion only from the nextQuest act (with the real follow-up id):
+        // the tutorial chain (1000 -> 1001) needs it, but an unsolicited Act_Success with
+        // nextQuest=0 while the client's NPC quest dialog is open CRASHES the client (the
+        // ネオトウキョウ 4681/4682 crash — completions sent from the dialog carry x/y and died;
+        // journal completions without x/y survived the same bytes).
         await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordCompleted)).ConfigureAwait(false);
+        short nextQuest = (short)(quest.EndAct?.NextQuest ?? 0);
+        if (nextQuest != 0)
+        {
+            await session.SendAsync(_packets.UserQuestResult(questId, npcId, nextQuest)).ConfigureAwait(false);
+        }
+
         await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectQuestComplete)).ConfigureAwait(false);
         if (_field is not null)
         {

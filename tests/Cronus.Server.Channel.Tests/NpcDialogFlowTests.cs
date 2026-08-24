@@ -510,11 +510,18 @@ public class NpcDialogFlowTests
         Assert.Equal(0, prompt.MessageType);            // a plain sendOk
         Assert.Contains("話すことはない", prompt.Text);
 
-        // Closing the line ends the conversation; a second click brings it back.
+        // Closing the line ends the conversation; a second click brings it back. The end runs
+        // on the fallback thread after our answer, so retry the click until it lands.
         await client.AnswerAsync(messageType: 0, action: 1);
-        await client.ReselectAsync(npcId);
-        ScriptPrompt again = client.Prompts.Take(cts.Token);
-        Assert.Equal(0, again.MessageType);
+        ScriptPrompt? again = null;
+        for (int i = 0; i < 40 && again is null; i++)
+        {
+            await client.ReselectAsync(npcId);
+            client.Prompts.TryTake(out again, 250);
+        }
+
+        Assert.NotNull(again);
+        Assert.Equal(0, again!.MessageType);
     }
 
     [Fact]

@@ -372,7 +372,19 @@ public class QuestTests
                 short next = p.ReadShort();
                 Result.TrySetResult((op, quest, next));
             }
+            else if (opcode == ServerOps.Get(ServerOpcode.Message))
+            {
+                if (p.ReadByte() == 1 && (p.ReadShort() & 0xFFFF) == _questId && p.ReadByte() == 2)
+                {
+                    CompletedRecord.TrySetResult();
+                }
+            }
         }
+
+        /// <summary>Set when the completed (state 2) quest record for the quest arrives — the
+        /// completion signal for quests without a nextQuest, which send no LP_UserQuestResult.</summary>
+        public TaskCompletionSource CompletedRecord { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     [Fact]
@@ -466,9 +478,12 @@ public class QuestTests
         _ = server.RunAsync(cts.Token);
         _ = clientSession.RunAsync(cts.Token);
 
-        (byte op, _, _) = await client.Result.Task.WaitAsync(cts.Token);
+        // No nextQuest → completion answers with the record alone (no LP_UserQuestResult:
+        // the oracle only sends that on completion from the nextQuest act, and an unsolicited
+        // one crashes the live client's NPC dialog).
+        await client.CompletedRecord.Task.WaitAsync(cts.Token);
 
-        Assert.Equal(8, op);
+        Assert.False(client.Result.Task.IsCompleted);
         Assert.Equal(2 + 3 + 1, hero.Sp);   // both matching grants applied, the Evan row skipped
     }
 

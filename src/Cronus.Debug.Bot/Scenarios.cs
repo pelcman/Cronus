@@ -635,7 +635,7 @@ public sealed class Scenarios
             await ChatAsync(bot, "/questreset 1001").ConfigureAwait(false);
             await Task.Delay(150).ConfigureAwait(false); // let the resets flush
 
-            async Task<short> QuestAsync(byte action, short questId, int npcId)
+            async Task SendQuestAsync(byte action, short questId, int npcId)
             {
                 PacketWriter w = bot.NewPacket(ClientOpcode.UserQuestRequest);
                 w.WriteByte(action);
@@ -647,27 +647,57 @@ public sealed class Scenarios
                 }
 
                 await bot.SendAsync(w).ConfigureAwait(false);
+            }
+
+            // Accepting still answers with UserQuestResult(Act_Success) — after the record.
+            async Task AcceptAsync(short questId, int npcId)
+            {
+                await SendQuestAsync(1, questId, npcId).ConfigureAwait(false);
                 PacketReader r = await bot.ExpectAsync(ServerOpcode.UserQuestResult).ConfigureAwait(false);
                 if (r.ReadByte() != 8)
                 {
-                    throw new InvalidOperationException($"quest {questId} action {action}: not Act_Success");
+                    throw new InvalidOperationException($"quest {questId} accept: not Act_Success");
                 }
-
-                r.ReadShort();              // quest id
-                r.ReadInt();                // npc
-                return r.ReadShort();       // nextQuest
             }
 
-            await QuestAsync(1, 1000, 2101).ConfigureAwait(false);   // accept 1000 (job+item gates)
-            short next = await QuestAsync(2, 1000, 2100).ConfigureAwait(false); // complete 1000
+            // Completing answers with the completed quest record; LP_UserQuestResult exists on
+            // completion ONLY when the act names a nextQuest (sending it otherwise crashes the
+            // live client's NPC dialog — the ネオトウキョウ 4681 crash).
+            async Task<short> CompleteAsync(short questId, int npcId, bool expectNextQuest)
+            {
+                await SendQuestAsync(2, questId, npcId).ConfigureAwait(false);
+                await bot.ExpectAsync(ServerOpcode.Message, r =>
+                {
+                    if (r.ReadByte() != 1)
+                    {
+                        return false; // not a quest record
+                    }
+
+                    return (r.ReadShort() & 0xFFFF) == questId && r.ReadByte() == 2;
+                }).ConfigureAwait(false);
+
+                if (!expectNextQuest)
+                {
+                    return 0;
+                }
+
+                PacketReader e3 = await bot.ExpectAsync(ServerOpcode.UserQuestResult).ConfigureAwait(false);
+                e3.ReadByte();              // Act_Success
+                e3.ReadShort();             // quest id
+                e3.ReadInt();               // npc
+                return e3.ReadShort();      // nextQuest
+            }
+
+            await AcceptAsync(1000, 2101).ConfigureAwait(false);     // accept 1000 (job+item gates)
+            short next = await CompleteAsync(1000, 2100, expectNextQuest: true).ConfigureAwait(false);
             if (next != 1001)
             {
                 throw new InvalidOperationException($"quest 1000 nextQuest {next}, expected 1001");
             }
 
-            await QuestAsync(1, 1001, 2100).ConfigureAwait(false);   // accept 1001 (prereq gate)
+            await AcceptAsync(1001, 2100).ConfigureAwait(false);     // accept 1001 (prereq gate)
             await bot.ExpectAsync(ServerOpcode.InventoryOperation).ConfigureAwait(false); // the letter
-            await QuestAsync(2, 1001, 2101).ConfigureAwait(false);   // turn the letter in
+            await CompleteAsync(1001, 2101, expectNextQuest: false).ConfigureAwait(false); // letter turn-in
 
             return "1000 -> (nextQuest) -> 1001 chained via wz data";
         }).ConfigureAwait(false);
