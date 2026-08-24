@@ -12,7 +12,8 @@
 |---|---|
 | `RunEmu.exe` | ランチャー。`MapleStory.exe` を起動して `EmuLoader.dll` を注入 |
 | `EmuLoader.dll` | 各 DLL を適切なタイミングで読み込む。多重起動ロックも解除 |
-| `LocalHost.dll` | **接続先 IP の書き換え**（メモリ展開前に読む必要あり） |
+| `FixThemida.dll` | **Themida 保護の Win10 対応**（メモリ展開前・最初に読む） |
+| `LocalHost.dll` | **接続先 IP の書き換え**（メモリ展開前に読む） |
 | `EmuMain.dll` | HackShield / MSCRC バイパス（メモリ展開後、最初に読む） |
 | `EmuExtra.dll` | その他のメモリ書き換え |
 
@@ -56,15 +57,40 @@ CmdLine=
 LoaderDLL=EmuLoader.dll
 
 [FastLoad]                 ; メモリ展開前（DLL_1..DLL_10）
-DLL_1=LocalHost.dll
+DLL_1=FixThemida.dll
+DLL_2=LocalHost.dll
 
 [DelayLoad]                ; メモリ展開後（DLL_1..DLL_10）
 DLL_1=EmuMain.dll
 DLL_2=EmuExtra.dll
 ```
 
-**順序が重要です。** `LocalHost.dll` は FastLoad（展開前）、`EmuMain.dll` は
-DelayLoad の先頭（MSCRC バイパスを最初に効かせるため）。
+**順序が重要です。** `FixThemida.dll` → `LocalHost.dll` が FastLoad（展開前）、
+`EmuMain.dll` が DelayLoad の先頭（MSCRC バイパスを最初に効かせるため）。
+
+> RunEmu は初回起動時に `DLL_2=` 〜 `DLL_10=` の空行を自動追記します。
+> あとから項目を足すときは**キーが重複しないよう**注意してください。
+
+## Themida の壁
+
+原本 `MapleStory.exe` は **Themida でパックされています**。古い Themida は
+Windows 10 上でシステム DLL のヘッダを誤読し、
+
+> A monitor program has been found running in your system.
+
+というダイアログを出して起動を拒否することがあります（監視ツールが実際に動いて
+いなくても発生します）。
+
+`FixThemida.dll` はこれの対処で、メモリ上の `kernel32.dll` / `user32.dll` の
+セクションヘッダの `PointerToRawData` を `VirtualAddress` に書き換え、古い Themida の
+想定（ファイルオフセット = RVA）に合わせます。メモリ展開**前**に読ませる必要があるため
+FastLoad の先頭に置きます。
+
+**それでも解消しない場合の切り分け:** `RunEmu.exe` を使わず `MapleStory.exe` を
+直接起動してみてください。同じダイアログが出るなら EmuClient は無関係で、
+Themida と実行環境の相性問題です。その場合は、Themida ごと取り除いてある
+配布版 `JMS_v186.1_L.exe`（Riremito 氏がまさにこの問題を回避するために作ったもの）を
+使うのが現実的です。
 
 ## WZ パッチとの関係
 
