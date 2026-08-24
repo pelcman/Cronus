@@ -162,9 +162,16 @@ public sealed class Scenarios
 
         await StepAsync(bot, "chat:/help", async () =>
         {
+            // The listing is one chat packet per line: a header, category headings, one line per
+            // command, and a footer. Read to the footer so nothing is left queued for later steps.
             await ChatAsync(bot, "/help").ConfigureAwait(false);
-            await bot.ExpectAsync(ServerOpcode.UserChat).ConfigureAwait(false);
-            return "";
+            List<string> lines = await ReadChatUntilAsync(bot, "/help <").ConfigureAwait(false);
+            if (lines.Count < 10)
+            {
+                throw new InvalidOperationException($"/help returned only {lines.Count} lines");
+            }
+
+            return $"{lines.Count} lines";
         }).ConfigureAwait(false);
 
         await StepAsync(bot, "cmd:/meso+/level", async () =>
@@ -513,6 +520,67 @@ public sealed class Scenarios
             throw new InvalidOperationException("the debug shop never opened");
         }).ConfigureAwait(false);
 
+        await StepAsync(bot, "cmd:/dbgwarp", async () =>
+        {
+            // /dbgwarp: region menu -> area menu -> map menu -> the field change.
+            await ChatAsync(bot, "/dbgwarp").ConfigureAwait(false);
+
+            int menus = 0;
+            for (int hop = 0; hop < 6; hop++)
+            {
+                (string which, PacketReader r) = await bot.ExpectAnyAsync(
+                    new[] { ServerOpcode.SetField, ServerOpcode.ScriptMessage }).ConfigureAwait(false);
+
+                if (which == ServerOpcode.ScriptMessage)
+                {
+                    r.ReadByte(); r.ReadInt();
+                    int type = r.ReadByte();
+                    if (type != 5)
+                    {
+                        throw new InvalidOperationException($"expected askMenu (5), got {type}");
+                    }
+
+                    menus++;
+                    PacketWriter pick = bot.NewPacket(ClientOpcode.UserScriptMessageAnswer);
+                    pick.WriteByte(5);
+                    pick.WriteByte(1);
+                    pick.WriteInt(0);          // always the first entry
+                    await bot.SendAsync(pick).ConfigureAwait(false);
+                    continue;
+                }
+
+                // Landed somewhere; go back to Henesys so later steps start where they expect.
+                await ChatAsync(bot, "/warp 100000000").ConfigureAwait(false);
+                await bot.ExpectAsync(ServerOpcode.SetField).ConfigureAwait(false);
+                return $"{menus} menus -> warped";
+            }
+
+            throw new InvalidOperationException("the warp never happened");
+        }).ConfigureAwait(false);
+
+        await StepAsync(bot, "cmd:/status", async () =>
+        {
+            // The consolidated stat command: a sheet with no args, a change with a field+value.
+            await ChatAsync(bot, "/status").ConfigureAwait(false);
+            List<string> sheet = await ReadChatUntilAsync(bot, "/status <").ConfigureAwait(false);
+            if (!sheet.Exists(l => l.Contains("Lv.", StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException("the stat sheet had no level line");
+            }
+
+            await ChatAsync(bot, "/status luk 123").ConfigureAwait(false);
+            await bot.ExpectAsync(ServerOpcode.StatChanged).ConfigureAwait(false);
+            return "sheet + luk set";
+        }).ConfigureAwait(false);
+
+        await StepAsync(bot, "cmd:bad-arguments", async () =>
+        {
+            // A known command with unusable arguments must answer with its registered usage.
+            await ChatAsync(bot, "/item apple").ConfigureAwait(false);
+            List<string> lines = await ReadChatUntilAsync(bot, "/item <").ConfigureAwait(false);
+            return lines[^1];
+        }).ConfigureAwait(false);
+
         await StepAsync(bot, "whisper:self-ack", async () =>
         {
             PacketWriter w = bot.NewPacket(ClientOpcode.Whisper);
@@ -774,13 +842,33 @@ public sealed class Scenarios
         {
             Task<PacketReader> receive = b.ExpectAsync(ServerOpcode.Whisper);
 
-            PacketWriter w = a.NewPacket(ClientOpcode.Whisper);
-            w.WriteByte(0x02 | 0x04);
-            w.WriteString(b.CharacterName);
-            w.WriteString("hello from " + a.CharacterName);
-            await a.SendAsync(w).ConfigureAwait(false);
+            // The recipient can be momentarily out of a field (its own re-entry steps migrate the
+            // session), and the server only delivers to a player it can find. The sender ack says
+            // which happened, so retry until it reports delivered rather than hanging on receive.
+            bool delivered = false;
+            for (int attempt = 0; attempt < 20 && !delivered; attempt++)
+            {
+                PacketWriter w = a.NewPacket(ClientOpcode.Whisper);
+                w.WriteByte(0x02 | 0x04);
+                w.WriteString(b.CharacterName);
+                w.WriteString("hello from " + a.CharacterName);
+                await a.SendAsync(w).ConfigureAwait(false);
 
-            await a.ExpectAsync(ServerOpcode.Whisper).ConfigureAwait(false); // sender ack
+                PacketReader ack = await a.ExpectAsync(ServerOpcode.Whisper).ConfigureAwait(false);
+                ack.ReadByte();                 // WP_Result | WP_Whisper
+                ack.ReadString();               // the target name we asked for
+                delivered = ack.ReadBool();
+                if (!delivered)
+                {
+                    await Task.Delay(200).ConfigureAwait(false);
+                }
+            }
+
+            if (!delivered)
+            {
+                throw new InvalidOperationException($"{b.Name} never became reachable for a whisper");
+            }
+
             PacketReader got = await receive.ConfigureAwait(false);          // recipient delivery
             got.ReadByte();
             string from = got.ReadString();
@@ -936,6 +1024,30 @@ public sealed class Scenarios
 
         r.ReadByte();                // player-drop flag
         r.ReadByte();                // trailing
+    }
+
+    /// <summary>
+    /// Reads server chat lines until one contains <paramref name="needle"/>, and returns every
+    /// line read. Commands reply over several chat packets now (/help, /status), and earlier steps
+    /// leave their own replies queued, so a plain "read one chat line" would pick up a stale one.
+    /// </summary>
+    private static async Task<List<string>> ReadChatUntilAsync(BotClient bot, string needle, int maxLines = 64)
+    {
+        var lines = new List<string>();
+        for (int i = 0; i < maxLines; i++)
+        {
+            PacketReader r = await bot.ExpectAsync(ServerOpcode.UserChat).ConfigureAwait(false);
+            r.ReadInt();            // character id
+            r.ReadBool();           // isGm
+            string line = r.ReadString();
+            lines.Add(line);
+            if (line.Contains(needle, StringComparison.Ordinal))
+            {
+                return lines;
+            }
+        }
+
+        throw new InvalidOperationException($"no chat line containing '{needle}' in {maxLines} lines");
     }
 
     private static async Task ChatAsync(BotClient bot, string text)

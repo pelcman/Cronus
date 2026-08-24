@@ -12,9 +12,12 @@ namespace Cronus.Server.Channel;
 public sealed partial class ChannelHandler
 {
     /// <summary>
-    /// Minimal GM/debug command set for local testing (chat lines starting with '/'). Replies
-    /// are echoed back to the caller as their own chat line. Documented in docs/COMMANDS.md
-    /// (Japanese: docs/COMMANDS.ja.md) — keep those in sync when commands change.
+    /// The GM/debug command dispatcher (chat lines starting with '/'). Replies are echoed back to
+    /// the caller as their own chat line, one packet per line. Every command's name, usage, and
+    /// help text lives in <see cref="CommandTable"/>, which drives /help and the argument-error
+    /// replies: a case guard that rejects its arguments falls through to <c>default</c>, which
+    /// answers with the registered usage. Adding a case means adding a table entry too.
+    /// Documented in docs/COMMANDS.md (Japanese: docs/COMMANDS.ja.md) — keep those in sync.
     /// </summary>
     private async ValueTask HandleCommandAsync(MapleSession session, string command)
     {
@@ -24,26 +27,102 @@ public sealed partial class ChannelHandler
             return;
         }
 
-        switch (parts[0].ToLowerInvariant())
+        string typed = parts[0];
+        string name = typed.ToLowerInvariant();
+
+        // The stat family collapsed into /status, but the old top-level spellings stay usable:
+        // rewrite "/hp 500" to "/status hp 500" so the behaviour lives in exactly one place.
+        if (CommandTable.IsStatField(name))
         {
-            case "map" when parts.Length >= 2 && int.TryParse(parts[1], out int mapId):
-                await MovePlayerToMapAsync(session, mapId, spawnPortal: 0).ConfigureAwait(false);
+            parts = parts.Prepend("status").ToArray();
+            name = "status";
+        }
+
+        switch (name)
+        {
+            case "status":
+                await HandleStatusAsync(session, parts).ConfigureAwait(false);
                 break;
 
-            case "meso" when parts.Length >= 2 && int.TryParse(parts[1], out int amount):
-                _player!.Character.Meso = (int)Math.Clamp((long)_player.Character.Meso + amount, 0, int.MaxValue);
-                _characters.Save(_player.Character);
-                await session.SendAsync(_packets.StatChanged(_player.Character, StatFlag.Meso)).ConfigureAwait(false);
-                break;
+            case "map" when parts.Length >= 2: // legacy spelling, same behaviour
+            case "warp" when parts.Length >= 2:
+            {
+                // One warp command for both addressing modes: a number is a map id, anything else
+                // is an online player whose map we jump to.
+                if (int.TryParse(parts[1], out int warpMapId))
+                {
+                    await MovePlayerToMapAsync(session, warpMapId, spawnPortal: 0).ConfigureAwait(false);
+                    break;
+                }
 
-            case "notice" when parts.Length >= 2:
-                await _field!.BroadcastAsync(_packets.BroadcastNotice(command["notice ".Length..].Trim()))
+                FieldPlayer? warpTarget = _fields.FindPlayerByName(parts[1]);
+                if (warpTarget is null || warpTarget.Character.Id == _player!.Character.Id)
+                {
+                    await ReplyAsync(session, $"'{parts[1]}' はオンラインではありません").ConfigureAwait(false);
+                    break;
+                }
+
+                await MovePlayerToMapAsync(session, warpTarget.Character.MapId, spawnPortal: 0).ConfigureAwait(false);
+                break;
+            }
+
+            case "dbgwarp":
+            {
+                // A windowed warp console: pick a region, pick a map, go — no ids to type. Same
+                // dialog plumbing as /beauty and /dbgshop.
+                if (_conversation is { IsEnded: false })
+                {
+                    break; // another dialog is open
+                }
+
+                if (_mapCatalog is null || _mapCatalog.Regions.Count == 0)
+                {
+                    await ReplyAsync(session, "マップカタログが未ロードです (CRONUS_WZ)").ConfigureAwait(false);
+                    break;
+                }
+
+                var warpDialog = new ChannelNpcDialog(session, _packets);
+                var warpConvo = new NpcConversation(BeautyNpcId, warpDialog);
+                _conversation = warpConvo;
+                IMapCatalog warpCatalog = _mapCatalog;
+                var warpThread = new Thread(() => RunDebugWarpFlow(warpConvo, warpCatalog, session))
+                {
+                    IsBackground = true,
+                    Name = "dbgwarp-console",
+                };
+                warpThread.Start();
+                break;
+            }
+
+            case "pos":
+                await ReplyAsync(session, $"pos: ({_player!.X}, {_player.Y}) map {_player.Character.MapId}")
                     .ConfigureAwait(false);
                 break;
 
+            case "notice" when parts.Length >= 2:
+            {
+                // /notice <msg> is this map; /notice all <msg> is every map on every channel.
+                bool everywhere = parts[1].Equals("all", StringComparison.OrdinalIgnoreCase) && parts.Length >= 3;
+                byte[] notice = _packets.BroadcastNotice(string.Join(' ', parts.Skip(everywhere ? 2 : 1)));
+                if (everywhere)
+                {
+                    foreach (Field f in _fields.Fields)
+                    {
+                        await f.BroadcastAsync(notice).ConfigureAwait(false);
+                    }
+                }
+                else
+                {
+                    await _field!.BroadcastAsync(notice).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
             case "snotice" when parts.Length >= 2:
             {
-                byte[] notice = _packets.BroadcastNotice(command["snotice ".Length..].Trim());
+                // Legacy spelling of "/notice all".
+                byte[] notice = _packets.BroadcastNotice(string.Join(' ', parts.Skip(1)));
                 foreach (Field f in _fields.Fields)
                 {
                     await f.BroadcastAsync(notice).ConfigureAwait(false);
@@ -61,70 +140,6 @@ public sealed partial class ChannelHandler
                 await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false); // party sees the heal
                 break;
             }
-
-            case "job" when parts.Length >= 2 && int.TryParse(parts[1], out int job):
-                await SetStatAsync(session, StatFlag.Job, c => c.Job = (short)job).ConfigureAwait(false);
-                break;
-
-            case "level" when parts.Length >= 2 && int.TryParse(parts[1], out int level):
-            {
-                Character lc = _player!.Character;
-                int target = Math.Clamp(level, 1, 200);
-                StatFlag levelChanged = StatFlag.Level | StatFlag.Exp;
-                if (target > lc.Level)
-                {
-                    // Raising runs real level-ups so HP/MP/AP/SP grow like normal play.
-                    levelChanged |= CharacterProgression.ForceLevelUps(lc, target - lc.Level, EffectResolverFor(lc));
-                }
-                else
-                {
-                    lc.Level = (byte)target; // lowering just sets the level (stats keep their values)
-                }
-
-                lc.Exp = 0; // reset so the new level's bar starts clean
-                _characters.Save(lc);
-                await session.SendAsync(_packets.StatChanged(lc, levelChanged)).ConfigureAwait(false);
-                await RefreshPartyWindowAsync(_player).ConfigureAwait(false); // party window shows levels
-                if (lc.GuildId > 0)
-                {
-                    await BroadcastToGuildAsync(lc.GuildId, _packets.GuildMemberLevelJob(lc.GuildId, lc.Id, lc.Level, lc.Job), exceptCharacterId: lc.Id).ConfigureAwait(false);
-                }
-
-                break;
-            }
-
-            case "hp" when parts.Length >= 2 && int.TryParse(parts[1], out int hp):
-            {
-                Character sc = _player!.Character;
-                sc.Hp = (short)Math.Clamp(hp, 0, sc.MaxHp);
-                _characters.Save(sc);
-                await session.SendAsync(_packets.StatChanged(sc, StatFlag.Hp)).ConfigureAwait(false);
-                await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
-                break;
-            }
-
-            case "maxhp" when parts.Length >= 2 && int.TryParse(parts[1], out int maxHp):
-            {
-                Character sc = _player!.Character;
-                sc.MaxHp = (short)Math.Clamp(maxHp, 1, 30000);
-                sc.Hp = Math.Min(sc.Hp, sc.MaxHp);
-                _characters.Save(sc);
-                await session.SendAsync(_packets.StatChanged(sc, StatFlag.Hp | StatFlag.MaxHp)).ConfigureAwait(false);
-                await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
-                break;
-            }
-
-            case "mp" when parts.Length >= 2 && int.TryParse(parts[1], out int mp):
-                await SetStatAsync(session, StatFlag.Mp, c => c.Mp = (short)Math.Clamp(mp, 0, c.MaxMp)).ConfigureAwait(false);
-                break;
-
-            case "maxmp" when parts.Length >= 2 && int.TryParse(parts[1], out int maxMp):
-                await SetStatAsync(session, StatFlag.Mp | StatFlag.MaxMp, c =>
-                {
-                    c.MaxMp = (short)Math.Clamp(maxMp, 1, 30000);
-                    c.Mp = Math.Min(c.Mp, c.MaxMp);
-                }).ConfigureAwait(false);
-                break;
 
             case "maxskills":
             {
@@ -221,140 +236,6 @@ public sealed partial class ChannelHandler
                 break;
             }
 
-            case "dbgshop":
-            {
-                // A debug shop stocking EVERY item in the game at 1 meso, browsed like /beauty:
-                // pick a category, pick a page, and the shop window opens with that page's stock.
-                if (_conversation is { IsEnded: false })
-                {
-                    break; // another dialog is open
-                }
-
-                if (_itemCatalog is null || _itemCatalog.Categories.Count == 0)
-                {
-                    await ReplyAsync(session, "アイテムカタログが未ロードです (CRONUS_WZ)").ConfigureAwait(false);
-                    break;
-                }
-
-                var shopDialog = new ChannelNpcDialog(session, _packets);
-                var shopConvo = new NpcConversation(BeautyNpcId, shopDialog);
-                _conversation = shopConvo;
-                IItemCatalog catalog = _itemCatalog;
-                var shopThread = new Thread(() => RunDebugShopFlow(shopConvo, catalog, session))
-                {
-                    IsBackground = true,
-                    Name = "dbgshop-console",
-                };
-                shopThread.Start();
-                break;
-            }
-
-            case "booktest" when parts.Length >= 2:
-            {
-                // Live bisect for the card-pickup crash: choose WHICH monster-book packets the
-                // next pickup sends. No restart needed. "reset" clears this character's
-                // registered cards so the same mob drops its card again.
-                string mode = parts[1].ToLowerInvariant();
-                if (mode == "reset")
-                {
-                    _player!.Character.MonsterCards.Clear();
-                    _characters.Save(_player.Character);
-                    await ReplyAsync(session, "monster book cleared — cards will drop again").ConfigureAwait(false);
-                    break;
-                }
-
-                GameConstants.SendMonsterBookSetCard = mode is "set" or "all";
-                GameConstants.SendMonsterBookCardEffect = mode is "effect" or "all";
-                GameConstants.SendMonsterBookCardMessage = mode is "msg" or "all";
-                if (mode == "effect" && parts.Length >= 3 && byte.TryParse(parts[2], out byte effectValue))
-                {
-                    GameConstants.MonsterBookCardEffectValue = effectValue; // e.g. /booktest effect 16
-                }
-
-                await ReplyAsync(session,
-                    $"book packets: set={GameConstants.SendMonsterBookSetCard} effect={GameConstants.SendMonsterBookCardEffect}(value {GameConstants.MonsterBookCardEffectValue}) msg={GameConstants.SendMonsterBookCardMessage}").ConfigureAwait(false);
-                break;
-            }
-
-            case "clearinv":
-            {
-                // Empties inventory tabs (positive slots only — worn equips stay): /clearinv wipes
-                // all five tabs, /clearinv <1-5> just one. Sends the per-slot removes so the
-                // client's grid clears live.
-                Character cc = _player!.Character;
-                int? onlyTab = parts.Length >= 2 && int.TryParse(parts[1], out int t) && t is >= 1 and <= 5 ? t : null;
-                var removed = new List<InventoryChange>();
-                foreach (InventoryItem item in cc.EquippedItems
-                             .Where(i => i.Position > 0 && (onlyTab is null || Inventory.Tab(i.ItemId) == onlyTab))
-                             .ToList())
-                {
-                    cc.EquippedItems.Remove(item);
-                    removed.Add(new InventoryChange(InvMode.Remove, Inventory.Tab(item.ItemId), item.Position, null, 0));
-                }
-
-                _characters.Save(cc);
-                foreach (InventoryChange[] chunk in removed.Chunk(32)) // keep packets small
-                {
-                    await session.SendAsync(_packets.InventoryOperation(chunk)).ConfigureAwait(false);
-                }
-
-                await ReplyAsync(session, $"cleared {removed.Count} item(s)").ConfigureAwait(false);
-                break;
-            }
-
-            case "questreset" when parts.Length >= 2 && int.TryParse(parts[1], out int resetQuestId):
-            {
-                // Clears one quest from both records (debug/bot use: makes quest flows re-runnable).
-                Character qc = _player!.Character;
-                bool removed = qc.StartedQuests.Remove(resetQuestId) | qc.CompletedQuests.Remove(resetQuestId);
-                _characters.Save(qc);
-                if (removed)
-                {
-                    await session.SendAsync(_packets.QuestRecordMessage(resetQuestId, ChannelPackets.QuestRecordNone)).ConfigureAwait(false);
-                }
-
-                await ReplyAsync(session, $"quest {resetQuestId} reset").ConfigureAwait(false);
-                break;
-            }
-
-            case "guildcreate" when parts.Length >= 2:
-                // Free, works anywhere (the client's own flow needs the HQ map and 5m meso).
-                await CreateGuildAsync(session, _player!.Character, parts[1], cost: 0).ConfigureAwait(false);
-                break;
-
-            case "str" when parts.Length >= 2 && int.TryParse(parts[1], out int str):
-                await SetStatAsync(session, StatFlag.Str, c => c.Str = (short)Math.Clamp(str, 4, short.MaxValue)).ConfigureAwait(false);
-                break;
-
-            case "dex" when parts.Length >= 2 && int.TryParse(parts[1], out int dex):
-                await SetStatAsync(session, StatFlag.Dex, c => c.Dex = (short)Math.Clamp(dex, 4, short.MaxValue)).ConfigureAwait(false);
-                break;
-
-            case "int" when parts.Length >= 2 && int.TryParse(parts[1], out int intStat):
-                await SetStatAsync(session, StatFlag.Int, c => c.Int = (short)Math.Clamp(intStat, 4, short.MaxValue)).ConfigureAwait(false);
-                break;
-
-            case "luk" when parts.Length >= 2 && int.TryParse(parts[1], out int luk):
-                await SetStatAsync(session, StatFlag.Luk, c => c.Luk = (short)Math.Clamp(luk, 4, short.MaxValue)).ConfigureAwait(false);
-                break;
-
-            case "ap" when parts.Length >= 2 && int.TryParse(parts[1], out int ap):
-                await SetStatAsync(session, StatFlag.Ap, c => c.Ap = (short)Math.Clamp(c.Ap + ap, 0, short.MaxValue)).ConfigureAwait(false);
-                break;
-
-            case "sp" when parts.Length >= 2 && int.TryParse(parts[1], out int sp):
-                await SetStatAsync(session, StatFlag.Sp, c => c.Sp = (short)Math.Clamp(c.Sp + sp, 0, short.MaxValue)).ConfigureAwait(false);
-                break;
-
-            case "fame" when parts.Length >= 2 && int.TryParse(parts[1], out int fame):
-                await SetStatAsync(session, StatFlag.Fame, c => c.Fame = (short)Math.Clamp(fame, -30000, 30000)).ConfigureAwait(false);
-                break;
-
-            case "save":
-                _characters.Save(_player!.Character);
-                await ReplyAsync(session, "saved").ConfigureAwait(false);
-                break;
-
             case "item" when parts.Length >= 2 && int.TryParse(parts[1], out int itemId):
             {
                 int qty = parts.Length >= 3 && int.TryParse(parts[2], out int q) ? q : 1;
@@ -393,12 +274,41 @@ public sealed partial class ChannelHandler
                 break;
             }
 
-            case "shop" when parts.Length >= 2 && int.TryParse(parts[1], out int shopId):
+            case "dbgshop":
+            case "shop" when parts.Length < 2:
+            {
+                // A debug shop stocking EVERY item in the game at 1 meso, browsed like /beauty:
+                // pick a category, pick a page, and the shop window opens with that page's stock.
+                if (_conversation is { IsEnded: false })
+                {
+                    break; // another dialog is open
+                }
+
+                if (_itemCatalog is null || _itemCatalog.Categories.Count == 0)
+                {
+                    await ReplyAsync(session, "アイテムカタログが未ロードです (CRONUS_WZ)").ConfigureAwait(false);
+                    break;
+                }
+
+                var shopDialog = new ChannelNpcDialog(session, _packets);
+                var shopConvo = new NpcConversation(BeautyNpcId, shopDialog);
+                _conversation = shopConvo;
+                IItemCatalog catalog = _itemCatalog;
+                var shopThread = new Thread(() => RunDebugShopFlow(shopConvo, catalog, session))
+                {
+                    IsBackground = true,
+                    Name = "dbgshop-console",
+                };
+                shopThread.Start();
+                break;
+            }
+
+            case "shop" when int.TryParse(parts[1], out int shopId):
             {
                 Shop? shop = _shops.GetShop(shopId);
                 if (shop is null)
                 {
-                    await ReplyAsync(session, $"no shop {shopId}").ConfigureAwait(false);
+                    await ReplyAsync(session, $"ショップ {shopId} は存在しません").ConfigureAwait(false);
                     break;
                 }
 
@@ -410,18 +320,22 @@ public sealed partial class ChannelHandler
                 await OpenStorageAsync(session).ConfigureAwait(false);
                 break;
 
-            case "warp" when parts.Length >= 2:
-            {
-                FieldPlayer? target = _fields.FindPlayerByName(parts[1]);
-                if (target is null || target.Character.Id == _player!.Character.Id)
-                {
-                    await ReplyAsync(session, $"'{parts[1]}' is not online").ConfigureAwait(false);
-                    break;
-                }
-
-                await MovePlayerToMapAsync(session, target.Character.MapId, spawnPortal: 0).ConfigureAwait(false);
+            case "clear" when parts.Length >= 2:
+                await HandleClearAsync(session, parts).ConfigureAwait(false);
                 break;
-            }
+
+            case "clearinv":
+                await ClearInventoryAsync(session, parts.Length >= 2 ? parts[1] : null).ConfigureAwait(false);
+                break;
+
+            case "questreset" when parts.Length >= 2 && int.TryParse(parts[1], out int legacyQuestId):
+                await ClearQuestAsync(session, legacyQuestId).ConfigureAwait(false);
+                break;
+
+            case "guildcreate" when parts.Length >= 2:
+                // Free, works anywhere (the client's own flow needs the HQ map and 5m meso).
+                await CreateGuildAsync(session, _player!.Character, parts[1], cost: 0).ConfigureAwait(false);
+                break;
 
             case "players":
             case "online":
@@ -440,22 +354,275 @@ public sealed partial class ChannelHandler
                 break;
             }
 
-            case "pos":
-                await ReplyAsync(session, $"pos: ({_player!.X}, {_player.Y}) map {_player.Character.MapId}")
-                    .ConfigureAwait(false);
+            case "save":
+                _characters.Save(_player!.Character);
+                await ReplyAsync(session, "saved").ConfigureAwait(false);
                 break;
 
             case "help":
-                await ReplyAsync(session, "commands: /map <id>, /warp <name>, /meso <n>, /heal, /job <n>, /level <n>, "
-                    + "/hp /maxhp /mp /maxmp /str /dex /int /luk <n>, /ap <n>, /sp <n>, /fame <n>, "
-                    + "/item <id> [qty], /drop <id> [qty], /shop <id>, /storage, /guildcreate <name>, /maxskills, /questreset <id>, /gender [m|f], /beauty, /dbgshop, /clearinv [tab], /save, /players, /notice <msg>, /snotice <msg>, /pos, /help")
-                    .ConfigureAwait(false);
+            {
+                if (parts.Length >= 2 && CommandTable.TryGet(parts[1].TrimStart('/'), out CommandSpec detail))
+                {
+                    await ReplyLinesAsync(session, CommandTable.DetailLines(detail)).ConfigureAwait(false);
+                    break;
+                }
+
+                if (parts.Length >= 2)
+                {
+                    await ReplyAsync(session, $"不明なコマンド: {parts[1]}").ConfigureAwait(false);
+                }
+
+                await ReplyLinesAsync(session, CommandTable.HelpLines()).ConfigureAwait(false);
+                break;
+            }
+
+            default:
+            {
+                // A registered name reaching here means the case guard rejected the arguments —
+                // answer with how the command is meant to be typed rather than "unknown command".
+                if (CommandTable.TryGet(name, out CommandSpec spec))
+                {
+                    await ReplyAsync(session, "引数が正しくありません。").ConfigureAwait(false);
+                    await ReplyAsync(session, "使い方: " + spec.Usage).ConfigureAwait(false);
+                    break;
+                }
+
+                string? suggestion = CommandTable.Suggest(name);
+                await ReplyAsync(session, $"不明なコマンド: /{typed}"
+                    + (suggestion is null ? string.Empty : $" — もしかして /{suggestion} ?")).ConfigureAwait(false);
+                await ReplyAsync(session, "/help でコマンド一覧を表示します").ConfigureAwait(false);
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>/status</c> — the consolidated stat command. With no field it prints the caller's stat
+    /// sheet; with a field and a value it applies the change (the same behaviours the old per-stat
+    /// commands had, which remain as aliases).
+    /// </summary>
+    private async ValueTask HandleStatusAsync(MapleSession session, string[] parts)
+    {
+        Character c = _player!.Character;
+        if (parts.Length < 2)
+        {
+            await ReplyLinesAsync(session, new[]
+            {
+                $"── {c.Name} ── Lv.{c.Level} job {c.Job} exp {c.Exp}",
+                $"HP {c.Hp}/{c.MaxHp}   MP {c.Mp}/{c.MaxMp}",
+                $"STR {c.Str}  DEX {c.Dex}  INT {c.Int}  LUK {c.Luk}",
+                $"AP {c.Ap}  SP {c.Sp}  fame {c.Fame}  meso {c.Meso}",
+                "変更するには /status <項目> <値>",
+            }).ConfigureAwait(false);
+            return;
+        }
+
+        string field = parts[1].ToLowerInvariant();
+        if (!CommandTable.IsStatField(field))
+        {
+            await ReplyAsync(session, $"不明な項目: {parts[1]}").ConfigureAwait(false);
+            await ReplyAsync(session, "項目: " + string.Join(" ", CommandTable.StatFields)).ConfigureAwait(false);
+            return;
+        }
+
+        if (parts.Length < 3 || !int.TryParse(parts[2], out int value))
+        {
+            await ReplyAsync(session, $"使い方: /status {field} <値>").ConfigureAwait(false);
+            return;
+        }
+
+        await ApplyStatAsync(session, field, value).ConfigureAwait(false);
+    }
+
+    /// <summary>Applies one <c>/status</c> field change and reports the resulting value.</summary>
+    private async ValueTask ApplyStatAsync(MapleSession session, string field, int value)
+    {
+        Character c = _player!.Character;
+        switch (field)
+        {
+            case "level":
+            {
+                int target = Math.Clamp(value, 1, 200);
+                StatFlag levelChanged = StatFlag.Level | StatFlag.Exp;
+                if (target > c.Level)
+                {
+                    // Raising runs real level-ups so HP/MP/AP/SP grow like normal play.
+                    levelChanged |= CharacterProgression.ForceLevelUps(c, target - c.Level, EffectResolverFor(c));
+                }
+                else
+                {
+                    c.Level = (byte)target; // lowering just sets the level (stats keep their values)
+                }
+
+                c.Exp = 0; // reset so the new level's bar starts clean
+                _characters.Save(c);
+                await session.SendAsync(_packets.StatChanged(c, levelChanged)).ConfigureAwait(false);
+                await RefreshPartyWindowAsync(_player).ConfigureAwait(false); // party window shows levels
+                if (c.GuildId > 0)
+                {
+                    await BroadcastToGuildAsync(c.GuildId, _packets.GuildMemberLevelJob(c.GuildId, c.Id, c.Level, c.Job), exceptCharacterId: c.Id).ConfigureAwait(false);
+                }
+
+                break;
+            }
+
+            case "job":
+                await SetStatAsync(session, StatFlag.Job, ch => ch.Job = (short)value).ConfigureAwait(false);
+                break;
+
+            case "exp":
+                await SetStatAsync(session, StatFlag.Exp, ch => ch.Exp = Math.Max(0, value)).ConfigureAwait(false);
+                break;
+
+            case "hp":
+                c.Hp = (short)Math.Clamp(value, 0, c.MaxHp);
+                _characters.Save(c);
+                await session.SendAsync(_packets.StatChanged(c, StatFlag.Hp)).ConfigureAwait(false);
+                await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+                break;
+
+            case "maxhp":
+                c.MaxHp = (short)Math.Clamp(value, 1, 30000);
+                c.Hp = Math.Min(c.Hp, c.MaxHp);
+                _characters.Save(c);
+                await session.SendAsync(_packets.StatChanged(c, StatFlag.Hp | StatFlag.MaxHp)).ConfigureAwait(false);
+                await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+                break;
+
+            case "mp":
+                await SetStatAsync(session, StatFlag.Mp, ch => ch.Mp = (short)Math.Clamp(value, 0, ch.MaxMp)).ConfigureAwait(false);
+                break;
+
+            case "maxmp":
+                await SetStatAsync(session, StatFlag.Mp | StatFlag.MaxMp, ch =>
+                {
+                    ch.MaxMp = (short)Math.Clamp(value, 1, 30000);
+                    ch.Mp = Math.Min(ch.Mp, ch.MaxMp);
+                }).ConfigureAwait(false);
+                break;
+
+            case "str":
+                await SetStatAsync(session, StatFlag.Str, ch => ch.Str = (short)Math.Clamp(value, 4, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "dex":
+                await SetStatAsync(session, StatFlag.Dex, ch => ch.Dex = (short)Math.Clamp(value, 4, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "int":
+                await SetStatAsync(session, StatFlag.Int, ch => ch.Int = (short)Math.Clamp(value, 4, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "luk":
+                await SetStatAsync(session, StatFlag.Luk, ch => ch.Luk = (short)Math.Clamp(value, 4, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "ap": // additive, like the original /ap
+                await SetStatAsync(session, StatFlag.Ap, ch => ch.Ap = (short)Math.Clamp(ch.Ap + value, 0, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "sp": // additive, like the original /sp
+                await SetStatAsync(session, StatFlag.Sp, ch => ch.Sp = (short)Math.Clamp(ch.Sp + value, 0, short.MaxValue)).ConfigureAwait(false);
+                break;
+
+            case "fame":
+                await SetStatAsync(session, StatFlag.Fame, ch => ch.Fame = (short)Math.Clamp(value, -30000, 30000)).ConfigureAwait(false);
+                break;
+
+            case "meso": // additive, like the original /meso
+                await SetStatAsync(session, StatFlag.Meso, ch => ch.Meso = (int)Math.Clamp((long)ch.Meso + value, 0, int.MaxValue)).ConfigureAwait(false);
+                break;
+        }
+
+        await ReplyAsync(session, $"{field} → {CurrentStat(c, field)}").ConfigureAwait(false);
+    }
+
+    /// <summary>The current value of one <c>/status</c> field, for the confirmation line.</summary>
+    private static string CurrentStat(Character c, string field) => field switch
+    {
+        "level" => c.Level.ToString(),
+        "job" => c.Job.ToString(),
+        "exp" => c.Exp.ToString(),
+        "hp" => $"{c.Hp}/{c.MaxHp}",
+        "maxhp" => c.MaxHp.ToString(),
+        "mp" => $"{c.Mp}/{c.MaxMp}",
+        "maxmp" => c.MaxMp.ToString(),
+        "str" => c.Str.ToString(),
+        "dex" => c.Dex.ToString(),
+        "int" => c.Int.ToString(),
+        "luk" => c.Luk.ToString(),
+        "ap" => c.Ap.ToString(),
+        "sp" => c.Sp.ToString(),
+        "fame" => c.Fame.ToString(),
+        "meso" => c.Meso.ToString(),
+        _ => "?",
+    };
+
+    /// <summary><c>/clear</c> — the consolidated "wipe some record" command.</summary>
+    private async ValueTask HandleClearAsync(MapleSession session, string[] parts)
+    {
+        switch (parts[1].ToLowerInvariant())
+        {
+            case "inv":
+            case "inventory":
+                await ClearInventoryAsync(session, parts.Length >= 3 ? parts[2] : null).ConfigureAwait(false);
+                break;
+
+            case "quest" when parts.Length >= 3 && int.TryParse(parts[2], out int questId):
+                await ClearQuestAsync(session, questId).ConfigureAwait(false);
+                break;
+
+            case "book":
+            case "monsterbook":
+                _player!.Character.MonsterCards.Clear();
+                _characters.Save(_player.Character);
+                await ReplyAsync(session, "モンスターブックを消去しました — カードが再びドロップします").ConfigureAwait(false);
                 break;
 
             default:
-                await ReplyAsync(session, $"unknown command: {parts[0]}").ConfigureAwait(false);
+                await ReplyAsync(session, "使い方: /clear <inv [タブ]|quest <クエストID>|book>").ConfigureAwait(false);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Empties inventory tabs (positive slots only — worn equips stay): no tab wipes all five,
+    /// a tab number (1-5) just that one. Sends the per-slot removes so the grid clears live.
+    /// </summary>
+    private async ValueTask ClearInventoryAsync(MapleSession session, string? tabArg)
+    {
+        Character cc = _player!.Character;
+        int? onlyTab = tabArg is not null && int.TryParse(tabArg, out int t) && t is >= 1 and <= 5 ? t : null;
+        var removed = new List<InventoryChange>();
+        foreach (InventoryItem item in cc.EquippedItems
+                     .Where(i => i.Position > 0 && (onlyTab is null || Inventory.Tab(i.ItemId) == onlyTab))
+                     .ToList())
+        {
+            cc.EquippedItems.Remove(item);
+            removed.Add(new InventoryChange(InvMode.Remove, Inventory.Tab(item.ItemId), item.Position, null, 0));
+        }
+
+        _characters.Save(cc);
+        foreach (InventoryChange[] chunk in removed.Chunk(32)) // keep packets small
+        {
+            await session.SendAsync(_packets.InventoryOperation(chunk)).ConfigureAwait(false);
+        }
+
+        await ReplyAsync(session, $"cleared {removed.Count} item(s)").ConfigureAwait(false);
+    }
+
+    /// <summary>Clears one quest from both records (debug/bot use: makes quest flows re-runnable).</summary>
+    private async ValueTask ClearQuestAsync(MapleSession session, int questId)
+    {
+        Character qc = _player!.Character;
+        bool removed = qc.StartedQuests.Remove(questId) | qc.CompletedQuests.Remove(questId);
+        _characters.Save(qc);
+        if (removed)
+        {
+            await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordNone)).ConfigureAwait(false);
+        }
+
+        await ReplyAsync(session, $"quest {questId} reset").ConfigureAwait(false);
     }
 
     /// <summary>Applies a stat mutation to the caller, persists it, and pushes the changed stat.</summary>
@@ -496,6 +663,18 @@ public sealed partial class ChannelHandler
     /// <summary>Sends a chat line visible only to the calling player (as their own message).</summary>
     private ValueTask ReplyAsync(MapleSession session, string text)
         => session.SendAsync(_packets.UserChat(_player!.Character.Id, isGm: true, text, onlyBalloon: false));
+
+    /// <summary>
+    /// Sends several chat lines in order. The client renders each chat packet as its own row, so
+    /// this is how multi-line output (/help, /status) gets its line breaks.
+    /// </summary>
+    private async ValueTask ReplyLinesAsync(MapleSession session, IEnumerable<string> lines)
+    {
+        foreach (string line in lines)
+        {
+            await ReplyAsync(session, line).ConfigureAwait(false);
+        }
+    }
 
     private async ValueTask HandleSelectNpcAsync(MapleSession session, PacketReader packet)
     {
@@ -703,6 +882,113 @@ public sealed partial class ChannelHandler
 
     /// <summary>Shop id used for the synthetic /dbgshop stock (never collides with wz shops).</summary>
     private const int DebugShopId = -1;
+
+    /// <summary>How many entries one /dbgwarp menu page lists before it splits into pages.</summary>
+    private const int DebugWarpPageSize = 20;
+
+    /// <summary>
+    /// The /dbgwarp console: region → street → map, then warp. Runs on its own thread because the
+    /// dialog helpers block waiting for the player's selection, exactly like an NPC script.
+    /// Streets are the middle level because a region can hold over a thousand maps while a street
+    /// is usually a handful — and streets ("ヘネシス", "オルビス") are how the game names places.
+    /// </summary>
+    private void RunDebugWarpFlow(NpcConversation cm, IMapCatalog catalog, MapleSession session)
+    {
+        try
+        {
+            IReadOnlyList<MapRegion> regions = catalog.Regions;
+            int regionPick = PickFromMenu(
+                cm,
+                "デバッグワープ\r\n地域を選んでください:",
+                regions.Select(r => $"{r.DisplayName} （{r.MapCount}箇所）").ToList());
+            if (regionPick < 0)
+            {
+                return;
+            }
+
+            MapRegion region = regions[regionPick];
+            int streetPick = PickFromMenu(
+                cm,
+                region.DisplayName + "\r\nエリアを選んでください:",
+                region.Streets.Select(s => $"{s.Name} （{s.Maps.Count}箇所）").ToList());
+            if (streetPick < 0)
+            {
+                return;
+            }
+
+            MapStreet street = region.Streets[streetPick];
+            int mapPick = PickFromMenu(
+                cm,
+                street.Name + "\r\n行き先を選んでください:",
+                street.Maps.Select(m => $"{m.MapName} （{m.MapId}）").ToList());
+            if (mapPick < 0)
+            {
+                return;
+            }
+
+            // The field change tears down the dialog, so close the conversation first.
+            int destination = street.Maps[mapPick].MapId;
+            cm.End();
+            MovePlayerToMapAsync(session, destination, spawnPortal: 0).AsTask().GetAwaiter().GetResult();
+        }
+        catch (ConversationEndedException)
+        {
+            // The player escaped the dialog — normal end.
+        }
+        catch (Exception)
+        {
+            // Never let a browse bug take the session down; the dialog just closes.
+        }
+        finally
+        {
+            cm.End();
+        }
+    }
+
+    /// <summary>
+    /// Shows <paramref name="labels"/> as a selectable menu and returns the chosen index, or -1 if
+    /// the player backed out. Lists longer than a page get a "which page" menu first, so no single
+    /// dialog grows past what the client can show.
+    /// </summary>
+    private static int PickFromMenu(NpcConversation cm, string prompt, IReadOnlyList<string> labels)
+    {
+        if (labels.Count == 0)
+        {
+            return -1;
+        }
+
+        int offset = 0;
+        if (labels.Count > DebugWarpPageSize)
+        {
+            int pages = (labels.Count + DebugWarpPageSize - 1) / DebugWarpPageSize;
+            var pageMenu = new System.Text.StringBuilder(prompt).Append("\r\nページを選んでください:");
+            for (int i = 0; i < pages; i++)
+            {
+                // Label each page with its first and last entry so the list stays navigable.
+                int last = Math.Min(labels.Count, (i + 1) * DebugWarpPageSize) - 1;
+                pageMenu.Append("\r\n#L").Append(i).Append('#')
+                    .Append(labels[i * DebugWarpPageSize]).Append(" 〜 ").Append(labels[last]).Append("#l");
+            }
+
+            int page = cm.askMenu(pageMenu.ToString());
+            if (page < 0 || page >= pages)
+            {
+                return -1;
+            }
+
+            offset = page * DebugWarpPageSize;
+        }
+
+        var menu = new System.Text.StringBuilder(prompt);
+        int count = Math.Min(DebugWarpPageSize, labels.Count - offset);
+        for (int i = 0; i < count; i++)
+        {
+            menu.Append("\r\n#L").Append(i).Append('#').Append(labels[offset + i]).Append("#l");
+        }
+
+        int pick = cm.askMenu(menu.ToString());
+        return pick < 0 || pick >= count ? -1 : offset + pick;
+    }
 
     /// <summary>Pages <paramref name="candidates"/> through the avatar picker and applies the pick.</summary>
     private static void PickPagedStyle(NpcConversation cm, List<int> candidates, string what, Action<int> apply)

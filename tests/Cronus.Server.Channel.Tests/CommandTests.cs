@@ -344,4 +344,175 @@ public class CommandTests
         Assert.Equal(30, hero.MaxHp);
         Assert.Equal(30, hero.Hp); // current HP pulled down with the max
     }
+
+    /// <summary>Sends one command on entry and collects every chat line the server replies with.</summary>
+    private sealed class ChatCollector : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly string _command;
+        private readonly int _expectedLines;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opChat = ServerOps.Get(ServerOpcode.UserChat);
+        private bool _sent;
+
+        public ChatCollector(int characterId, string command, int expectedLines)
+        {
+            _characterId = characterId;
+            _command = command;
+            _expectedLines = expectedLines;
+        }
+
+        public List<string> Lines { get; } = new();
+
+        public TaskCompletionSource Enough { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session) =>
+            await session.SendAsync(MigrateIn(session, _characterId));
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && !_sent)
+            {
+                _sent = true;
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserChat), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);
+                w.WriteString(_command);
+                w.WriteBool(false);
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opChat)
+            {
+                p.ReadInt();                 // character id
+                p.ReadBool();                // isGm
+                lock (Lines)
+                {
+                    Lines.Add(p.ReadString());
+                    if (Lines.Count >= _expectedLines)
+                    {
+                        Enough.TrySetResult();
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>Runs one chat command against a lone player and returns the reply lines.</summary>
+    private static async Task<List<string>> ReplyLinesFor(
+        string command, int expectedLines, Character hero, ICharacterRepository repo)
+    {
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new ChatCollector(hero.Id, command, expectedLines);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        await client.Enough.Task.WaitAsync(cts.Token);
+        lock (client.Lines)
+        {
+            return client.Lines.ToList();
+        }
+    }
+
+    [Fact]
+    public async Task StatusCommand_SetsTheNamedStat()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Consol", MapId = 100000000 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new Commander(hero.Id, "/status dex 321", statBit: 0x80); // StatFlag.Dex
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        Assert.Equal(321, await client.StatValue.Task.WaitAsync(cts.Token));
+        Assert.Equal(321, hero.Dex);
+    }
+
+    [Fact]
+    public async Task StatusCommand_WithNoArguments_PrintsTheStatSheet()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Sheet", MapId = 100000000, Level = 7, Str = 13,
+        });
+
+        List<string> lines = await ReplyLinesFor("/status", expectedLines: 5, hero, repo);
+
+        Assert.Equal(5, lines.Count);                          // one chat packet per line
+        Assert.Contains("Lv.7", lines[0]);
+        Assert.Contains("STR 13", lines[2]);
+        Assert.Contains("/status", lines[4]);                   // tells you how to change one
+    }
+
+    [Fact]
+    public async Task WrongArguments_AnswerWithTheCommandsUsage()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Typo", MapId = 100000000 });
+
+        // /item wants an id; a word is not one, so the guard rejects it.
+        List<string> lines = await ReplyLinesFor("/item apple", expectedLines: 2, hero, repo);
+
+        Assert.Contains("引数", lines[0]);
+        Assert.Contains("/item <", lines[1]);   // the registered usage, verbatim
+    }
+
+    [Fact]
+    public async Task LegacyStatSpelling_WithoutAValue_ShowsTheStatusUsage()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Legacy", MapId = 100000000 });
+
+        // "/hp" still resolves (it is an alias), but with no value it explains the new spelling.
+        List<string> lines = await ReplyLinesFor("/hp", expectedLines: 1, hero, repo);
+
+        Assert.Equal("使い方: /status hp <値>", lines[0]);
+    }
+
+    [Fact]
+    public async Task UnknownCommand_SuggestsTheClosestNameAndPointsAtHelp()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Lost", MapId = 100000000 });
+
+        List<string> lines = await ReplyLinesFor("/healx", expectedLines: 2, hero, repo);
+
+        Assert.Contains("/heal", lines[0]);     // did-you-mean
+        Assert.Contains("/help", lines[1]);
+    }
+
+    [Fact]
+    public async Task HelpCommand_IsBrokenIntoLines_AndCanDetailOneCommand()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Reader", MapId = 100000000 });
+
+        // The listing: a header, five category headings, one line per command, and a footer —
+        // every one its own chat packet, which is what makes it readable in the client.
+        List<string> listing = await ReplyLinesFor("/help", expectedLines: 12, hero, repo);
+        Assert.Contains(listing, l => l.Contains("コマンド一覧"));
+        Assert.Contains(listing, l => l.Contains("【移動】"));
+        Assert.Contains(listing, l => l.Trim().StartsWith("/warp "));
+
+        // The detail view for a single command, reachable by any of its aliases.
+        List<string> detail = await ReplyLinesFor("/help map", expectedLines: 3, hero, repo);
+        Assert.Contains("/warp", detail[0]);
+        Assert.Contains("別名", detail[2]);
+    }
 }

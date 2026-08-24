@@ -756,7 +756,19 @@ restart).
 
 **A. Verification & stability (highest value per the final goal)**
 - [ ] Live-client pass over the newest features (quest chains/acts, reactor drops, /gender,
-      SP grants) — bot-verified only so far; a human client run is the gate.
+      SP grants, the reworked command set + /dbgwarp) — bot-verified only so far; a human
+      client run is the gate. Checklist: docs/CLIENT_TEST_CHECKLIST.ja.md.
+- [x] Command system reworked (2026-08-24): one metadata table
+      (ChannelHandler.CommandTable.cs) drives /help (grouped, one chat line per row),
+      `/help <cmd>` detail, and the "wrong arguments -> registered usage" reply; the stat
+      family consolidated into `/status <field> <n>` (old spellings kept as aliases);
+      `/map`+`/warp`, `/snotice`+`/notice all`, `/clearinv`+`/questreset`+monster-book into
+      `/clear`, `/dbgshop`+`/shop` merged; `/booktest` bisect scaffolding retired now that
+      the card effect id (16) is client-verified. New `/dbgwarp` browses region -> area ->
+      map from a wz map catalog intersected with real field data (3,267 of ~5,500 named
+      maps). While adding bot steps for these, the cross-bot `whisper->Bot2` step turned out
+      to depend on timing (the recipient is briefly out of a field during its own re-entry
+      step) — it now retries until the sender ack reports delivered.
 - [~] Long-session soak test: a 30-cycle bot-suite loop with memory sampling ran 2026-08-22
       (see commit notes); an hours-long human-attended run is still open.
 - [x] Golden vectors v1 (2026-08-22): ran the live Java build (JDK 21, local MySQL) and

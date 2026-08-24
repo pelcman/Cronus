@@ -136,6 +136,15 @@ IItemCatalog? itemCatalog = Environment.GetEnvironmentVariable("CRONUS_WZ") is {
 Console.WriteLine(itemCatalog is null
     ? "[shops] item catalog unavailable (no wz String data) — /dbgshop disabled."
     : "[shops] item catalog ready — /dbgshop lists every item by category.");
+
+// Every named map, grouped by region — powers /dbgwarp. Same wz String requirement.
+IMapCatalog? mapCatalog = Environment.GetEnvironmentVariable("CRONUS_WZ") is { Length: > 0 } mapCatalogRoot
+    && Directory.Exists(Path.Combine(mapCatalogRoot, "String"))
+        ? new WzMapCatalog(mapCatalogRoot)
+        : null;
+Console.WriteLine(mapCatalog is null
+    ? "[maps] map catalog unavailable (no wz String data) — /dbgwarp disabled."
+    : "[maps] map catalog ready — /dbgwarp lists every map by region.");
 INpcNameProvider? npcNames = CreateNpcNameProvider();
 IStyleProvider? styles = CreateStyleProvider();
 ICommodityProvider? commodities = CreateCommodityProvider();
@@ -167,7 +176,7 @@ for (int i = 0; i < channelCount; i++)
         new IPEndPoint(IPAddress.Any, channelPort + i),
         config,
         () => new LoggingHandler(
-            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, accounts: accounts, itemCatalog: itemCatalog, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
+            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, accounts: accounts, itemCatalog: itemCatalog, mapCatalog: mapCatalog, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
             $"channel{channelId}", verbose: wireDebug),
         keepAlive));
 }

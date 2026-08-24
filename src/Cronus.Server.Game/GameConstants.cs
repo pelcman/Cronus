@@ -18,19 +18,13 @@ public static class GameConstants
     /// </summary>
     public const int MonsterCardStopDropCount = 1;
 
-    // Monster-Book packet switches (mutable: the /booktest command flips them live to bisect
-    // a client crash — the LP_MonsterBookSetCard opcode is unverified against the real client).
-    public static bool SendMonsterBookSetCard { get; set; } = true;
-    public static bool SendMonsterBookCardEffect { get; set; } = true;
-    public static bool SendMonsterBookCardMessage { get; set; } = true;
-
     /// <summary>
-    /// The user-effect id for the card-get flash, tunable live via <c>/booktest effect &lt;n&gt;</c>.
-    /// v186's table is neither the ≤147 pre-BB one (13 crashed) nor the GMS-v95 default (15
-    /// crashed): with Aran in v186 the Resist entry shifts everything, giving the v302 layout
-    /// minus the later JMS charm entry — CardGet 16 (and QuestComplete 12).
+    /// The user-effect id for the card-get flash. Client-verified: v186's table is neither the
+    /// ≤147 pre-BB one (13 crashed the client) nor the GMS-v95 default (15 crashed too). With
+    /// Aran present in v186 the Resist entry shifts everything, giving the v302 layout minus the
+    /// later JMS charm entry — CardGet 16 (and QuestComplete 12).
     /// </summary>
-    public static byte MonsterBookCardEffectValue { get; set; } = 16;
+    public const byte MonsterBookCardEffectValue = 16;
 
     // ---- Social -------------------------------------------------------------------------
 

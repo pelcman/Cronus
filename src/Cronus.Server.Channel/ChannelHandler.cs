@@ -56,6 +56,9 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     /// <summary>Every known item grouped by category (for /dbgshop); null without wz.</summary>
     private readonly IItemCatalog? _itemCatalog;
 
+    /// <summary>Every named map grouped by region (for /dbgwarp); null without wz.</summary>
+    private readonly IMapCatalog? _mapCatalog;
+
     /// <summary>Every channel's advertised endpoint (index = channel id); null = single channel.</summary>
     private readonly IReadOnlyList<System.Net.IPEndPoint>? _channelEndpoints;
 
@@ -181,6 +184,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         INpcNameProvider? npcNames = null,
         IStyleProvider? styles = null,
         IItemCatalog? itemCatalog = null,
+        IMapCatalog? mapCatalog = null,
         IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
         IReadOnlyList<FieldRegistry>? worldFields = null,
         System.Net.IPEndPoint? cashShopEndpoint = null,
@@ -211,6 +215,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _npcNames = npcNames;
         _styles = styles;
         _itemCatalog = itemCatalog;
+        _mapCatalog = mapCatalog;
         _channelEndpoints = channelEndpoints;
         _worldFields = worldFields;
         _cashShopEndpoint = cashShopEndpoint;

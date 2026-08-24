@@ -173,7 +173,7 @@ Every player (you included) does this once, to their own JMS v186 client:
 5. **Play together** — move, chat, fight mobs, pick up drops, use portals. Other
    players in the same map appear and their movement/chat is relayed.
 
-In-game commands use the `/` prefix — `/map <id>`, `/meso <n>`, `/notice <msg>`, `/help`, … — see [COMMANDS.md](COMMANDS.md) ([日本語](COMMANDS.ja.md)).
+In-game commands use the `/` prefix — `/warp <mapId|player>`, `/dbgwarp`, `/status <field> <n>`, `/help`, … — see [COMMANDS.md](COMMANDS.md) ([日本語](COMMANDS.ja.md)). `/help` lists everything, and getting a command's arguments wrong replies with its usage.
 
 ---
 
