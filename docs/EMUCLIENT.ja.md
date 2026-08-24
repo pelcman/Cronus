@@ -38,6 +38,35 @@
 また、**古い `MapleStory.exe` プロセスが残っていると起動に失敗します**。
 `run-client.bat` は残留プロセスを検出したら警告します。
 
+### ini は必ず CRLF で保存する
+
+`Config` は `GetPrivateProfileStringW` で ini を読みます。この API は
+**CRLF 改行を前提**としており、LF only のファイルではキーを読み取れません。
+その場合 `TargetEXE` が空扱いになり、**何も起動せずに終了**します
+（症状としては「ダブルクリックしても無反応」に見えます）。
+
+Linux 系のツールやエディタで編集した場合は改行コードに注意してください。
+正しく読めているかは PowerShell で確認できます:
+
+```powershell
+Add-Type -Name I -Namespace W -MemberDefinition '[DllImport("kernel32.dll")] public static extern int GetPrivateProfileStringW(string s,string k,string d,System.Text.StringBuilder r,int n,string f);'
+$b = New-Object System.Text.StringBuilder 512
+[W.I]::GetPrivateProfileStringW('RunEmu','TargetEXE','',$b,512,"$PWD\RunEmu.ini"); $b.ToString()
+```
+
+### うまくいかないときのログ取得
+
+EmuClient の各 DLL は `OutputDebugString` でデバッグ出力を出します。
+同梱の `debug-log.ps1` を**管理者 PowerShell で実行したまま** `run-client.bat` を
+起動すると、どの DLL がどこまで進んだかが見えます。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File debug-log.ps1
+```
+
+`FastLoad:...` / `DelayLoad:...` / `[Redirect]...` といった行が出れば、
+その段階までは正常に動いています。
+
 多重起動ロックが解除されるので、**同じ PC で複数クライアントを同時起動できます**
 （2 人プレイの動作確認に便利）。
 
