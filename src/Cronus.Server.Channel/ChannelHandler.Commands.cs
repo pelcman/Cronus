@@ -697,17 +697,54 @@ public sealed partial class ChannelHandler
             return;
         }
 
-        if (_npcScripts is null)
+        if (_npcScripts is not null)
+        {
+            var dialog = new ChannelNpcDialog(session, _packets);
+            _conversation = _npcScripts.Start(templateId, dialog, CreateScriptPlayer(session));
+            if (_conversation is not null)
+            {
+                return;
+            }
+        }
+
+        // No script and no shop. For a QUEST NPC, send NOTHING (ports OnUserSelectNpc —
+        // TacosScriptNPC.start just returns false): the client then runs its own quest UI, and a
+        // server-sent dialog here would swallow the click and break the conversation. An NPC with
+        // no quests either gets a small fallback line instead — many of the v186 map spawns are
+        // long-expired event NPCs whose server scripts (wz info/script names like
+        // "visitor_gogocube") only ever existed on Nexon's side, and dead-silent clicks read as
+        // a bug to players.
+        if (_questNpcs is null || _questNpcs.HasQuests(templateId))
         {
             return;
         }
 
-        var dialog = new ChannelNpcDialog(session, _packets);
-        _conversation = _npcScripts.Start(templateId, dialog, CreateScriptPlayer(session));
+        var fallbackDialog = new ChannelNpcDialog(session, _packets);
+        var fallbackConvo = new NpcConversation(templateId, fallbackDialog);
+        _conversation = fallbackConvo;
+        var fallbackThread = new Thread(() => RunNpcFallback(fallbackConvo))
+        {
+            IsBackground = true,
+            Name = $"npc-fallback-{templateId}",
+        };
+        fallbackThread.Start();
+    }
 
-        // No script and no shop: send NOTHING (ports OnUserSelectNpc — TacosScriptNPC.start just
-        // returns false). The client then runs its own quest UI for the NPC; a server-sent
-        // greeting dialog here would swallow the click and break every quest-NPC conversation.
+    /// <summary>One flavor line for a script-less, shop-less, quest-less NPC, then done.</summary>
+    private static void RunNpcFallback(NpcConversation cm)
+    {
+        try
+        {
+            cm.sendOk("（今は特に話すことはないようだ……）");
+        }
+        catch (ConversationEndedException)
+        {
+            // the player closed the window — fine
+        }
+        finally
+        {
+            cm.End();
+        }
     }
 
     /// <summary>The NPC whose portrait fronts the /beauty console (the Henesys stylist).</summary>

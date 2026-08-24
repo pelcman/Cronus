@@ -68,7 +68,19 @@ public class NpcDialogFlowTests
                 if (!SelectSpawnedNpc)
                 {
                     await SelectNpcAsync(session, _npcId);
+                    if (ChatAfterSelect is not null)
+                    {
+                        var chat = NewPacket(session, ClientOpcode.UserChat);
+                        chat.WriteInt(0);
+                        chat.WriteString(ChatAfterSelect);
+                        chat.WriteBool(false);
+                        await session.SendAsync(chat.ToArray());
+                    }
                 }
+            }
+            else if (opcode == ServerOps.Get(ServerOpcode.UserChat))
+            {
+                ChatReply.TrySetResult();
             }
             else if (opcode == _opNpcEnter)
             {
@@ -97,6 +109,14 @@ public class NpcDialogFlowTests
                 Prompts.Add(new ScriptPrompt(npcId, messageType, text, prev, next));
             }
         }
+
+        /// <summary>Sent right after the select when set — used to prove a click was silent.</summary>
+        public string? ChatAfterSelect { get; init; }
+
+        public TaskCompletionSource ChatReply { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Clicks the NPC again mid-test.</summary>
+        public async ValueTask ReselectAsync(int npcObjectId) => await SelectNpcAsync(Session!, npcObjectId);
 
         private async ValueTask SelectNpcAsync(MapleSession session, int npcObjectId)
         {
@@ -455,5 +475,79 @@ public class NpcDialogFlowTests
         ScriptPrompt prompt = client.Prompts.Take(cts.Token);
         Assert.Equal(0, prompt.MessageType);
         Assert.Equal("Hi from 9010000!", prompt.Text);
+    }
+
+    [Fact]
+    public async Task SelectNpc_WithoutScriptShopOrQuests_GetsTheFallbackLine()
+    {
+        // Script-less, shop-less, quest-less NPCs (the expired-event spawns baked into the v186
+        // maps) answer with one flavor line instead of dead silence.
+        const int npcId = 9250136; // ビンポス — a real event NPC with nothing behind it
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Poker", MapId = 100000000 });
+
+        var scripts = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string>())); // no scripts at all
+
+        var client = new NpcClient(hero.Id, npcId);
+        var handler = new ChannelHandler(
+            ClientOps, ServerOps, repo, ServerConfig.Jms186, npcScripts: scripts,
+            questNpcs: new InMemoryQuestNpcIndex(Array.Empty<int>()));
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        ScriptPrompt prompt = client.Prompts.Take(cts.Token);
+        Assert.Equal(npcId, prompt.NpcId);
+        Assert.Equal(0, prompt.MessageType);            // a plain sendOk
+        Assert.Contains("話すことはない", prompt.Text);
+
+        // Closing the line ends the conversation; a second click brings it back.
+        await client.AnswerAsync(messageType: 0, action: 1);
+        await client.ReselectAsync(npcId);
+        ScriptPrompt again = client.Prompts.Take(cts.Token);
+        Assert.Equal(0, again.MessageType);
+    }
+
+    [Fact]
+    public async Task SelectNpc_QuestNpcWithoutScript_StaysSilentForTheClientQuestUi()
+    {
+        // A quest NPC's click must NOT be answered — the client runs its own quest UI, and a
+        // server dialog would swallow it. The follow-up chat command proves the pipeline stayed
+        // healthy and that no ScriptMessage snuck in ahead of it.
+        const int npcId = 9010010; // カサンドラ — quest NPC in the real data
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Quiet", MapId = 100000000 });
+
+        var scripts = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string>()));
+
+        var client = new NpcClient(hero.Id, npcId) { ChatAfterSelect = "/pos" };
+        var handler = new ChannelHandler(
+            ClientOps, ServerOps, repo, ServerConfig.Jms186, npcScripts: scripts,
+            questNpcs: new InMemoryQuestNpcIndex(new[] { npcId }));
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        // The /pos reply arrives with no ScriptMessage before it (same ordered pipe).
+        await client.ChatReply.Task.WaitAsync(cts.Token);
+        Assert.Empty(client.Prompts);
     }
 }

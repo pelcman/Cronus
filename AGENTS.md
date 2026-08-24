@@ -771,6 +771,24 @@ restart).
   truly script-less NPC the 8/24 session clicked), character name min length 1 (GameConstants
   moved to Cronus.Common so Login can read it), save DB reset.
 
+**A0b. NPC coverage drive (2026-08-25, ongoing)**
+- [x] docs/NPC_COVERAGE.md — generated inventory (DevTools/npc_coverage.py) of all 1,447
+      spawning NPCs: script 202 / shop 90 / quest-data 499 (55% covered), none 656. The
+      "actionable queue" lists uncovered NPCs with Nexon's own wz info/script names as
+      authoring leads. Regenerate after adding scripts; this is the progress tracker.
+- [x] Fallback dialog: a script-less, shop-less, quest-less NPC now answers one generic line
+      instead of dead silence (quest NPCs stay silent for the client's own quest UI —
+      WzQuestNpcIndex from Check.img gates it).
+- [x] Gachapon (15 NPCs, 9100100-9100117): ticket 5220000 or 10,000 meso per spin, 78-item
+      pool validated against gamedata (authentic pools live in BMS Server.wz/Gachapon.img,
+      which even the reference lacks).
+- [x] Neo Tokyo unblocked: the chain (Ashia 4681+ -> Ponichal 4683-4686 -> Deeda 4688-4689 …)
+      was data-driven all along; the missing link was クリスタル(9120026, wz script
+      tell_Tokyo) — now a free era-warp menu (Kamuna/Odaiba 2100/Park 2095/Akihabara/
+      Shibuya/Roppongi 2102). Era gating by quest progress is simplified (no oracle).
+- [ ] Work the queue by area (Victoria towns first): refine_* (item refining), *Teleport,
+      minigame00, petmaster, storage/parcel NPCs.
+
 **A. Verification & stability (highest value per the final goal)**
 - [ ] Live-client pass over the newest features (quest chains/acts, reactor drops, /gender,
       SP grants, the reworked command set + /dbgwarp) — bot-verified only so far; a human

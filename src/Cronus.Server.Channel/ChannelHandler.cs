@@ -59,6 +59,9 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     /// <summary>Every named map grouped by region (for /dbgwarp); null without wz.</summary>
     private readonly IMapCatalog? _mapCatalog;
 
+    /// <summary>Which NPCs have quests (their clicks stay silent for the client's quest UI).</summary>
+    private readonly IQuestNpcIndex? _questNpcs;
+
     /// <summary>Every channel's advertised endpoint (index = channel id); null = single channel.</summary>
     private readonly IReadOnlyList<System.Net.IPEndPoint>? _channelEndpoints;
 
@@ -185,6 +188,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         IStyleProvider? styles = null,
         IItemCatalog? itemCatalog = null,
         IMapCatalog? mapCatalog = null,
+        IQuestNpcIndex? questNpcs = null,
         IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
         IReadOnlyList<FieldRegistry>? worldFields = null,
         System.Net.IPEndPoint? cashShopEndpoint = null,
@@ -216,6 +220,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _styles = styles;
         _itemCatalog = itemCatalog;
         _mapCatalog = mapCatalog;
+        _questNpcs = questNpcs;
         _channelEndpoints = channelEndpoints;
         _worldFields = worldFields;
         _cashShopEndpoint = cashShopEndpoint;

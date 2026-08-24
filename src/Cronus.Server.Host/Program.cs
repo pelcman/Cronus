@@ -150,6 +150,7 @@ Console.WriteLine(mapCatalog is null
     ? "[maps] map catalog unavailable (no game data) — /dbgwarp disabled."
     : "[maps] map catalog ready — /dbgwarp lists every map by region.");
 INpcNameProvider? npcNames = wzStore is null ? null : new WzNpcNameProvider(wzStore);
+IQuestNpcIndex? questNpcs = wzStore is null ? null : new WzQuestNpcIndex(wzStore);
 IStyleProvider? styles = wzStore is null ? null : new WzStyleProvider(wzStore);
 ICommodityProvider? commodities = wzStore is null ? null : new WzCommodityProvider(wzStore);
 Rates rates = CreateRates();
@@ -180,7 +181,7 @@ for (int i = 0; i < channelCount; i++)
         new IPEndPoint(IPAddress.Any, channelPort + i),
         config,
         () => new LoggingHandler(
-            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, accounts: accounts, itemCatalog: itemCatalog, mapCatalog: mapCatalog, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
+            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, accounts: accounts, itemCatalog: itemCatalog, mapCatalog: mapCatalog, questNpcs: questNpcs, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
             $"channel{channelId}", verbose: wireDebug),
         keepAlive));
 }
