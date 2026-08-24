@@ -1,10 +1,52 @@
+## Themida の壁（原本を使う場合）
+
+原本 `MapleStory.exe` は Themida でパックされており、この環境では
+
+> A monitor program has been found running in your system.
+
+を出して起動を拒否します。**EmuClient を介さない単体起動でも同じ**なので、
+Themida と実行環境の相性問題です（監視ツールは 1 つも動いていない状態で確認）。
+
+`FixThemida.dll` も同梱してビルドしてありますが、これは作者のコメントによれば
+**「Win10 で古い Themida が kernel32/user32 の EAT を誤って解決してクラッシュする」
+問題への対処で、対象は JMS v176 以下**です。v186 のこのダイアログには効きません
+（実際に FastLoad に入れて試し、変化なしを確認）。
+
+アンパック済みの `JMS_v186.1_L.exe` には Themida 自体が存在しないため、
+この問題は起きません。
+
 # EmuClient でクライアントを起動する
 
-改造済み exe（`JMS_v186.1_L.exe`）を使わず、**自分の原本クライアントをそのまま起動して、
-接続先だけを実行時に切り替える**方式です。ディスク上に改造 exe が存在しないため、
-セキュリティソフトに「再ビルドされたバイナリ」として検出される問題が起きません。
-
+クライアントを起動し、**接続先を実行時に書き換える**ツール群です。
 作者は Riremito 氏（このプロジェクトの移植元 JMSv186 サーバーと同じ作者）。
+
+## この環境での結論（2026-08-24 実測）
+
+| 対象 | 結果 |
+|---|---|
+| 原本 `MapleStory.exe` | ❌ **Themida に阻まれて起動不可**（EmuClient 抜きの単体起動でも同じ） |
+| アンパック済み `JMS_v186.1_L.exe` | ✅ **EmuClient 経由で正常動作**（ゲーム内まで到達を確認） |
+
+**原本は EmuClient とは無関係に起動できません。** `MapleStory.exe` を直接
+ダブルクリックしても `A monitor program has been found running in your system.`
+のダイアログが出ます（監視ツールは一切動いていない状態で確認済み）。
+Riremito 氏がアンパック版を用意しているのは、まさにこの壁を越えるためです。
+
+したがって **TargetEXE にはアンパック版を指定します**。
+
+### それでも EmuClient を使う利点
+
+アンパック版は接続先が `127.0.0.1` にハードコードされていますが、
+`LocalHost.dll` が**全接続の宛先を書き換える**ため、**exe を作り直さずに
+接続先を変えられます**。参加者に配るときは `LocalHost.ini` の 1 行だけ
+書き換えてもらえば済みます。
+
+```ini
+ServerIP=203.0.113.9    ; 各参加者はここだけ変更
+```
+
+さらに `EmuLoader` が多重起動ロックを解除するので、**1 台で複数クライアント**を
+起動できます（2 人プレイの動作確認に便利）。
 
 ## 構成
 
@@ -12,7 +54,6 @@
 |---|---|
 | `RunEmu.exe` | ランチャー。`MapleStory.exe` を起動して `EmuLoader.dll` を注入 |
 | `EmuLoader.dll` | 各 DLL を適切なタイミングで読み込む。多重起動ロックも解除 |
-| `FixThemida.dll` | **Themida 保護の Win10 対応**（メモリ展開前・最初に読む） |
 | `LocalHost.dll` | **接続先 IP の書き換え**（メモリ展開前に読む） |
 | `EmuMain.dll` | HackShield / MSCRC バイパス（メモリ展開後、最初に読む） |
 | `EmuExtra.dll` | その他のメモリ書き換え |
@@ -25,15 +66,12 @@
 2. `Client/MapleStory_v186/run-client.bat` をダブルクリック（UAC の確認が出ます）
 3. ログイン画面が出れば成功（ID/パスワードは任意 — 自動登録）
 
-### 管理者権限が必須です
+### 管理者権限について
 
-`MapleStory.exe.manifest` が `requestedExecutionLevel level="requireAdministrator"`
-を宣言しているため、クライアントは**管理者権限でしか起動できません**。
-`RunEmu` は `CreateProcessW` で対象を起動しますが、この API は昇格を伴う起動が
-できないため、**通常権限で `RunEmu.exe` を実行すると何も起こらずに終了します**。
-
-`run-client.bat` は自分自身を昇格させてから `RunEmu.exe` を呼ぶので、
-これを使えば問題ありません（`RunEmu.exe` を右クリック →「管理者として実行」でも可）。
+クライアントは管理者権限を要求しますが（`MapleStory.exe.manifest`）、
+**`RunEmu.exe` 自身のマニフェストも `requireAdministrator` を宣言している**ため、
+ダブルクリックすれば自動で昇格します。`run-client.bat` は残留プロセスの警告も
+出すので便利ですが、必須ではありません。
 
 また、**古い `MapleStory.exe` プロセスが残っていると起動に失敗します**。
 `run-client.bat` は残留プロセスを検出したら警告します。
@@ -99,15 +137,14 @@ CmdLine=
 LoaderDLL=EmuLoader.dll
 
 [FastLoad]                 ; メモリ展開前（DLL_1..DLL_10）
-DLL_1=FixThemida.dll
-DLL_2=LocalHost.dll
+DLL_1=LocalHost.dll
 
 [DelayLoad]                ; メモリ展開後（DLL_1..DLL_10）
 DLL_1=EmuMain.dll
 DLL_2=EmuExtra.dll
 ```
 
-**順序が重要です。** `FixThemida.dll` → `LocalHost.dll` が FastLoad（展開前）、
+**順序が重要です。** `LocalHost.dll` が FastLoad（展開前）、
 `EmuMain.dll` が DelayLoad の先頭（MSCRC バイパスを最初に効かせるため）。
 
 > RunEmu は初回起動時に `DLL_2=` 〜 `DLL_10=` の空行を自動追記します。
