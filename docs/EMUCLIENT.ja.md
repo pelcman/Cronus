@@ -22,8 +22,21 @@
 ## 使い方
 
 1. サーバーを起動（`Cronus/run-server.bat`）
-2. `Client/MapleStory_v186/RunEmu.exe` をダブルクリック
+2. `Client/MapleStory_v186/run-client.bat` をダブルクリック（UAC の確認が出ます）
 3. ログイン画面が出れば成功（ID/パスワードは任意 — 自動登録）
+
+### 管理者権限が必須です
+
+`MapleStory.exe.manifest` が `requestedExecutionLevel level="requireAdministrator"`
+を宣言しているため、クライアントは**管理者権限でしか起動できません**。
+`RunEmu` は `CreateProcessW` で対象を起動しますが、この API は昇格を伴う起動が
+できないため、**通常権限で `RunEmu.exe` を実行すると何も起こらずに終了します**。
+
+`run-client.bat` は自分自身を昇格させてから `RunEmu.exe` を呼ぶので、
+これを使えば問題ありません（`RunEmu.exe` を右クリック →「管理者として実行」でも可）。
+
+また、**古い `MapleStory.exe` プロセスが残っていると起動に失敗します**。
+`run-client.bat` は残留プロセスを検出したら警告します。
 
 多重起動ロックが解除されるので、**同じ PC で複数クライアントを同時起動できます**
 （2 人プレイの動作確認に便利）。
