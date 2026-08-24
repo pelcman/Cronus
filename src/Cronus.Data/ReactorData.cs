@@ -49,18 +49,21 @@ public interface IReactorProvider
 /// <summary>Loads reactor templates from a wz_xml tree: <c>Reactor/{id:0000000}.img.xml</c> (cached).</summary>
 public sealed class WzReactorProvider : IReactorProvider
 {
-    private readonly string _wzRoot;
+    private readonly IWzStore _store;
     private readonly ConcurrentDictionary<int, ReactorData?> _cache = new();
 
-    public WzReactorProvider(string wzRoot) => _wzRoot = wzRoot;
+    public WzReactorProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
+    {
+    }
+
+    public WzReactorProvider(IWzStore store) => _store = store;
 
     public ReactorData? GetReactor(int reactorId) => _cache.GetOrAdd(reactorId, Load);
 
     private ReactorData? Load(int reactorId)
-    {
-        string path = Path.Combine(_wzRoot, "Reactor", $"{reactorId:0000000}.img.xml");
-        return File.Exists(path) ? ReactorData.FromWz(WzData.ParseFile(path)) : null;
-    }
+        => _store.ReadText($"Reactor/{reactorId:0000000}.img.xml") is { } xml
+            ? ReactorData.FromWz(WzData.ParseText(xml))
+            : null;
 }
 
 /// <summary>An in-memory reactor provider for tests / seeded content.</summary>

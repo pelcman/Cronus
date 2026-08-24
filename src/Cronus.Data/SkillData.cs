@@ -89,25 +89,27 @@ public interface ISkillProvider
 /// </summary>
 public sealed class WzSkillProvider : ISkillProvider
 {
-    private readonly string _wzRoot;
+    private readonly IWzStore _store;
     private readonly ConcurrentDictionary<int, int> _cache = new();
 
-    public WzSkillProvider(string wzRoot)
+    public WzSkillProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
     {
-        _wzRoot = wzRoot;
+    }
+
+    public WzSkillProvider(IWzStore store)
+    {
+        _store = store;
         _mobSkillImg = new Lazy<WzData?>(() =>
-        {
-            string path = Path.Combine(_wzRoot, "Skill", "MobSkill.img.xml");
-            return File.Exists(path) ? WzData.ParseFile(path) : null;
-        });
+            _store.ReadText("Skill/MobSkill.img.xml") is { } xml ? WzData.ParseText(xml) : null);
     }
 
     public int GetMaxLevel(int skillId) => _cache.GetOrAdd(skillId, Load);
 
     private int Load(int skillId)
     {
-        string path = SkillImagePath(_wzRoot, skillId);
-        return File.Exists(path) ? MaxLevelFromWz(WzData.ParseFile(path), skillId) : 0;
+        return _store.ReadText(SkillImageRel(skillId)) is { } xml
+            ? MaxLevelFromWz(WzData.ParseText(xml), skillId)
+            : 0;
     }
 
     private readonly ConcurrentDictionary<long, SkillEffect?> _effectCache = new();
@@ -117,13 +119,13 @@ public sealed class WzSkillProvider : ISkillProvider
 
     private SkillEffect? LoadEffect(int skillId, int level)
     {
-        string path = SkillImagePath(_wzRoot, skillId);
-        if (level < 1 || !File.Exists(path))
+        string? effectXml = level < 1 ? null : _store.ReadText(SkillImageRel(skillId));
+        if (effectXml is null)
         {
             return null;
         }
 
-        WzData? skillDir = WzData.ParseFile(path).Child("skill");
+        WzData? skillDir = WzData.ParseText(effectXml).Child("skill");
         if (skillDir is null)
         {
             return null;
@@ -170,13 +172,13 @@ public sealed class WzSkillProvider : ISkillProvider
 
     private IReadOnlyList<int> LoadSkillIds(int jobId)
     {
-        string path = Path.Combine(_wzRoot, "Skill", $"{jobId:000}.img.xml");
-        if (!File.Exists(path))
+        string? jobXml = _store.ReadText($"Skill/{jobId:000}.img.xml");
+        if (jobXml is null)
         {
             return Array.Empty<int>();
         }
 
-        WzData? skillDir = WzData.ParseFile(path).Child("skill");
+        WzData? skillDir = WzData.ParseText(jobXml).Child("skill");
         if (skillDir is null)
         {
             return Array.Empty<int>();
@@ -264,6 +266,9 @@ public sealed class WzSkillProvider : ISkillProvider
     /// <summary>The Skill <c>.img.xml</c> file for a skill: named by the job (skillId / 10000).</summary>
     public static string SkillImagePath(string wzRoot, int skillId)
         => Path.Combine(wzRoot, "Skill", $"{skillId / 10000:000}.img.xml");
+
+    /// <summary>Store-relative form of <see cref="SkillImagePath"/>.</summary>
+    public static string SkillImageRel(int skillId) => $"Skill/{skillId / 10000:000}.img.xml";
 }
 
 /// <summary>An <see cref="ISkillProvider"/> with no data — every skill is "unknown" (max 0).</summary>

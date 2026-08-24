@@ -57,3 +57,4 @@ Desktop.ini
 
 # WZ data junctions (point into Reference/JMSv186/wz_xml — never commit the tree)
 DevTools/cronus-wz/
+gamedata.db

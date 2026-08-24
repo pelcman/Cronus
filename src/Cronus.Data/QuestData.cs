@@ -4,8 +4,50 @@ namespace Cronus.Data;
 
 /// <summary>A quest requirement/reward item row (<c>id</c>/<c>count</c>; negative count = taken
 /// away). <see cref="Prop"/> mirrors the wz <c>prop</c> when present (−1 = player-selectable,
-/// &gt;0 = weighted random) — rows with a prop are the choose/lottery rewards.</summary>
-public sealed record QuestItemEntry(int ItemId, int Count, int? Prop = null);
+/// &gt;0 = weighted random) — rows with a prop are the choose/lottery rewards. <see cref="Gender"/>
+/// and <see cref="Job"/>/<see cref="JobEx"/> mirror the per-row filters (ports
+/// <c>MapleQuestAction.canGetItem</c>): gender 2 = both, job is a bitmask of job families.</summary>
+public sealed record QuestItemEntry(int ItemId, int Count, int? Prop = null, int? Gender = null, long? Job = null, long? JobEx = null)
+{
+    /// <summary>The base job each bit of the wz <c>job</c> bitmask selects (5-byte encoding,
+    /// pre-BB range; ports <c>MapleQuestAction.getJobBy5ByteEncoding</c>).</summary>
+    private static readonly (long Bit, int BaseJob)[] JobBits =
+    {
+        (0x1, 0), (0x2, 100), (0x4, 200), (0x8, 300), (0x10, 400), (0x20, 500),
+        (0x400, 1000), (0x800, 1100), (0x1000, 1200), (0x2000, 1300), (0x4000, 1400), (0x8000, 1500),
+        (0x20000, 2200), (0x100000, 2000), (0x100000, 2001),
+    };
+
+    /// <summary>Whether this row applies to a player (gender first, then the job-family bitmask
+    /// with <see cref="JobEx"/> as the fallback — the reference's <c>canGetItem</c> order).</summary>
+    public bool AppliesTo(int job, int gender)
+    {
+        if (Gender is { } g && g != 2 && g != gender)
+        {
+            return false;
+        }
+
+        if (Job is not { } flags)
+        {
+            return true;
+        }
+
+        return MatchesJobFamily(flags, job) || (JobEx is { } ex && MatchesJobFamily(ex, job));
+    }
+
+    private static bool MatchesJobFamily(long flags, int job)
+    {
+        foreach ((long bit, int baseJob) in JobBits)
+        {
+            if ((flags & bit) != 0 && baseJob / 100 == job / 100)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
 
 /// <summary>A quest mob-kill requirement (<c>id</c>/<c>count</c>).</summary>
 public sealed record QuestMobEntry(int MobId, int Count);
@@ -113,17 +155,18 @@ public sealed class WzQuestProvider : IQuestProvider
     private readonly Lazy<WzData?> _act;
     private readonly ConcurrentDictionary<int, QuestData?> _cache = new();
 
-    public WzQuestProvider(string wzRoot)
+    public WzQuestProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
     {
-        _check = new Lazy<WzData?>(() => LoadImg(wzRoot, "Check"));
-        _act = new Lazy<WzData?>(() => LoadImg(wzRoot, "Act"));
     }
 
-    private static WzData? LoadImg(string wzRoot, string name)
+    public WzQuestProvider(IWzStore store)
     {
-        string path = Path.Combine(wzRoot, "Quest", $"{name}.img.xml");
-        return File.Exists(path) ? WzData.ParseFile(path) : null;
+        _check = new Lazy<WzData?>(() => LoadImg(store, "Check"));
+        _act = new Lazy<WzData?>(() => LoadImg(store, "Act"));
     }
+
+    private static WzData? LoadImg(IWzStore store, string name)
+        => store.ReadText($"Quest/{name}.img.xml") is { } xml ? WzData.ParseText(xml) : null;
 
     public QuestData? GetQuest(int questId) => _cache.GetOrAdd(questId, Load);
 
@@ -198,7 +241,10 @@ public sealed class WzQuestProvider : IQuestProvider
         => ParseList(list, row => new QuestItemEntry(
             row.GetInt("id"),
             row.GetInt("count"),
-            row.Child("prop") is null ? null : row.GetInt("prop")));
+            row.Child("prop") is null ? null : row.GetInt("prop"),
+            row.Child("gender") is null ? null : row.GetInt("gender"),
+            row.Child("job") is null ? null : row.GetInt("job"),
+            row.Child("jobEx") is null ? null : row.GetInt("jobEx")));
 
     /// <summary>Reads a job-id list (int leaves named "0","1",…) in numeric order.</summary>
     private static IReadOnlyList<int> ParseJobs(WzData? list)

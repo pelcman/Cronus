@@ -38,7 +38,9 @@ change storage, set:
 | Env var | Effect |
 |---|---|
 | `CRONUS_DB` | unset = SQLite file (persistent, zero setup); a MySQL connection string switches to MySQL; `memory` = in-process only |
-| `CRONUS_WZ` | a wz_xml tree → NPC/mob/portal spawns (try the bundled `data/sample-wz`) |
+| `CRONUS_GAMEDATA` | a `gamedata.db` built from the client's .wz files (`dotnet run --project src/Cronus.Ingest -- <client dir>`) → all maps/NPCs/mobs/quests/strings |
+| `CRONUS_CLIENT` | or just the client folder — `gamedata.db` is built from it on first boot |
+| `CRONUS_WZ` | legacy: a loose wz_xml tree (try the bundled `data/sample-wz`) |
 | `CRONUS_SCRIPTS` | script root (`{root}/npc/{id}.js`) → NPC dialogs (try `scripts`) |
 | `CRONUS_DROPS` | a `drop_data.sql` dump → mobs drop items/meso (else placeholder meso only) |
 | `CRONUS_SHOPS` | a `shops`+`shopitems` SQL dump → vendor NPCs open shops (buy/sell) |

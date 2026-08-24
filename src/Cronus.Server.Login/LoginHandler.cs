@@ -13,8 +13,6 @@ namespace Cronus.Server.Login;
 /// </summary>
 public sealed class LoginHandler : PacketHandlerBase
 {
-    private const int MinNameLength = 4;
-    private const int MaxNameLength = 12;
 
     private readonly LoginService _loginService;
     private readonly LoginPackets _packets;
@@ -291,5 +289,6 @@ public sealed class LoginHandler : PacketHandlerBase
     }
 
     private static bool IsNameValid(string name)
-        => name.Length is >= MinNameLength and <= MaxNameLength;
+        => name.Length >= GameConstants.CharacterNameMinLength
+            && name.Length <= GameConstants.CharacterNameMaxLength;
 }

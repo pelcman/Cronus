@@ -1,10 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Library</OutputType>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
-  <!-- No project dependencies. Microsoft.Data.Sqlite backs the gamedata.db wz store. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Cronus.Data\Cronus.Data.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
   </ItemGroup>

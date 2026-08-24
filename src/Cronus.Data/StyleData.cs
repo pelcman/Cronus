@@ -30,9 +30,13 @@ public sealed class WzStyleProvider : IStyleProvider
 {
     private readonly Lazy<(HashSet<int> Hairs, HashSet<int> Faces, HashSet<int> Bodies)> _sets;
 
-    public WzStyleProvider(string wzRoot)
+    public WzStyleProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
     {
-        _sets = new(() => Load(wzRoot));
+    }
+
+    public WzStyleProvider(IWzStore store)
+    {
+        _sets = new(() => Load(store));
     }
 
     public bool IsValidHair(int hairId) => _sets.Value.Hairs.Contains(hairId);
@@ -48,28 +52,19 @@ public sealed class WzStyleProvider : IStyleProvider
     public IReadOnlyList<int> AllSkins()
         => _sets.Value.Bodies.Where(b => b is >= 2000 and < 2100).Select(b => b - 2000).Order().ToList();
 
-    private static (HashSet<int>, HashSet<int>, HashSet<int>) Load(string wzRoot)
-    {
-        string root = Path.Combine(wzRoot, "Character");
-        return (
-            IdsIn(Path.Combine(root, "Hair")),
-            IdsIn(Path.Combine(root, "Face")),
-            IdsIn(root));
-    }
+    private static (HashSet<int>, HashSet<int>, HashSet<int>) Load(IWzStore store)
+        => (IdsIn(store, "Character/Hair"), IdsIn(store, "Character/Face"), IdsIn(store, "Character"));
 
-    private static HashSet<int> IdsIn(string dir)
+    /// <summary>Numeric image ids that are DIRECT children of <paramref name="prefix"/> (skins
+    /// live at the Character root, so nested folders must not leak in).</summary>
+    private static HashSet<int> IdsIn(IWzStore store, string prefix)
     {
         var ids = new HashSet<int>();
-        if (!Directory.Exists(dir))
+        foreach (string path in store.EnumeratePaths(prefix))
         {
-            return ids;
-        }
-
-        foreach (string file in Directory.EnumerateFiles(dir, "*.img.xml"))
-        {
-            string name = Path.GetFileName(file);
-            int dot = name.IndexOf('.');
-            if (dot > 0 && int.TryParse(name[..dot], out int id))
+            string rest = path[(prefix.Length + 1)..];
+            int dot = rest.IndexOf('.');
+            if (!rest.Contains('/') && dot > 0 && int.TryParse(rest[..dot], out int id))
             {
                 ids.Add(id);
             }

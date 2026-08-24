@@ -1,3 +1,4 @@
+using Cronus.Common;
 using Cronus.Domain;
 using Cronus.Server.Game;
 using Xunit;

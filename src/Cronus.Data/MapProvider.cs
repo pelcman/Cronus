@@ -16,32 +16,30 @@ public interface IMapProvider
 /// </summary>
 public sealed class WzMapProvider : IMapProvider
 {
-    private readonly string _wzRoot;
+    private readonly IWzStore _store;
     private readonly ConcurrentDictionary<int, MapData?> _cache = new();
 
-    public WzMapProvider(string wzRoot) => _wzRoot = wzRoot;
+    public WzMapProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
+    {
+    }
+
+    public WzMapProvider(IWzStore store) => _store = store;
 
     public MapData? GetMap(int mapId) => _cache.GetOrAdd(mapId, Load);
 
     private MapData? Load(int mapId)
     {
-        string path = MapImagePath(_wzRoot, mapId);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        WzData img = WzData.ParseFile(path);
-        return MapData.FromWz(mapId, img);
+        string? xml = _store.ReadText(MapImageRel(mapId));
+        return xml is null ? null : MapData.FromWz(mapId, WzData.ParseText(xml));
     }
+
+    /// <summary>The store-relative path of a map's WZ image.</summary>
+    public static string MapImageRel(int mapId)
+        => $"Map/Map{mapId / 100000000}/{mapId:000000000}.img.xml";
 
     /// <summary>Builds the expected on-disk path for a map's WZ image.</summary>
     public static string MapImagePath(string wzRoot, int mapId)
-    {
-        int prefix = mapId / 100000000;
-        string file = $"{mapId:000000000}.img.xml";
-        return Path.Combine(wzRoot, "Map", $"Map{prefix}", file);
-    }
+        => Path.Combine(wzRoot, MapImageRel(mapId).Replace('/', Path.DirectorySeparatorChar));
 }
 
 /// <summary>An in-memory map provider for tests / seeded worlds.</summary>

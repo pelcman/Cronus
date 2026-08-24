@@ -28,6 +28,10 @@ public class CharacterFlowTests
 
     private sealed class FlowClient : PacketHandlerBase
     {
+        private readonly string _name;
+
+        public FlowClient(string name = "Kaede") => _name = name;
+
         private readonly int _opCheckPwResult = ServerOps.Get(ServerOpcode.CheckPasswordResult);
         private readonly int _opDupIdResult = ServerOps.Get(ServerOpcode.CheckDuplicatedIdResult);
         private readonly int _opCreateResult = ServerOps.Get(ServerOpcode.CreateNewCharacterResult);
@@ -76,7 +80,7 @@ public class CharacterFlowTests
                     Assert.Empty(chars);
                     // Ask whether the name is free before creating.
                     var w = NewPacket(session, ClientOpcode.CheckDuplicatedId);
-                    w.WriteString("Kaede");
+                    w.WriteString(_name);
                     await session.SendAsync(w.ToArray());
                 }
                 else
@@ -92,7 +96,7 @@ public class CharacterFlowTests
 
                 // JMS v186 CP_CreateNewCharacter layout.
                 var w = NewPacket(session, ClientOpcode.CreateNewCharacter);
-                w.WriteString("Kaede");
+                w.WriteString(_name);
                 w.WriteInt(1);           // job type (pre-BB: 0 = Cygnus, 1 = Adventurer, 2 = Aran)
                 w.WriteShort(0);         // job sub-type
                 w.WriteInt(20000);       // face
@@ -225,5 +229,32 @@ public class CharacterFlowTests
 
         // Repository actually persisted it.
         Assert.True(characterRepo.NameExists("kaede")); // case-insensitive
+    }
+
+    [Fact]
+    public async Task CreateCharacter_WithASingleCharacterName_Succeeds()
+    {
+        // GameConstants.CharacterNameMinLength is 1 (reference: 4) — a one-kanji name is fine.
+        var config = ServerConfig.Jms186;
+        var loginService = new LoginService(new InMemoryAccountRepository());
+        var characterRepo = new InMemoryCharacterRepository();
+        var client = new FlowClient("南");
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, config, SessionRole.Server,
+            new LoginHandler(ClientOps, ServerOps, loginService, config, characters: characterRepo));
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, config, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        DecodedCharacter created = await client.Created.Task.WaitAsync(cts.Token);
+        Assert.Equal("南", created.Name);
+        Assert.True(characterRepo.NameExists("南"));
     }
 }

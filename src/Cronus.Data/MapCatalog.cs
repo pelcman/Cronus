@@ -73,20 +73,22 @@ public sealed class WzMapCatalog : IMapCatalog
 
     private readonly Lazy<IReadOnlyList<MapRegion>> _regions;
 
-    public WzMapCatalog(string wzRoot) => _regions = new(() => Load(wzRoot));
+    public WzMapCatalog(string wzRoot) : this(new DirectoryWzStore(wzRoot))
+    {
+    }
+
+    public WzMapCatalog(IWzStore store) => _regions = new(() => Load(store));
 
     public IReadOnlyList<MapRegion> Regions => _regions.Value;
 
-    private static IReadOnlyList<MapRegion> Load(string wzRoot)
+    private static IReadOnlyList<MapRegion> Load(IWzStore store)
     {
-        string namesPath = Path.Combine(wzRoot, "String", "Map.img.xml");
-        if (!File.Exists(namesPath))
+        if (store.ReadText("String/Map.img.xml") is not { } xml)
         {
             return Array.Empty<MapRegion>();
         }
 
-        string xml = File.ReadAllText(namesPath);
-        HashSet<int> real = RealMapIds(wzRoot);
+        HashSet<int> real = RealMapIds(store);
         var regions = new List<MapRegion>();
 
         foreach ((string key, string label) in RegionLabels)
@@ -103,18 +105,12 @@ public sealed class WzMapCatalog : IMapCatalog
 
     /// <summary>Every map id that has real field data — the client has the same files, so an id in
     /// here is one it can actually load.</summary>
-    private static HashSet<int> RealMapIds(string wzRoot)
+    private static HashSet<int> RealMapIds(IWzStore store)
     {
         var ids = new HashSet<int>();
-        string mapRoot = Path.Combine(wzRoot, "Map");
-        if (!Directory.Exists(mapRoot))
+        foreach (string path in store.EnumeratePaths("Map"))
         {
-            return ids;
-        }
-
-        foreach (string file in Directory.EnumerateFiles(mapRoot, "*.img.xml", SearchOption.AllDirectories))
-        {
-            string name = Path.GetFileName(file);
+            string name = path[(path.LastIndexOf('/') + 1)..];
             int dot = name.IndexOf('.');
             if (dot > 0 && int.TryParse(name.AsSpan(0, dot), out int id))
             {

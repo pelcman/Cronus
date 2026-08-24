@@ -107,10 +107,15 @@ var loginListener = new MapleListener(
         "login", verbose: wireDebug),
     keepAlive: null); // keep-alive disabled during login diagnosis
 
-// Map data from a wz_xml tree if CRONUS_WZ points at one, else no static map data (portal-by-
-// name transfers degrade to "disabled portal"; direct map-id jumps still work; no NPCs spawn).
-IMapProvider maps = CreateMapProvider();
-IMobProvider mobs = CreateMobProvider();
+// Game data (maps/mobs/items/skills/quests/strings/styles): resolved once, in preference order.
+//   CRONUS_GAMEDATA  → the gamedata.db built by Cronus.Ingest (single file, from the client)
+//   CRONUS_CLIENT    → a client folder with .wz files; gamedata.db is built from it on first
+//                      boot (and reused after), so pointing at the client is all it takes
+//   CRONUS_WZ        → the classic loose wz_xml dump tree
+// With none of them, the server runs data-less (walkable maps, no NPCs/mobs/quest data).
+IWzStore? wzStore = ResolveWzStore();
+IMapProvider maps = wzStore is null ? new InMemoryMapProvider(Array.Empty<MapData>()) : new WzMapProvider(wzStore);
+IMobProvider mobs = wzStore is null ? new InMemoryMobProvider(Array.Empty<MobData>()) : new WzMobProvider(wzStore);
 
 // Each channel gets its own world state (fields); everything account-scoped is shared below.
 var channelFields = new List<FieldRegistry>();
@@ -120,34 +125,33 @@ for (int i = 0; i < channelCount; i++)
 }
 
 FieldRegistry fields = channelFields[0];
-ISkillProvider skills = CreateSkillProvider();
-IItemProvider items = CreateItemProvider();
+ISkillProvider skills = wzStore is null ? NullSkillProvider.Instance : new WzSkillProvider(wzStore);
+IItemProvider items = wzStore is null ? new InMemoryItemProvider(Array.Empty<ConsumeSpec>()) : new WzItemProvider(wzStore);
 IDropProvider drops = CreateDropProvider();
 IShopProvider shops = CreateShopProvider();
-IQuestProvider quests = CreateQuestProvider();
-IReactorProvider? reactorProvider = CreateReactorProvider();
+IQuestProvider quests = wzStore is null
+    ? new InMemoryQuestProvider(Array.Empty<QuestData>())
+    : new WzQuestProvider(wzStore);
+IReactorProvider? reactorProvider = wzStore is null ? null : new WzReactorProvider(wzStore);
+Console.WriteLine(wzStore is null
+    ? "[quests] no game data — quests/reactors disabled."
+    : "[quests] quest definitions + reactors ready.");
 IReactorDropProvider reactorDrops = CreateReactorDropProvider();
 
 // Every named item, grouped by category — powers /dbgshop. Needs the wz String tables.
-IItemCatalog? itemCatalog = Environment.GetEnvironmentVariable("CRONUS_WZ") is { Length: > 0 } catalogRoot
-    && Directory.Exists(Path.Combine(catalogRoot, "String"))
-        ? new WzItemCatalog(catalogRoot)
-        : null;
+IItemCatalog? itemCatalog = wzStore is null ? null : new WzItemCatalog(wzStore);
 Console.WriteLine(itemCatalog is null
-    ? "[shops] item catalog unavailable (no wz String data) — /dbgshop disabled."
+    ? "[shops] item catalog unavailable (no game data) — /dbgshop disabled."
     : "[shops] item catalog ready — /dbgshop lists every item by category.");
 
 // Every named map, grouped by region — powers /dbgwarp. Same wz String requirement.
-IMapCatalog? mapCatalog = Environment.GetEnvironmentVariable("CRONUS_WZ") is { Length: > 0 } mapCatalogRoot
-    && Directory.Exists(Path.Combine(mapCatalogRoot, "String"))
-        ? new WzMapCatalog(mapCatalogRoot)
-        : null;
+IMapCatalog? mapCatalog = wzStore is null ? null : new WzMapCatalog(wzStore);
 Console.WriteLine(mapCatalog is null
-    ? "[maps] map catalog unavailable (no wz String data) — /dbgwarp disabled."
+    ? "[maps] map catalog unavailable (no game data) — /dbgwarp disabled."
     : "[maps] map catalog ready — /dbgwarp lists every map by region.");
-INpcNameProvider? npcNames = CreateNpcNameProvider();
-IStyleProvider? styles = CreateStyleProvider();
-ICommodityProvider? commodities = CreateCommodityProvider();
+INpcNameProvider? npcNames = wzStore is null ? null : new WzNpcNameProvider(wzStore);
+IStyleProvider? styles = wzStore is null ? null : new WzStyleProvider(wzStore);
+ICommodityProvider? commodities = wzStore is null ? null : new WzCommodityProvider(wzStore);
 Rates rates = CreateRates();
 
 // NPC scripts from CRONUS_SCRIPTS/npc/{id}.js and portal scripts from CRONUS_SCRIPTS/portal/{name}.js.
@@ -291,55 +295,60 @@ static IPAddress ResolveHost(string? host, IPAddress fallback)
     return fallback;
 }
 
-static IMapProvider CreateMapProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
-    {
-        Console.WriteLine("[wz] CRONUS_WZ not set — no static map data (portal-by-name disabled).");
-        return new InMemoryMapProvider(Array.Empty<MapData>());
-    }
 
-    Console.WriteLine($"[wz] Loading map data on demand from {wzRoot}");
-    return new WzMapProvider(wzRoot);
-}
 
-static IMobProvider CreateMobProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
-    {
-        return new InMemoryMobProvider(Array.Empty<MobData>());
-    }
 
-    return new WzMobProvider(wzRoot);
-}
-
-static ISkillProvider CreateSkillProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
-    {
-        return NullSkillProvider.Instance; // no wz data → skills uncapped
-    }
-
-    return new WzSkillProvider(wzRoot);
-}
-
-static IItemProvider CreateItemProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
-    {
-        return new InMemoryItemProvider(Array.Empty<ConsumeSpec>()); // no wz → no item effects
-    }
-
-    return new WzItemProvider(wzRoot);
-}
 
 // Mob drop tables from the reference drop_data.sql dump if CRONUS_DROPS points at one, else no
 // tables (mobs fall back to a small placeholder meso pile). The dump is the same asset the Java
 // build loads into its drop_data table.
+
+static IWzStore? ResolveWzStore()
+{
+    // 1) An explicit game-data database.
+    string? gamedata = Environment.GetEnvironmentVariable("CRONUS_GAMEDATA");
+    if (!string.IsNullOrWhiteSpace(gamedata) && File.Exists(gamedata))
+    {
+        var store = new SqliteWzStore(gamedata);
+        Console.WriteLine($"[data] game data from {gamedata} " +
+            $"(ingested {store.Meta.GetValueOrDefault("ingested_utc", "?")} from {store.Meta.GetValueOrDefault("source", "?")})");
+        return store;
+    }
+
+    // 2) A client folder: build (or reuse) gamedata.db right next to the working directory.
+    string? clientDir = Environment.GetEnvironmentVariable("CRONUS_CLIENT");
+    if (!string.IsNullOrWhiteSpace(clientDir) && Directory.Exists(clientDir))
+    {
+        string dbPath = string.IsNullOrWhiteSpace(gamedata) ? "gamedata.db" : gamedata;
+        if (!File.Exists(dbPath))
+        {
+            Console.WriteLine($"[data] building {dbPath} from {clientDir} (first boot; ~20s)...");
+            Cronus.Data.Wz.WzIngest.BuildDatabase(clientDir, dbPath, Console.WriteLine);
+        }
+
+        Console.WriteLine($"[data] game data from {dbPath} (client: {clientDir})");
+        return new SqliteWzStore(dbPath);
+    }
+
+    // 2b) No env at all, but a previously built gamedata.db sits in the working directory.
+    if (string.IsNullOrWhiteSpace(gamedata) && File.Exists("gamedata.db"))
+    {
+        Console.WriteLine("[data] game data from ./gamedata.db");
+        return new SqliteWzStore("gamedata.db");
+    }
+
+    // 3) The classic loose wz_xml dump tree.
+    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
+    if (!string.IsNullOrWhiteSpace(wzRoot) && Directory.Exists(wzRoot))
+    {
+        Console.WriteLine($"[data] game data from wz_xml tree {wzRoot}");
+        return new DirectoryWzStore(wzRoot);
+    }
+
+    Console.WriteLine("[data] no game data (set CRONUS_GAMEDATA, CRONUS_CLIENT, or CRONUS_WZ) — maps are walkable but empty.");
+    return null;
+}
+
 static IDropProvider CreateDropProvider()
 {
     string? dropFile = Environment.GetEnvironmentVariable("CRONUS_DROPS");
@@ -369,18 +378,7 @@ static Rates CreateRates()
     return rates;
 }
 
-// Quest definitions from the wz tree's Quest/Check.img.xml + Act.img.xml (CRONUS_WZ), else no
 // quest data (quest accept/complete degrade to script-driven only).
-static IQuestProvider CreateQuestProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(wzRoot))
-    {
-        return new InMemoryQuestProvider(Array.Empty<QuestData>());
-    }
-
-    return new WzQuestProvider(wzRoot);
-}
 
 // NPC shops from a shops+shopitems SQL dump if CRONUS_SHOPS points at one, else no shops (vendor
 // NPCs open nothing). The dump is the same asset the Java build loads into its shops tables.
@@ -427,53 +425,9 @@ static NpcScriptEngine? CreateNpcScriptEngine()
     return new NpcScriptEngine(new FolderNpcScriptSource(npcDir), new FolderNpcScriptSource(questDir));
 }
 
-static INpcNameProvider? CreateNpcNameProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !File.Exists(Path.Combine(wzRoot, "String", "Npc.img.xml")))
-    {
-        return null;
-    }
 
-    Console.WriteLine("[npc] NPC names loaded from String data.");
-    return new WzNpcNameProvider(wzRoot);
-}
 
-static ICommodityProvider? CreateCommodityProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !File.Exists(Path.Combine(wzRoot, "Etc", "Commodity.img.xml")))
-    {
-        return null;
-    }
 
-    Console.WriteLine("[cashshop] commodity catalog loaded from Etc data.");
-    return new WzCommodityProvider(wzRoot);
-}
-
-static IStyleProvider? CreateStyleProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(Path.Combine(wzRoot, "Character", "Hair")))
-    {
-        return null;
-    }
-
-    Console.WriteLine("[style] hair/face/skin styles loaded from Character data (salons enabled).");
-    return new WzStyleProvider(wzRoot);
-}
-
-static IReactorProvider? CreateReactorProvider()
-{
-    string? wzRoot = Environment.GetEnvironmentVariable("CRONUS_WZ");
-    if (string.IsNullOrWhiteSpace(wzRoot) || !Directory.Exists(Path.Combine(wzRoot, "Reactor")))
-    {
-        return null;
-    }
-
-    Console.WriteLine("[reactor] Loading reactor templates on demand from wz data.");
-    return new WzReactorProvider(wzRoot);
-}
 
 static PortalScriptEngine? CreateReactorScriptEngine()
 {

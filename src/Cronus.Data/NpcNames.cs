@@ -22,24 +22,27 @@ public sealed class WzNpcNameProvider : INpcNameProvider
 
     private readonly Lazy<IReadOnlyDictionary<int, string>> _names;
 
-    public WzNpcNameProvider(string wzRoot)
+    public WzNpcNameProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
     {
-        _names = new Lazy<IReadOnlyDictionary<int, string>>(() => Load(wzRoot));
+    }
+
+    public WzNpcNameProvider(IWzStore store)
+    {
+        _names = new Lazy<IReadOnlyDictionary<int, string>>(() => Load(store));
     }
 
     public string? GetName(int npcId)
         => _names.Value.TryGetValue(npcId, out string? name) ? name : null;
 
-    private static IReadOnlyDictionary<int, string> Load(string wzRoot)
+    private static IReadOnlyDictionary<int, string> Load(IWzStore store)
     {
-        string path = Path.Combine(wzRoot, "String", "Npc.img.xml");
-        if (!File.Exists(path))
+        string? xml = store.ReadText("String/Npc.img.xml");
+        if (xml is null)
         {
             return new Dictionary<int, string>();
         }
 
         var names = new Dictionary<int, string>();
-        string xml = File.ReadAllText(path);
         foreach (Match m in EntryPattern.Matches(xml))
         {
             if (int.TryParse(m.Groups[1].Value, out int id) && m.Groups[2].Value.Length > 0)

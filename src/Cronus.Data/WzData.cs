@@ -87,6 +87,13 @@ public sealed class WzData
         return Parse(fs);
     }
 
+    /// <summary>Parses a wz_xml document held in a string (the store-backed path).</summary>
+    public static WzData ParseText(string xml)
+    {
+        using var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        return Parse(ms);
+    }
+
     private static WzData FromElement(XmlElement element)
     {
         string name = element.GetAttribute("name");

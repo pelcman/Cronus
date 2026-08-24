@@ -174,13 +174,17 @@ public sealed class WzItemProvider : IItemProvider
         "Pants", "PetEquip", "Ring", "Shield", "Shoes", "TamingMob", "Weapon",
     };
 
-    private readonly string _wzRoot;
+    private readonly IWzStore _store;
     private readonly ConcurrentDictionary<int, ConsumeSpec?> _cache = new();
     private readonly ConcurrentDictionary<int, int?> _priceCache = new();
     private readonly ConcurrentDictionary<int, EquipStats?> _equipCache = new();
     private readonly ConcurrentDictionary<int, string?> _equipPathCache = new();
 
-    public WzItemProvider(string wzRoot) => _wzRoot = wzRoot;
+    public WzItemProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
+    {
+    }
+
+    public WzItemProvider(IWzStore store) => _store = store;
 
     public ConsumeSpec? GetConsume(int itemId) => _cache.GetOrAdd(itemId, Load);
 
@@ -190,13 +194,13 @@ public sealed class WzItemProvider : IItemProvider
 
     private ConsumeSpec? Load(int itemId)
     {
-        string path = ConsumeImagePath(_wzRoot, itemId);
-        if (!File.Exists(path))
+        string? consumeXml = _store.ReadText(ConsumeImageRel(itemId));
+        if (consumeXml is null)
         {
             return null;
         }
 
-        WzData? node = WzData.ParseFile(path).Child($"{itemId:00000000}");
+        WzData? node = WzData.ParseText(consumeXml).Child($"{itemId:00000000}");
         if (node is null)
         {
             return null;
@@ -227,13 +231,14 @@ public sealed class WzItemProvider : IItemProvider
 
     private int? LoadPrice(int itemId)
     {
-        string? path = ItemImagePath(_wzRoot, itemId);
-        if (path is null || !File.Exists(path))
+        string? rel = ItemImageRel(itemId);
+        string? xml = rel is null ? null : _store.ReadText(rel);
+        if (xml is null)
         {
             return null;
         }
 
-        WzData? info = WzData.ParseFile(path).Child($"{itemId:00000000}")?.Child("info");
+        WzData? info = WzData.ParseText(xml).Child($"{itemId:00000000}")?.Child("info");
         return info?.Child("price")?.AsInt();
     }
 
@@ -243,13 +248,14 @@ public sealed class WzItemProvider : IItemProvider
 
     private double? LoadUnitPrice(int itemId)
     {
-        string? path = ItemImagePath(_wzRoot, itemId);
-        if (path is null || !File.Exists(path))
+        string? rel = ItemImageRel(itemId);
+        string? xml = rel is null ? null : _store.ReadText(rel);
+        if (xml is null)
         {
             return null;
         }
 
-        WzData? info = WzData.ParseFile(path).Child($"{itemId:00000000}")?.Child("info");
+        WzData? info = WzData.ParseText(xml).Child($"{itemId:00000000}")?.Child("info");
         return info?.Child("unitPrice")?.AsDouble();
     }
 
@@ -264,13 +270,13 @@ public sealed class WzItemProvider : IItemProvider
             return null;
         }
 
-        string path = ConsumeImagePath(_wzRoot, itemId);
-        if (!File.Exists(path))
+        string? scrollXml = _store.ReadText(ConsumeImageRel(itemId));
+        if (scrollXml is null)
         {
             return null;
         }
 
-        WzData? info = WzData.ParseFile(path).Child($"{itemId:00000000}")?.Child("info");
+        WzData? info = WzData.ParseText(scrollXml).Child($"{itemId:00000000}")?.Child("info");
         if (info is null)
         {
             return null;
@@ -320,7 +326,7 @@ public sealed class WzItemProvider : IItemProvider
 
         // Each equip file's root imgdir contains the info node directly (unlike grouped Consume
         // files, which nest each item under an {id:00000000} node).
-        WzData? info = WzData.ParseFile(path).Child("info");
+        WzData? info = WzData.ParseText(_store.ReadText(path)!).Child("info");
         return info is null ? null : ReadIncStats(info);
     }
 
@@ -332,10 +338,10 @@ public sealed class WzItemProvider : IItemProvider
     {
         foreach (string folder in EquipFolders)
         {
-            string path = Path.Combine(_wzRoot, "Character", folder, $"{itemId:00000000}.img.xml");
-            if (File.Exists(path))
+            string rel = $"Character/{folder}/{itemId:00000000}.img.xml";
+            if (_store.Exists(rel))
             {
-                return path;
+                return rel;
             }
         }
 
@@ -345,6 +351,24 @@ public sealed class WzItemProvider : IItemProvider
     /// <summary>The Consume <c>.img.xml</c> file grouping an item (by <c>itemId / 10000</c>).</summary>
     public static string ConsumeImagePath(string wzRoot, int itemId)
         => Path.Combine(wzRoot, "Item", "Consume", $"{itemId / 10000:0000}.img.xml");
+
+    /// <summary>Store-relative form of <see cref="ConsumeImagePath"/>.</summary>
+    public static string ConsumeImageRel(int itemId)
+        => $"Item/Consume/{itemId / 10000:0000}.img.xml";
+
+    /// <summary>Store-relative form of <see cref="ItemImagePath"/> (null for equips/unknown).</summary>
+    public static string? ItemImageRel(int itemId)
+    {
+        string? subFolder = (itemId / 1000000) switch
+        {
+            2 => "Consume",
+            3 => "Install",
+            4 => "Etc",
+            5 => "Cash",
+            _ => null,
+        };
+        return subFolder is null ? null : $"Item/{subFolder}/{itemId / 10000:0000}.img.xml";
+    }
 
     /// <summary>
     /// The <c>.img.xml</c> file grouping an item, with the subfolder chosen by the item category

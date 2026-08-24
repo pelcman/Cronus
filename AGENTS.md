@@ -754,6 +754,23 @@ restart).
 
 ### Remaining work (as of 2026-08-22, post stable-1)
 
+**A0. Game-data pipeline (2026-08-25): client .wz -> gamedata.db (Maple2-style ingest)**
+- [x] `Cronus.Data/Wz`: a binary .wz reader for the classic pre-BB format — header, brute-forced
+      (iv, version) detection, encrypted names/offsets, per-image List.wz-style AES retry — plus
+      an emitter that renders each .img as wz_xml. Byte-validated: all 18,479 files of the
+      DevTools dump (itself a copy of Riremito's xml_JMS_v186) are reproduced IDENTICALLY from
+      the real client's archives; the client carries 380 more images than the dump had.
+- [x] `Cronus.Ingest` console + `WzIngest`: 10 archives -> one SQLite gamedata.db (deflate blobs,
+      ~56 MB from ~1.7 GB of wz) in ~20s; `--verify <dump>` byte-compares against a dump tree.
+- [x] `IWzStore` (Directory / Sqlite) behind every provider; the host resolves
+      CRONUS_GAMEDATA -> CRONUS_CLIENT (auto-ingest on first boot) -> CRONUS_WZ. Bot suite 99/99
+      on the DB-backed server.
+- Also this session: quest reward fixes (per-row gender/job bitmask filters ported from
+  canGetItem; inventory-fit pre-check so a full inventory no longer destroys rewards — the
+  turn-in stays open with the verified ShowInventoryFull toast), ごみ箱おじさん script (the one
+  truly script-less NPC the 8/24 session clicked), character name min length 1 (GameConstants
+  moved to Cronus.Common so Login can read it), save DB reset.
+
 **A. Verification & stability (highest value per the final goal)**
 - [ ] Live-client pass over the newest features (quest chains/acts, reactor drops, /gender,
       SP grants, the reworked command set + /dbgwarp) — bot-verified only so far; a human

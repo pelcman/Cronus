@@ -1,4 +1,4 @@
-namespace Cronus.Server.Game;
+namespace Cronus.Common;
 
 /// <summary>
 /// Central gameplay tunables (the Maple2 <c>Constants.cs</c> pattern): every rule that an
@@ -25,6 +25,14 @@ public static class GameConstants
     /// later JMS charm entry — CardGet 16 (and QuestComplete 12).
     /// </summary>
     public const byte MonsterBookCardEffectValue = 16;
+
+    // ---- Characters ---------------------------------------------------------------------
+
+    /// <summary>Shortest allowed character name (reference: 4). 1 lets short JP names through.</summary>
+    public const int CharacterNameMinLength = 1;
+
+    /// <summary>Longest allowed character name (reference: 12).</summary>
+    public const int CharacterNameMaxLength = 12;
 
     // ---- Social -------------------------------------------------------------------------
 

@@ -63,27 +63,28 @@ public sealed class WzItemCatalog : IItemCatalog
 
     private readonly Lazy<IReadOnlyList<ItemCategory>> _categories;
 
-    public WzItemCatalog(string wzRoot) => _categories = new(() => Load(wzRoot));
+    public WzItemCatalog(string wzRoot) : this(new DirectoryWzStore(wzRoot))
+    {
+    }
+
+    public WzItemCatalog(IWzStore store) => _categories = new(() => Load(store));
 
     public IReadOnlyList<ItemCategory> Categories => _categories.Value;
 
-    private static IReadOnlyList<ItemCategory> Load(string wzRoot)
+    private static IReadOnlyList<ItemCategory> Load(IWzStore store)
     {
-        string root = Path.Combine(wzRoot, "String");
         var categories = new List<ItemCategory>();
 
         // String.wz names MANY ids the item data doesn't actually contain (unreleased/removed
         // content — 56 equips and ~89 bundles in the v186 tree). The client crashes trying to
         // render one, so a name alone is not enough: an id must also have real data.
-        HashSet<int> real = RealItemIds(wzRoot);
+        HashSet<int> real = RealItemIds(store);
 
-        string eqpPath = Path.Combine(root, "Eqp.img.xml");
-        if (File.Exists(eqpPath))
+        if (store.ReadText("String/Eqp.img.xml") is { } eqpXml)
         {
-            string xml = File.ReadAllText(eqpPath);
             foreach ((string key, string label) in EquipGroups)
             {
-                var ids = IdsInEquipGroup(xml, key).Where(real.Contains).ToList();
+                var ids = IdsInEquipGroup(eqpXml, key).Where(real.Contains).ToList();
                 if (ids.Count > 0)
                 {
                     categories.Add(new ItemCategory(key, label, ids));
@@ -93,13 +94,12 @@ public sealed class WzItemCatalog : IItemCatalog
 
         foreach ((string file, string label) in FlatTables)
         {
-            string path = Path.Combine(root, $"{file}.img.xml");
-            if (!File.Exists(path))
+            if (store.ReadText($"String/{file}.img.xml") is not { } xml)
             {
                 continue;
             }
 
-            var ids = SortedIds(ItemEntry.Matches(File.ReadAllText(path))).Where(real.Contains).ToList();
+            var ids = SortedIds(ItemEntry.Matches(xml)).Where(real.Contains).ToList();
             if (ids.Count > 0)
             {
                 categories.Add(new ItemCategory(file, label, ids));
@@ -115,20 +115,15 @@ public sealed class WzItemCatalog : IItemCatalog
     /// (<c>Character/**/{id:00000000}.img.xml</c>, <c>Item/Pet/{id}.img.xml</c>); bundle items are
     /// grouped by id prefix inside <c>Item/{tab}/{prefix}.img.xml</c>.
     /// </summary>
-    private static HashSet<int> RealItemIds(string wzRoot)
+    private static HashSet<int> RealItemIds(IWzStore store)
     {
         var ids = new HashSet<int>();
 
-        foreach (string dir in new[] { Path.Combine(wzRoot, "Character"), Path.Combine(wzRoot, "Item", "Pet") })
+        foreach (string prefix in new[] { "Character", "Item/Pet" })
         {
-            if (!Directory.Exists(dir))
+            foreach (string path in store.EnumeratePaths(prefix))
             {
-                continue;
-            }
-
-            foreach (string file in Directory.EnumerateFiles(dir, "*.img.xml", SearchOption.AllDirectories))
-            {
-                string name = Path.GetFileName(file);
+                string name = path[(path.LastIndexOf('/') + 1)..];
                 int dot = name.IndexOf('.');
                 if (dot > 0 && int.TryParse(name.AsSpan(0, dot), out int id))
                 {
@@ -137,22 +132,18 @@ public sealed class WzItemCatalog : IItemCatalog
             }
         }
 
-        string itemRoot = Path.Combine(wzRoot, "Item");
-        if (Directory.Exists(itemRoot))
+        foreach (string path in store.EnumeratePaths("Item"))
         {
-            foreach (string file in Directory.EnumerateFiles(itemRoot, "*.img.xml", SearchOption.AllDirectories))
+            if (path.StartsWith("Item/Pet/", StringComparison.Ordinal))
             {
-                if (Path.GetDirectoryName(file)?.EndsWith("Pet", StringComparison.Ordinal) == true)
-                {
-                    continue; // already covered by the per-file pass above
-                }
+                continue; // already covered by the per-file pass above
+            }
 
-                foreach (Match m in BundleEntry.Matches(File.ReadAllText(file)))
+            foreach (Match m in BundleEntry.Matches(store.ReadText(path) ?? ""))
+            {
+                if (int.TryParse(m.Groups[1].ValueSpan, out int id))
                 {
-                    if (int.TryParse(m.Groups[1].ValueSpan, out int id))
-                    {
-                        ids.Add(id);
-                    }
+                    ids.Add(id);
                 }
             }
         }

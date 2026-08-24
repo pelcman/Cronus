@@ -103,23 +103,25 @@ public interface IMobProvider
 /// </summary>
 public sealed class WzMobProvider : IMobProvider
 {
-    private readonly string _wzRoot;
+    private readonly IWzStore _store;
     private readonly ConcurrentDictionary<int, MobData?> _cache = new();
 
-    public WzMobProvider(string wzRoot) => _wzRoot = wzRoot;
+    public WzMobProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
+    {
+    }
+
+    public WzMobProvider(IWzStore store) => _store = store;
 
     public MobData? GetMob(int templateId) => _cache.GetOrAdd(templateId, Load);
 
     private MobData? Load(int templateId)
     {
-        string path = MobImagePath(_wzRoot, templateId);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        return MobData.FromWz(templateId, WzData.ParseFile(path));
+        string? xml = _store.ReadText(MobImageRel(templateId));
+        return xml is null ? null : MobData.FromWz(templateId, WzData.ParseText(xml));
     }
+
+    /// <summary>Store-relative form of <see cref="MobImagePath"/>.</summary>
+    public static string MobImageRel(int templateId) => $"Mob/{templateId:0000000}.img.xml";
 
     public static string MobImagePath(string wzRoot, int templateId)
         => Path.Combine(wzRoot, "Mob", $"{templateId:0000000}.img.xml");

@@ -180,14 +180,13 @@ public sealed partial class ChannelHandler
             }
         }
 
-        string progress = InitialQuestProgress(quest);
-        c.StartedQuests[questId] = progress;
-
-        if (quest?.StartAct is { } act)
+        if (quest?.StartAct is { } act && !await ApplyQuestActAsync(session, c, act).ConfigureAwait(false))
         {
-            await ApplyQuestActAsync(session, c, act).ConfigureAwait(false);
+            return; // start rewards don't fit — the player must make room first
         }
 
+        string progress = InitialQuestProgress(quest);
+        c.StartedQuests[questId] = progress;
         _characters.Save(c);
         await session.SendAsync(_packets.UserQuestResult(questId, npcId)).ConfigureAwait(false);
         await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted, progress)).ConfigureAwait(false);
@@ -206,9 +205,9 @@ public sealed partial class ChannelHandler
             return; // unknown quest or unmet kills/items — the dialog stays open
         }
 
-        if (quest.EndAct is { } act)
+        if (quest.EndAct is { } act && !await ApplyQuestActAsync(session, c, act, selection).ConfigureAwait(false))
         {
-            await ApplyQuestActAsync(session, c, act, selection).ConfigureAwait(false);
+            return; // rewards don't fit — keep the quest open so the turn-in can be retried
         }
 
         c.StartedQuests.Remove(questId);
@@ -269,14 +268,19 @@ public sealed partial class ChannelHandler
     /// <summary>
     /// Applies a quest act: give/take items, meso, fame, and exp. Selectable rewards (prop == -1)
     /// give only the row the player picked (<paramref name="selection"/> indexes the selectable
-    /// rows in wz order); weighted-lottery rows (prop &gt; 0) aren't modelled yet and are skipped.
+    /// rows in wz order); weighted-lottery rows (prop &gt; 0) roll one winner by weight.
     /// </summary>
-    private async ValueTask ApplyQuestActAsync(MapleSession session, Character c, QuestAct act, int selection = -1)
+    private async ValueTask<bool> ApplyQuestActAsync(MapleSession session, Character c, QuestAct act, int selection = -1)
     {
-        var changes = new List<InventoryChange>();
-        QuestItemEntry? lotteryPick = PickLotteryReward(act.Items);
+        // Resolve WHICH item rows this player actually gets before touching anything: the per-row
+        // gender/job filters (ports canGetItem), then the choose/lottery props. Filtering first
+        // matters twice over — the lottery must roll only among rows the player can get, and the
+        // inventory fit-check below must count only rows that will really be granted.
+        var eligible = act.Items.Where(i => i.AppliesTo(c.Job, c.Gender)).ToList();
+        QuestItemEntry? lotteryPick = PickLotteryReward(eligible);
+        var granted = new List<QuestItemEntry>();
         int selectableIndex = 0;
-        foreach (QuestItemEntry item in act.Items)
+        foreach (QuestItemEntry item in eligible)
         {
             if (item.Prop is -1)
             {
@@ -297,6 +301,20 @@ public sealed partial class ChannelHandler
                 continue; // prop 0: unused marker rows
             }
 
+            granted.Add(item);
+        }
+
+        // Refuse the whole act when the rewards don't fit: completing anyway would silently
+        // destroy them. The caller keeps the quest open so the player can make room and retry.
+        if (!QuestRewardsFit(c, granted))
+        {
+            await session.SendAsync(_packets.ShowInventoryFull()).ConfigureAwait(false);
+            return false;
+        }
+
+        var changes = new List<InventoryChange>();
+        foreach (QuestItemEntry item in granted)
+        {
             if (item.Count > 0)
             {
                 int slotMax = _items.GetConsume(item.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax;
@@ -395,6 +413,64 @@ public sealed partial class ChannelHandler
                     break;
             }
         }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether every to-be-granted reward row fits the inventory as it stands. Counts per tab:
+    /// equips and pets need one free slot per unit; bundles first fill existing stacks' headroom
+    /// and then need a fresh slot per <c>slotMax</c> of the remainder.
+    /// </summary>
+    private bool QuestRewardsFit(Character c, IReadOnlyList<QuestItemEntry> granted)
+    {
+        Dictionary<int, int>? needed = null;
+        foreach (QuestItemEntry item in granted)
+        {
+            if (item.Count <= 0)
+            {
+                continue; // removals always fit
+            }
+
+            int tab = Inventory.Tab(item.ItemId);
+            int slots;
+            if (tab == 1 || item.ItemId / 10_000 == 500)
+            {
+                slots = item.Count; // equips and pets take one slot each
+            }
+            else
+            {
+                int slotMax = Math.Max(1, _items.GetConsume(item.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax);
+                int headroom = c.EquippedItems
+                    .Where(i => i.Position > 0 && i.ItemId == item.ItemId && i.Quantity < slotMax)
+                    .Sum(i => slotMax - i.Quantity);
+                int overflow = item.Count - headroom;
+                slots = overflow > 0 ? (overflow + slotMax - 1) / slotMax : 0;
+            }
+
+            if (slots > 0)
+            {
+                needed ??= new Dictionary<int, int>();
+                needed[tab] = needed.GetValueOrDefault(tab) + slots;
+            }
+        }
+
+        if (needed is null)
+        {
+            return true;
+        }
+
+        foreach ((int tab, int slots) in needed)
+        {
+            int free = GameConstants.InventorySlotsPerTab
+                - c.EquippedItems.Count(i => i.Position > 0 && Inventory.Tab(i.ItemId) == tab);
+            if (slots > free)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Picks the weighted-random winner among lottery (<c>prop &gt; 0</c>) reward rows.</summary>

@@ -23,24 +23,26 @@ public sealed class WzCommodityProvider : ICommodityProvider
 
     private readonly Lazy<IReadOnlyDictionary<int, Commodity>> _bySn;
 
-    public WzCommodityProvider(string wzRoot)
+    public WzCommodityProvider(string wzRoot) : this(new DirectoryWzStore(wzRoot))
     {
-        _bySn = new(() => Load(wzRoot));
+    }
+
+    public WzCommodityProvider(IWzStore store)
+    {
+        _bySn = new(() => Load(store));
     }
 
     public Commodity? GetBySn(int sn)
         => _bySn.Value.TryGetValue(sn, out Commodity? c) ? c : null;
 
-    private static IReadOnlyDictionary<int, Commodity> Load(string wzRoot)
+    private static IReadOnlyDictionary<int, Commodity> Load(IWzStore store)
     {
-        string path = Path.Combine(wzRoot, "Etc", "Commodity.img.xml");
         var map = new Dictionary<int, Commodity>();
-        if (!File.Exists(path))
+        if (store.ReadText("Etc/Commodity.img.xml") is not { } xml)
         {
             return map;
         }
 
-        string xml = File.ReadAllText(path);
         foreach (string block in xml.Split("<imgdir name=\"", StringSplitOptions.RemoveEmptyEntries))
         {
             int sn = 0, itemId = 0, count = 1, price = 0;

@@ -99,6 +99,9 @@ public class QuestTests
         public TaskCompletionSource<(byte State, string Progress)> Record { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        public TaskCompletionSource InventoryFull { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public override async ValueTask OnConnectedAsync(MapleSession session)
         {
             var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
@@ -128,7 +131,14 @@ public class QuestTests
             }
             else if (opcode == _opMessage)
             {
-                if (p.ReadByte() != 1)
+                byte messageType = p.ReadByte();
+                if (messageType == 0 && p.ReadByte() == 0xFF)
+                {
+                    InventoryFull.TrySetResult(); // the "inventory is full" toast
+                    return;
+                }
+
+                if (messageType != 1)
                 {
                     return; // not a quest record
                 }
@@ -618,5 +628,110 @@ public class QuestTests
 
         Assert.Equal("001", progress);                 // one of two kills recorded
         Assert.Equal("001", hero.StartedQuests[1000]);
+    }
+
+    [Fact]
+    public async Task CompleteQuest_FiltersRewardRowsByJobAndGender()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Fighter", MapId = 100000000, Level = 30,
+            Job = 111, Gender = 0, // a male crusader
+        });
+        hero.StartedQuests[1002] = string.Empty;
+        repo.Save(hero);
+
+        var quest = new QuestData
+        {
+            QuestId = 1002,
+            EndCheck = new QuestCheck { Npc = 9000021 },
+            EndAct = new QuestAct
+            {
+                Items = new[]
+                {
+                    new QuestItemEntry(1072000, 1, Job: 0x2),   // warrior family  <- given (111/100 == 100/100)
+                    new QuestItemEntry(1072001, 1, Job: 0x4),   // magician family    (filtered out)
+                    new QuestItemEntry(1050000, 1, Gender: 0),  // male            <- given
+                    new QuestItemEntry(1051000, 1, Gender: 1),  // female             (filtered out)
+                    new QuestItemEntry(2000000, 3, Gender: 2),  // both            <- given
+                },
+            },
+        };
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var quests = new InMemoryQuestProvider(new[] { quest });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new QuestClient(hero.Id, action: 2, questId: 1002);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, quests: quests);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        (byte state, _) = await client.Record.Task.WaitAsync(cts.Token);
+
+        Assert.Equal(2, state);
+        Assert.Single(hero.EquippedItems, i => i.ItemId == 1072000);          // job-matched
+        Assert.Single(hero.EquippedItems, i => i.ItemId == 1050000);          // gender-matched
+        Assert.Single(hero.EquippedItems, i => i.ItemId == 2000000);          // gender 2 = both
+        Assert.DoesNotContain(hero.EquippedItems, i => i.ItemId == 1072001);  // other job's row
+        Assert.DoesNotContain(hero.EquippedItems, i => i.ItemId == 1051000);  // other gender's row
+    }
+
+    [Fact]
+    public async Task CompleteQuest_WithFullInventory_KeepsTheQuestAndRewards()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Packrat", MapId = 100000000, Level = 30,
+        });
+        hero.StartedQuests[1003] = string.Empty;
+
+        // Fill every equip-tab slot so the reward equip cannot fit.
+        for (short slot = 1; slot <= GameConstants.InventorySlotsPerTab; slot++)
+        {
+            hero.EquippedItems.Add(new InventoryItem { ItemId = 1302000, Position = slot });
+        }
+
+        repo.Save(hero);
+
+        var quest = new QuestData
+        {
+            QuestId = 1003,
+            EndCheck = new QuestCheck { Npc = 9000021 },
+            EndAct = new QuestAct
+            {
+                Exp = 300,
+                Items = new[] { new QuestItemEntry(1072000, 1) }, // an equip that has no room
+            },
+        };
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var quests = new InMemoryQuestProvider(new[] { quest });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new QuestClient(hero.Id, action: 2, questId: 1003);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, quests: quests);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        // The full-inventory notice arrives instead of a completion record.
+        await client.InventoryFull.Task.WaitAsync(cts.Token);
+
+        Assert.True(hero.StartedQuests.ContainsKey(1003));                    // still open — retryable
+        Assert.False(hero.CompletedQuests.ContainsKey(1003));
+        Assert.Equal(0, hero.Exp);                                            // nothing was applied
+        Assert.DoesNotContain(hero.EquippedItems, i => i.ItemId == 1072000);  // reward not destroyed
     }
 }
