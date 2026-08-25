@@ -659,13 +659,17 @@ public sealed partial class ChannelHandler
         int level = c.Skills.TryGetValue(skillId, out int learned) ? learned : 0;
         if (level <= 0)
         {
-            return; // skill not learned — server authority over the cast
+            // Not learned — refuse the cast but release the client (the oracle's uncoded-skill
+            // path acks and then sends sendStatChanged(true)).
+            await session.SendAsync(_packets.StatChanged(c, 0)).ConfigureAwait(false);
+            return;
         }
 
         SkillEffect? effect = _skills.GetSkillEffect(skillId, level);
         if (effect is null)
         {
-            return; // unknown skill / no wz effect
+            await session.SendAsync(_packets.StatChanged(c, 0)).ConfigureAwait(false); // unknown skill
+            return;
         }
         if (effect.MpCon > 0 && c.Mp >= effect.MpCon)
         {
@@ -748,6 +752,13 @@ public sealed partial class ChannelHandler
         {
             _buffs.Remove(c.Id, skillId);
             await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
+
+            // Onlookers get the remote cancel so the buff's aura visuals stop for them too
+            // (ports OnUserSkillCancelRequest's broadcastMessage).
+            if (_field is not null)
+            {
+                await _field.BroadcastAsync(_packets.UserSkillCancel(c.Id, skillId), exceptCharacterId: c.Id).ConfigureAwait(false);
+            }
         }
 
         // Cancelling a summon skill dismisses the summon too.

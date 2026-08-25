@@ -1170,6 +1170,9 @@ public sealed partial class ChannelHandler
             return;
         }
 
+        // The oracle plays the portal sound before the script runs (EffectLocal PlayPortalSE).
+        await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectPlayPortalSE)).ConfigureAwait(false);
+
         // JMS v186 CP_UserPortalScriptRequest: [portalCount:1][portalName:str][x:2][y:2]
         packet.ReadByte();
         string portalName = packet.ReadString();

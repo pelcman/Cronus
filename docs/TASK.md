@@ -78,8 +78,16 @@
       ペット購入のペットインスタンス生成は未対応(NPC店でのペット販売なし、キャッシュ側は対応済)。
 - [x] 倉庫(Trunk) — 預入/引出/メルの失敗は TrunkError(PutNoMoney/IncorrectRequest/NoSpace等)で
       全分岐応答済みを確認。ショップ/倉庫とも「開いていない状態の要求は沈黙」も oracle と一致。
-- [ ] トレード・ミニゲーム・個人商店(ルーム系の開閉契約)
-- [ ] スキル・バフ (`UserSkillUseRequest` / `TemporaryStatSet/Reset` の順序・cooldown)
+- [x] トレード・ミニゲーム・個人商店(ルーム系) — 入室失敗は全経路 MiniGameFull で応答済み。
+      ルーム内操作(put/buy等)の失敗は **oracle自身がほぼ沈黙**(ReqCMiniRoomBaseDlg)であり、
+      うちの沈黙分岐は契約一致と判定。差分なし。
+- [x] スキル・バフ — ackが先(SkillUseResult)・バフ順・cooldown・パーティバフは一致。
+      **修正3件**: ①未習得/効果なしスキルのキャスト後に StatChanged 空アンロックを送る
+      (oracleの sendStatChanged(true) 相当) ②スキルキャンセルの周囲通知 `LP_UserSkillCancel`
+      を新規実装(未送信だったため他人視点でオーラが残っていた)③ポータルスクリプト起動前の
+      効果音 PlayPortalSE=10 を送出(v302表−1の法則。12/16と同一法則だが**実機未検証** —
+      スクリプトポータルを一度踏んで確認すること)。
+      残メモ: MP不足でもバフが掛かる(サーバー権威の締め付けはフェーズ4で)。
 - [ ] 戦闘 (`UserAttack` 各種・被弾・ダメージ数値・死亡)
 - [ ] ソーシャル (パーティ・ギルド・バディ・メッセンジャー・ウィスパーの結果コード)
 - [ ] キャッシュショップ (`SetCashShop` 入退場・購入・在庫)

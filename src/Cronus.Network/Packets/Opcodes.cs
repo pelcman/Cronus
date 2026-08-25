@@ -116,6 +116,8 @@ public static class ServerOpcode
     public const string UserLeaveField = "LP_UserLeaveField";
     public const string UserAvatarModified = "LP_UserAvatarModified";
     public const string TransferFieldReqIgnored = "LP_TransferFieldReqIgnored";
+
+    public const string UserSkillCancel = "LP_UserSkillCancel";
     public const string UserChat = "LP_UserChat";
     public const string UserEmotion = "LP_UserEmotion";
     public const string UserSitResult = "LP_UserSitResult";

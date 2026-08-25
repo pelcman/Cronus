@@ -1602,7 +1602,19 @@ public sealed class ChannelPackets
     }
 
     /// <summary>Builds <c>LP_UserChat</c> (ports <c>ResCUser.UserChat</c>, JMS v186 path).</summary>
-    public byte[] UserChat(int characterId, bool isGm, string message, bool onlyBalloon)
+/// <summary>
+    /// Builds <c>LP_UserSkillCancel</c> — tells onlookers a player's skill buff ended so its aura
+    /// visuals stop (ports <c>ResCUserRemote.UserSkillCancel</c>: character id + skill id).
+    /// </summary>
+    public byte[] UserSkillCancel(int characterId, int skillId)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserSkillCancel);
+        w.WriteInt(characterId);
+        w.WriteInt(skillId);
+        return w.ToArray();
+    }
+
+        public byte[] UserChat(int characterId, bool isGm, string message, bool onlyBalloon)
     {
         PacketWriter w = NewPacket(ServerOpcode.UserChat);
         w.WriteInt(characterId);
@@ -2571,6 +2583,10 @@ public sealed class ChannelPackets
     // BuffItem=14, Squib=15, MonsterBookCardGet=16.
 
     /// <summary>User effect type: the quest-complete jingle (v186 table: 12).</summary>
+    /// <summary>The portal sound effect (v302 table minus the JMS charm entry, like
+    /// QuestComplete 12 and MonsterBookCardGet 16 — both client-verified on that law).</summary>
+    public const byte UserEffectPlayPortalSE = 10;
+
     public const byte UserEffectQuestComplete = 12;
 
     /// <summary>User effect type: the Monster Book card-registered flash (v186 table: 16).</summary>
