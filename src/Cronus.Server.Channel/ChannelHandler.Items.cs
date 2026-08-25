@@ -636,7 +636,17 @@ public sealed partial class ChannelHandler
         }
 
         Character c = _player!.Character;
-        long price = (long)entry.Price * quantity;
+
+        // Rechargeables (stars/bullets) sell as a full stack for the flat listed price — the
+        // oracle ignores the requested quantity entirely (MapleShop.buy: isRechargable →
+        // price = item.getPrice(), quantity = slotMax).
+        bool rechargeable = ShopItems.IsRechargeable(itemId);
+        if (rechargeable)
+        {
+            quantity = _items.GetConsume(itemId)?.SlotMax ?? Inventory.DefaultSlotMax;
+        }
+
+        long price = rechargeable ? entry.Price : (long)entry.Price * quantity;
         if (entry.Price < 0 || c.Meso < price)
         {
             await session.SendAsync(_packets.ShopResult(ShopResultCode.BuyNoMoney)).ConfigureAwait(false);
@@ -709,7 +719,11 @@ public sealed partial class ChannelHandler
         slotMax += mastery * 10;
         if (item.Quantity >= slotMax)
         {
-            return; // already full — the client shouldn't ask
+            // Already full — the client shouldn't ask, but the dialog still waits on a result.
+            // (The oracle replies with an enum the v186 init never sets; we pick the defined
+            // RechargeUnknown code instead — a deliberate, safe deviation.)
+            await session.SendAsync(_packets.ShopResult(ShopResultCode.RechargeUnknown)).ConfigureAwait(false);
+            return;
         }
 
         double unit = _items.GetUnitPrice(item.ItemId) ?? 0;

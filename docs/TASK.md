@@ -70,8 +70,15 @@
       拾得(死亡中/取得済み)。バフ解除は oracle 同様 **常に** TemporaryStatReset を返すよう変更。
       機械走査ツール: 早期returnの直前5行に応答packetが無い分岐を列挙する方式(再利用可)。
       残り(InventoryOperation 全モードのバイト検証・Gather/Sort応答)は golden vector 拡張時に。
-- [ ] ショップ (`UserShopRequest` 各op / 開閉・売買・補充の応答)
-- [ ] 倉庫・トレード・ミニゲーム・個人商店(ルーム系の開閉契約)
+- [x] ショップ (`UserShopRequest` 各op) — v186表(Close=4・結果0-12)は一致、
+      buy/sell/rechargeの失敗コードも一致。**バグ修正1件**: リチャージ品(手裏剣・弾)の購入は
+      oracleでは「定額でスタック満タン」なのに価格×個数・個数分付与になっていた。
+      **軽微修正1件**: 補充要求が既に満タンの場合に無応答だった → RechargeUnknown で応答
+      (oracleは未定義enumを送る箇所のため、定義済みコードを選ぶ意図的な差)。
+      ペット購入のペットインスタンス生成は未対応(NPC店でのペット販売なし、キャッシュ側は対応済)。
+- [x] 倉庫(Trunk) — 預入/引出/メルの失敗は TrunkError(PutNoMoney/IncorrectRequest/NoSpace等)で
+      全分岐応答済みを確認。ショップ/倉庫とも「開いていない状態の要求は沈黙」も oracle と一致。
+- [ ] トレード・ミニゲーム・個人商店(ルーム系の開閉契約)
 - [ ] スキル・バフ (`UserSkillUseRequest` / `TemporaryStatSet/Reset` の順序・cooldown)
 - [ ] 戦闘 (`UserAttack` 各種・被弾・ダメージ数値・死亡)
 - [ ] ソーシャル (パーティ・ギルド・バディ・メッセンジャー・ウィスパーの結果コード)

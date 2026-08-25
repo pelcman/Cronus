@@ -122,6 +122,12 @@ public class ShopTests
 
         public Shopper(int characterId) => _characterId = characterId;
 
+        /// <summary>Overrides the bought item id (default: the potion 2000000).</summary>
+        public int BuyItemId { get; init; } = 2000000;
+
+        /// <summary>Overrides the requested quantity (default 3).</summary>
+        public short BuyQuantity { get; init; } = 3;
+
         public TaskCompletionSource<byte> BuyResult { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override async ValueTask OnConnectedAsync(MapleSession session)
@@ -151,8 +157,8 @@ public class ShopTests
                 var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserShopRequest), session.Config.PacketHeaderSize, session.Config.CodePage);
                 w.WriteByte(0);        // ShopReq_Buy
                 w.WriteShort(0);       // shop position (discarded)
-                w.WriteInt(2000000);   // red potion
-                w.WriteShort(3);       // buy 3
+                w.WriteInt(BuyItemId);
+                w.WriteShort(BuyQuantity);
                 await session.SendAsync(w.ToArray());
             }
             else if (opcode == _opShopResult)
@@ -277,6 +283,43 @@ public class ShopTests
         Assert.Equal(850, hero.Meso); // 1000 - 50*3
         InventoryItem potion = Assert.Single(hero.EquippedItems, i => i.ItemId == 2000000);
         Assert.Equal(3, potion.Quantity);
+    }
+
+    [Fact]
+    public async Task Buy_Rechargeable_FillsAFullStackForTheFlatPrice()
+    {
+        // Stars/bullets sell as a full stack for the flat listed price — the oracle ignores the
+        // requested quantity (MapleShop.buy: isRechargable -> price=getPrice(), qty=slotMax).
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Thief", MapId = 100000000, Meso = 1000 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+        var items = new InMemoryItemProvider(new[]
+        {
+            new ConsumeSpec { ItemId = 2070000, SlotMax = 200 }, // subi throwing stars
+        });
+        var shops = new InMemoryShopProvider(new[]
+        {
+            new Shop { ShopId = 100, NpcId = 9000000, Items = new[] { new ShopItem(2070000, 500, 1, 0, 0) } },
+        });
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var client = new Shopper(hero.Id) { BuyItemId = 2070000, BuyQuantity = 1 };
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, shops: shops, items: items);
+        var c2s = new Pipe();
+        var s2c = new Pipe();
+        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+        _ = server.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        byte result = await client.BuyResult.Task.WaitAsync(cts.Token);
+
+        Assert.Equal((byte)ShopResultCode.BuySuccess, result);
+        Assert.Equal(500, hero.Meso);                                     // flat price, not price*qty
+        InventoryItem stars = Assert.Single(hero.EquippedItems, i => i.ItemId == 2070000);
+        Assert.Equal(200, stars.Quantity);                                // a full stack
     }
 
     /// <summary>Buys one of a token-priced entry (paying with an ETC item, not meso).</summary>
