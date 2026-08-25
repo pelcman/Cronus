@@ -11,6 +11,15 @@ namespace Cronus.Server.Channel;
 
 public sealed partial class ChannelHandler
 {
+    /// <summary>
+    /// Releases the client's exclusive-request lock without changing anything: the empty
+    /// LP_InventoryOperation (the oracle's <c>updateInv()</c>). Every inventory-touching request
+    /// the client sends locks it until an InventoryOperation or StatChanged answers — a silently
+    /// dropped request wedges the client, so every failure branch must send this.
+    /// </summary>
+    private ValueTask UnlockInventoryAsync(MapleSession session)
+        => session.SendAsync(_packets.InventoryOperation(Array.Empty<InventoryChange>()));
+
     private async ValueTask HandleDropPickUpAsync(MapleSession session, PacketReader packet)
     {
         if (_player is null || _field is null)
@@ -54,7 +63,8 @@ public sealed partial class ChannelHandler
     {
         if (_player!.Character.Hp <= 0)
         {
-            return; // the dead don't loot
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // the dead don't loot
+            return;
         }
 
         // Full-tab check BEFORE taking the drop off the field, so a full inventory leaves the
@@ -71,7 +81,8 @@ public sealed partial class ChannelHandler
         FieldDrop? drop = _field!.RemoveDrop(dropOid);
         if (drop is null)
         {
-            return; // already taken
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // already taken
+            return;
         }
 
         Character c = _player.Character;
@@ -234,9 +245,15 @@ public sealed partial class ChannelHandler
     /// </summary>
     private async ValueTask HandleUseItemAsync(MapleSession session, PacketReader packet)
     {
-        if (_player is null || _player.Character.Hp <= 0)
+        if (_player is null)
         {
-            return; // the dead don't drink
+            return;
+        }
+
+        if (_player.Character.Hp <= 0)
+        {
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // the dead don't drink
+            return;
         }
 
         packet.ReadInt();                 // timestamp
@@ -247,7 +264,8 @@ public sealed partial class ChannelHandler
         InventoryItem? item = Inventory.ItemAt(c, UseTab, slot);
         if (item is null || item.ItemId != itemId || item.Quantity < 1)
         {
-            return; // desync / already gone
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // desync / already gone
+            return;
         }
 
         ConsumeSpec? spec = _items.GetConsume(itemId);
@@ -269,6 +287,10 @@ public sealed partial class ChannelHandler
                 }
 
                 await MovePlayerToMapAsync(session, target, spawnPortal: 0).ConfigureAwait(false);
+            }
+            else
+            {
+                await UnlockInventoryAsync(session).ConfigureAwait(false); // nowhere to go
             }
 
             return;
@@ -340,17 +362,21 @@ public sealed partial class ChannelHandler
 
         int buffId = packet.ReadInt();       // negative item id
         int itemId = -buffId;
-        if (itemId <= 0 || _items.GetConsume(itemId) is not { } spec)
+
+        // The oracle answers EVERY cancel request with TemporaryStatReset, even when it can't
+        // resolve the buff (the mask is just 0 then) — the client is waiting on it.
+        ulong mask = 0;
+        if (itemId > 0 && _items.GetConsume(itemId) is { } spec)
         {
-            return;
+            mask = BuffEffect.Mask64(BuffEffect.FromSpec(spec));
         }
 
-        ulong mask = BuffEffect.Mask64(BuffEffect.FromSpec(spec));
         if (mask != 0)
         {
             _buffs.Remove(_player.Character.Id, buffId);
-            await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
         }
+
+        await session.SendAsync(_packets.TemporaryStatReset(mask)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -379,6 +405,7 @@ public sealed partial class ChannelHandler
         if (scroll is null || equip is null || scroll.ItemId / 10000 != 204
             || _items.GetScroll(scroll.ItemId) is not { } spec)
         {
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // desync / not a scroll
             return;
         }
 
@@ -386,12 +413,14 @@ public sealed partial class ChannelHandler
         bool chaos = Scrolling.IsChaosScroll(scroll.ItemId);
         if (!cleanSlate && equip.UpgradeSlots < 1)
         {
-            return; // nothing left to scroll
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // nothing left to scroll
+            return;
         }
 
         if (!cleanSlate && !chaos && !Scrolling.CanScroll(scroll.ItemId, equip.ItemId))
         {
-            return; // scroll targets a different equip family
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // wrong equip family
+            return;
         }
 
         // White-scroll protection consumes one 2340000 alongside the scroll.
@@ -465,16 +494,18 @@ public sealed partial class ChannelHandler
             return;
         }
 
-        // Equipped→equipped moves aren't allowed; ignore rather than desync.
+        // Equipped→equipped moves aren't allowed; refuse (with the unlock) rather than desync.
         if (tab == equipTab && src < 0 && dst < 0)
         {
+            await UnlockInventoryAsync(session).ConfigureAwait(false);
             return;
         }
 
         Character c = _player.Character;
         if (Inventory.Move(c, tab, src, dst) is not { } change)
         {
-            return; // empty source slot / no-op
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // empty source slot / no-op
+            return;
         }
 
         _characters.Save(c);
@@ -504,6 +535,7 @@ public sealed partial class ChannelHandler
         InventoryItem? item = Inventory.ItemAt(c, tab, src);
         if (item is null)
         {
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // empty slot
             return;
         }
 

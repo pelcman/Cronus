@@ -63,8 +63,13 @@
       (>0 = その場復活、0 = 帰還マップ。HP/MP全快は一致済み)。
       在マップテレポート(`PortalTeleportRequest`)はoracle自体が not coded — 未対応でOK。
       MigrateIn/チャンネル移動は実機で常用済みのため対象外とした。
-- [ ] インベントリ (`InventoryOperation` の全モード / 使用・装備・移動・ドロップの応答契約、
-      排他リクエストロックの解除条件を全パス列挙)
+- [x] インベントリ 排他ロック解除の全パス監査 — oracleの規則「失敗も必ず `updateInv()`
+      (空InventoryOperation) か StatChanged で応答」に対し、**沈黙分岐11箇所を修正**:
+      アイテム使用(死亡中/desync/帰還先なし)、スクロール(desync/回数切れ/対象違い)、
+      スロット移動(装備間移動拒否/空スロット)、地面ドロップ(空スロット)、
+      拾得(死亡中/取得済み)。バフ解除は oracle 同様 **常に** TemporaryStatReset を返すよう変更。
+      機械走査ツール: 早期returnの直前5行に応答packetが無い分岐を列挙する方式(再利用可)。
+      残り(InventoryOperation 全モードのバイト検証・Gather/Sort応答)は golden vector 拡張時に。
 - [ ] ショップ (`UserShopRequest` 各op / 開閉・売買・補充の応答)
 - [ ] 倉庫・トレード・ミニゲーム・個人商店(ルーム系の開閉契約)
 - [ ] スキル・バフ (`UserSkillUseRequest` / `TemporaryStatSet/Reset` の順序・cooldown)
