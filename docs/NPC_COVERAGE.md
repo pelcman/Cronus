@@ -12,10 +12,10 @@ parcel = home delivery.
 ## Summary
 
 - NPCs spawning across all maps: **1447**
-- script: **216** (14%)
+- script: **227** (15%)
 - shop: **90** (6%)
 - quest-data: **499** (34%)
-- none: **642** (44%)
+- none: **631** (43%)
 
 ## Actionable queue (spawning, status=none, with a wz script hint)
 
@@ -112,11 +112,7 @@ parcel = home delivery.
 | 2013001 | 侍従イク | script:party3_play | 920010100 中央塔 他10 |
 | 2013002 | 女神ミネルバ | script:party3_minerva | 920011300 女神の祝福 |
 | 2022004 | タイラス | script:s4common1_out | 921100301 タイラス護衛完遂 |
-| 2030006 | 聖なる岩 | script:holyStone | 211040401 雪原の聖地 |
-| 2030011 | アーリ | script:Zakum04 | 280090000 悲恋の部屋 |
 | 2030014 | 古代氷石 | script:s4freeze_item | 921100100 氷の谷 |
-| 2032002 | アウラ | script:Zakum01 | 280010000 知られざる閉鉱 |
-| 2032003 | リラー | script:Zakum02 | 280020001 火山の息&lt;2段階&gt; |
 | 2040020 | ジロクン | script:make_ludi2 | 220000303 ジロクンとペイの家 |
 | 2040021 | ペイ | script:make_ludi3 | 220000303 ジロクンとペイの家 |
 | 2040022 | ライドル | script:make_ludi4 | 220020600 オモチャ工場-機械室 |
@@ -144,18 +140,11 @@ parcel = home delivery.
 | 2060010 | イルカ | script:aqua_taxi3 | 923020000 座礁された幽霊船 |
 | 2071012 | 見覚えがある少女(キツネ) | script:foxLaidy | 922220000 冷たく寒い森 |
 | 2080000 | モス | script:minar_weapon | 240000000 リプレ |
-| 2081005 | ケロベン | script:hontale_keroben | 240040700 生命の洞窟入口 |
 | 2081010 | ムス(FieldsetEnterance) | script:s4blocking | 924000000 修練場への道 他2 |
-| 2083000 | 遠征隊暗号石版 | script:hontale_enterToE | 240050000 洞窟の入口 |
-| 2083001 | ホーンテイルの道標 | script:hontale_enter1 | 240050000 洞窟の入口 他3 |
-| 2083002 | 木の根の水晶 | script:hontale_out | 240050100 迷路部屋 他13 |
-| 2083003 | 迷路部屋の切り株 | script:hontale_Bdoor | 240050100 迷路部屋 |
-| 2083004 | 遠征隊の標識 | script:hontale_accept | 240050400 ホーンテイルの洞窟入口 |
 | 2083005 | 生命の泉 | script:s4holycharge | 240050400 ホーンテイルの洞窟入口 |
 | 2084000 | ゴールドコンパス | script:goldCompass | 390000000 ゴールドリッチの宝倉庫&lt;1&gt; 他10 |
 | 2085001 | 天空の扉 | script:SkyGate | 240080000 天空の渡し場 他1 |
 | 2085002 | 天空の扉 | script:skyquest | 240030102 消えた森 他1 |
-| 2091006 | 武陵道場掲示板 | script:dojang_move | 250000100 武陵神社 |
 | 2091009 | 封印された社員入口 | script:enterShadow | 250020300 上級修練場 |
 | 2092101 | ギオン | script:Pottery | 925110000 海賊の宝物倉庫 |
 | 2094001 | キキョウニジン | script:davy_clear | 925100600 キキョウニジンの感謝 |
@@ -1078,20 +1067,20 @@ parcel = home delivery.
 | 2030003 | 雪に覆われた岩 | quest-data | 2 |  | 211040100 氷の谷1 |
 | 2030004 | 小さな墓 | quest-data | 4 |  | 211040500 狼の領域1 |
 | 2030005 | 石像 | quest-data | 5 |  | 200081400 オルビス塔&lt;8層&gt; |
-| 2030006 | 聖なる岩 | none |  | script:holyStone | 211040401 雪原の聖地 |
+| 2030006 | 聖なる岩 | script |  | script:holyStone | 211040401 雪原の聖地 |
 | 2030007 | 石像の破片 | quest-data | 2 |  | 211042101 裏洞窟 |
 | 2030008 | アドビス | quest-data | 1 | script:Zakum00 | 211042300 ジャクムへの門 |
 | 2030009 | グリーバ | shop |  |  | 211040200 氷の谷2 |
 | 2030010 | アーモン | script |  | script:Zakum06 | 280020000 火山の息&lt;1段階&gt; 他2 |
-| 2030011 | アーリ | none |  | script:Zakum04 | 280090000 悲恋の部屋 |
+| 2030011 | アーリ | script |  | script:Zakum04 | 280090000 悲恋の部屋 |
 | 2030012 | ハークル | quest-data | 14 |  | 200081201 オルビス塔&lt;秘密の部屋&gt; |
 | 2030013 | アドビス | script |  | script:zakum_accept | 211042400 ジャクムの祭壇入口 |
 | 2030014 | 古代氷石 | none |  | script:s4freeze_item | 921100100 氷の谷 |
 | 2030015 | 隠密な岩 | quest-data | 1 | script:enterHolyStoneDual | 211040400 険しき絶壁2 |
 | 2032000 | ？？？ | quest-data | 11 |  | 200050001 老婆の家 |
 | 2032001 | スピルナ | quest-data | 26 | script:oldBook5 | 200050001 老婆の家 |
-| 2032002 | アウラ | none |  | script:Zakum01 | 280010000 知られざる閉鉱 |
-| 2032003 | リラー | none |  | script:Zakum02 | 280020001 火山の息&lt;2段階&gt; |
+| 2032002 | アウラ | script |  | script:Zakum01 | 280010000 知られざる閉鉱 |
+| 2032003 | リラー | script |  | script:Zakum02 | 280020001 火山の息&lt;2段階&gt; |
 | 2032004 | 溶岩 | quest-data | 2 |  | 211042101 裏洞窟 |
 | 2040000 | モル | script |  | script:sell_ticket | 220000100 チケット売場 |
 | 2040001 | ライトくん | quest-data | 3 |  | 221024400 エオス塔100階 |
@@ -1254,7 +1243,7 @@ parcel = home delivery.
 | 2081002 | イト | quest-data | 2 |  | 240000004 イトの家 |
 | 2081003 | ヤク | quest-data | 7 |  | 240000003 ヤクの家 |
 | 2081004 | ファム | quest-data | 5 | script:babyfood | 240000006 ファムの家 |
-| 2081005 | ケロベン | none |  | script:hontale_keroben | 240040700 生命の洞窟入口 |
+| 2081005 | ケロベン | script |  | script:hontale_keroben | 240040700 生命の洞窟入口 |
 | 2081006 | モイラ | quest-data | 10 |  | 240040700 生命の洞窟入口 |
 | 2081007 | 騎士ラウル | quest-data | 15 |  | 240040400 ワイバーンの峡谷 |
 | 2081009 | ムス | quest-data | 2 | script:s4blocking_enter | 240010400 森の分かれ道 |
@@ -1271,11 +1260,11 @@ parcel = home delivery.
 | 2082001 | タミ | script |  | script:get_ticket | 240000110 ステーション&lt;オルビス行き&gt; |
 | 2082002 | ハリモ | script |  | script:goOutWaitingRoom | 240000111 控え室&lt;オルビス行き&gt; |
 | 2082003 | コルバ | quest-data | 1 | script:flyminidraco | 240000110 ステーション&lt;オルビス行き&gt; |
-| 2083000 | 遠征隊暗号石版 | none |  | script:hontale_enterToE | 240050000 洞窟の入口 |
-| 2083001 | ホーンテイルの道標 | none |  | script:hontale_enter1 | 240050000 洞窟の入口 他3 |
-| 2083002 | 木の根の水晶 | none |  | script:hontale_out | 240050100 迷路部屋 他13 |
-| 2083003 | 迷路部屋の切り株 | none |  | script:hontale_Bdoor | 240050100 迷路部屋 |
-| 2083004 | 遠征隊の標識 | none |  | script:hontale_accept | 240050400 ホーンテイルの洞窟入口 |
+| 2083000 | 遠征隊暗号石版 | script |  | script:hontale_enterToE | 240050000 洞窟の入口 |
+| 2083001 | ホーンテイルの道標 | script |  | script:hontale_enter1 | 240050000 洞窟の入口 他3 |
+| 2083002 | 木の根の水晶 | script |  | script:hontale_out | 240050100 迷路部屋 他13 |
+| 2083003 | 迷路部屋の切り株 | script |  | script:hontale_Bdoor | 240050100 迷路部屋 |
+| 2083004 | 遠征隊の標識 | script |  | script:hontale_accept | 240050400 ホーンテイルの洞窟入口 |
 | 2083005 | 生命の泉 | none |  | script:s4holycharge | 240050400 ホーンテイルの洞窟入口 |
 | 2084000 | ゴールドコンパス | none |  | script:goldCompass | 390000000 ゴールドリッチの宝倉庫&lt;1&gt; 他10 |
 | 2084002 | ゴールドリッチ | quest-data | 1 |  | 390009999 宝倉庫出口 |
@@ -1300,7 +1289,7 @@ parcel = home delivery.
 | 2091003 | ノル | quest-data | 5 |  | 250010500 天桃の果樹園1 |
 | 2091004 | 神仙妖怪 | quest-data | 4 |  | 925000000 神仙妖怪の領地 |
 | 2091005 | 素公パンダ | quest-data | 4 | script:dojang_enter | 925020001 武陵道場入口 他38 |
-| 2091006 | 武陵道場掲示板 | none |  | script:dojang_move | 250000100 武陵神社 |
+| 2091006 | 武陵道場掲示板 | script |  | script:dojang_move | 250000100 武陵神社 |
 | 2091007 | 武功 | quest-data | 5 |  | 925040000 武陵道場裏道 |
 | 2091008 | ジンジン | quest-data | 3 |  | 250000000 武陵 |
 | 2091009 | 封印された社員入口 | none |  | script:enterShadow | 250020300 上級修練場 |
