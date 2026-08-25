@@ -12,10 +12,10 @@ parcel = home delivery.
 ## Summary
 
 - NPCs spawning across all maps: **1447**
-- script: **212** (14%)
+- script: **216** (14%)
 - shop: **90** (6%)
 - quest-data: **499** (34%)
-- none: **646** (44%)
+- none: **642** (44%)
 
 ## Actionable queue (spawning, status=none, with a wz script hint)
 
@@ -102,8 +102,6 @@ parcel = home delivery.
 | 2010003 | ネーブ | script:make_orbis | 200000200 オルビス公園 |
 | 2012000 | イフ | script:sell_ticket | 200000100 オルビスチケット売場 |
 | 2012006 | イス | script:getAboard | 200000100 オルビスチケット売場 |
-| 2012014 | オルビス魔法石 | script:ossyria3_1 | 200080200 オルビス塔&lt;20層&gt; |
-| 2012015 | エルナス魔法石 | script:ossyria3_2 | 200082100 オルビス塔&lt;1層&gt; |
 | 2012027 | ヒューズ | script:elizaHarp1 | 920020000 エリジャーの庭園 |
 | 2012028 | ハープ弦&lt;レ&gt; | script:elizaHarp2 | 920020000 エリジャーの庭園 |
 | 2012029 | ハープ弦&lt;ミ&gt; | script:elizaHarp3 | 920020000 エリジャーの庭園 |
@@ -114,7 +112,6 @@ parcel = home delivery.
 | 2013001 | 侍従イク | script:party3_play | 920010100 中央塔 他10 |
 | 2013002 | 女神ミネルバ | script:party3_minerva | 920011300 女神の祝福 |
 | 2022004 | タイラス | script:s4common1_out | 921100301 タイラス護衛完遂 |
-| 2023000 | 危険地域弾丸タクシー | script:ossyria_taxi | 211000000 エルナス 他2 |
 | 2030006 | 聖なる岩 | script:holyStone | 211040401 雪原の聖地 |
 | 2030011 | アーリ | script:Zakum04 | 280090000 悲恋の部屋 |
 | 2030014 | 古代氷石 | script:s4freeze_item | 921100100 氷の谷 |
@@ -144,7 +141,6 @@ parcel = home delivery.
 | 2050017 | 隕石4 | script:earth012 | 221040100 クーラン草原2 |
 | 2050018 | 隕石5 | script:earth013 | 221040201 バーナードの草原 |
 | 2050019 | 隕石6 | script:earth014 | 221040400 クーラン草原5 |
-| 2060009 | イルカ | script:aqua_taxi | 230000000 アクアリウム 他1 |
 | 2060010 | イルカ | script:aqua_taxi3 | 923020000 座礁された幽霊船 |
 | 2071012 | 見覚えがある少女(キツネ) | script:foxLaidy | 922220000 冷たく寒い森 |
 | 2080000 | モス | script:minar_weapon | 240000000 リプレ |
@@ -1033,8 +1029,8 @@ parcel = home delivery.
 | 2012011 | 妖精クリエル | quest-data | 13 |  | 200000002 雑貨屋 |
 | 2012012 | リーサ | quest-data | 37 | script:oldBook2 | 200000000 オルビス |
 | 2012013 | スナ | script |  | script:get_ticket | 200000121 ステーション&lt;ルディブリアム行き&gt; |
-| 2012014 | オルビス魔法石 | none |  | script:ossyria3_1 | 200080200 オルビス塔&lt;20層&gt; |
-| 2012015 | エルナス魔法石 | none |  | script:ossyria3_2 | 200082100 オルビス塔&lt;1層&gt; |
+| 2012014 | オルビス魔法石 | script |  | script:ossyria3_1 | 200080200 オルビス塔&lt;20層&gt; |
+| 2012015 | エルナス魔法石 | script |  | script:ossyria3_2 | 200082100 オルビス塔&lt;1層&gt; |
 | 2012017 | ヒューズ | quest-data | 20 |  | 200082301 オルビス塔&lt;ヒューズの研究室&gt; |
 | 2012018 | エリック | quest-data | 21 |  | 200000200 オルビス公園 |
 | 2012019 | ボンちゃん | quest-data | 18 |  | 200000000 オルビス |
@@ -1075,7 +1071,7 @@ parcel = home delivery.
 | 2022002 | バルン | shop |  |  | 200080800 オルビス塔&lt;14層&gt; |
 | 2022003 | シャモス | quest-data | 21 |  | 211000001 長老の官邸 |
 | 2022004 | タイラス | none |  | script:s4common1_out | 921100301 タイラス護衛完遂 |
-| 2023000 | 危険地域弾丸タクシー | none |  | script:ossyria_taxi | 211000000 エルナス 他2 |
+| 2023000 | 危険地域弾丸タクシー | script |  | script:ossyria_taxi | 211000000 エルナス 他2 |
 | 2030000 | ジェフ | script | 1 | script:goDungeon | 211040200 氷の谷2 |
 | 2030001 | ブラボー伍長 | quest-data | 5 |  | 211050000 凍てつく野原 |
 | 2030002 | イージー兵長 | quest-data | 8 |  | 200080000 雲の公園6 |
@@ -1220,7 +1216,7 @@ parcel = home delivery.
 | 2060006 | ニュズ | quest-data | 12 |  | 230000003 動物園 |
 | 2060007 | カリプン | shop |  |  | 230000002 商店街 |
 | 2060008 | ジャラド | script |  |  | 230000002 商店街 |
-| 2060009 | イルカ | none |  | script:aqua_taxi | 230000000 アクアリウム 他1 |
+| 2060009 | イルカ | script |  | script:aqua_taxi | 230000000 アクアリウム 他1 |
 | 2060010 | イルカ | none |  | script:aqua_taxi3 | 923020000 座礁された幽霊船 |
 | 2060100 | 海の魔女カルタ | quest-data | 17 | script:s4common2 | 230040001 カルタの洞窟 |
 | 2060101 | 探査隊長タン | quest-data | 4 |  | 230040401 小さい難波船 |
