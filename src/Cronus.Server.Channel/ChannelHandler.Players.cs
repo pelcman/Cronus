@@ -456,6 +456,7 @@ public sealed partial class ChannelHandler
         InventoryItem? item = Inventory.ItemAt(c, 5, slot);
         if (item is null || item.ItemId != itemId)
         {
+            await UnlockInventoryAsync(_player.Session).ConfigureAwait(false); // desync — updateInv
             return;
         }
 
@@ -474,6 +475,9 @@ public sealed partial class ChannelHandler
 
         if (itemId / 10000 != 507)
         {
+            // Not a megaphone/ad board — unhandled cash items release the lock like the oracle's
+            // dispatcher fallback (`!handled -> updateInv`).
+            await UnlockInventoryAsync(_player.Session).ConfigureAwait(false);
             return;
         }
 
@@ -502,6 +506,7 @@ public sealed partial class ChannelHandler
                 ear = packet.ReadByte();
                 break;
             default:
+                await UnlockInventoryAsync(_player.Session).ConfigureAwait(false);
                 return; // other megaphone variants (item/triple/avatar) aren't modelled
         }
 
@@ -611,6 +616,7 @@ public sealed partial class ChannelHandler
         InventoryItem? food = Inventory.ItemAt(c, 2, slot);
         if (food is null || food.ItemId != itemId)
         {
+            await UnlockInventoryAsync(session).ConfigureAwait(false); // desync — updateInv
             return;
         }
 
