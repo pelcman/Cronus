@@ -1159,8 +1159,14 @@ public sealed partial class ChannelHandler
     /// </summary>
     private async ValueTask HandlePortalScriptAsync(MapleSession session, PacketReader packet)
     {
-        if (_player is null || _field is null || _portalScripts is null)
+        if (_player is null || _field is null)
         {
+            return;
+        }
+
+        if (_portalScripts is null)
+        {
+            await session.SendAsync(_packets.TransferFieldReqIgnored(TransferDisabledPortal)).ConfigureAwait(false);
             return;
         }
 
@@ -1171,6 +1177,9 @@ public sealed partial class ChannelHandler
         PortalData? portal = _maps.GetMap(_player.Character.MapId)?.FindPortal(portalName);
         if (portal is null || !portal.HasScript)
         {
+            // The request locks the client until a SetField or this refusal arrives — the oracle
+            // answers every failed portal-script request with TransferFieldReqIgnored.
+            await session.SendAsync(_packets.TransferFieldReqIgnored(TransferDisabledPortal)).ConfigureAwait(false);
             return;
         }
 
@@ -1225,19 +1234,28 @@ public sealed partial class ChannelHandler
             return;
         }
 
-        // A dead player dismissing the tombstone dialog sends a transfer request; revive them at
-        // this map's return town (or in place) with full HP/MP instead of a normal transfer.
-        if (_player.Character.Hp <= 0)
-        {
-            await ReviveAsync(session).ConfigureAwait(false);
-            return;
-        }
-
         // JMS v186 CP_UserTransferFieldRequest:
         //   [portalCount:1][mapId:4][portalName:str][x:2,y:2 if portal][unk:1][reviveType:1]
         packet.ReadByte();
         int targetMapId = packet.ReadInt();
         string portalName = packet.ReadString();
+
+        // A dead player dismissing the tombstone dialog sends mapId 0 with no portal; revive_type
+        // trails the packet (ports mapChangePortal: > 0 = revive where they died, else the return
+        // town) — an alive player's packet is a normal transfer.
+        if (_player.Character.Hp <= 0)
+        {
+            if (portalName.Length > 0 && packet.Remaining >= 4)
+            {
+                packet.ReadShort();
+                packet.ReadShort(); // the x/y that ride portal-form packets
+            }
+
+            packet.ReadByte();      // unk
+            bool inPlace = packet.Remaining >= 1 && packet.ReadByte() > 0;
+            await ReviveAsync(session, inPlace).ConfigureAwait(false);
+            return;
+        }
 
         // A direct map id (portal name empty) is a /map-style jump: honor it as-is.
         if (string.IsNullOrEmpty(portalName))
@@ -1279,13 +1297,13 @@ public sealed partial class ChannelHandler
     /// Revives a dead player: restores full HP/MP, then transfers to this map's return town (or
     /// the same map when it has none), which clears the client's death state.
     /// </summary>
-    private async ValueTask ReviveAsync(MapleSession session)
+    private async ValueTask ReviveAsync(MapleSession session, bool inPlace = false)
     {
         Character c = _player!.Character;
         c.Hp = c.MaxHp;
         c.Mp = c.MaxMp;
 
-        int reviveMap = _maps.GetMap(c.MapId)?.ReviveMap ?? c.MapId;
+        int reviveMap = inPlace ? c.MapId : _maps.GetMap(c.MapId)?.ReviveMap ?? c.MapId;
         await MovePlayerToMapAsync(session, reviveMap, spawnPortal: 0).ConfigureAwait(false);
         await NotifyPartyOfMyHpAsync(_player!).ConfigureAwait(false); // party sees the revive
     }

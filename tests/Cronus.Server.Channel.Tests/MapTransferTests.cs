@@ -96,6 +96,29 @@ public class MapTransferTests
             await Session!.SendAsync(w.ToArray());
         }
 
+        /// <summary>Steps on a scripted portal (CP_UserPortalScriptRequest).</summary>
+        public async ValueTask RequestPortalScriptAsync(string portalName)
+        {
+            var w = NewPacket(Session!, ClientOpcode.UserPortalScriptRequest);
+            w.WriteByte(0);              // portal count
+            w.WriteString(portalName);
+            w.WriteShort(0);
+            w.WriteShort(0);
+            await Session!.SendAsync(w.ToArray());
+        }
+
+        /// <summary>The tombstone dismissal: mapId 0, no portal, trailing revive type.</summary>
+        public async ValueTask RequestReviveAsync(byte reviveType)
+        {
+            var w = NewPacket(Session!, ClientOpcode.UserTransferFieldRequest);
+            w.WriteByte(0);              // portal count
+            w.WriteInt(0);               // mapId 0 = revive
+            w.WriteString(string.Empty);
+            w.WriteByte(0);              // unk
+            w.WriteByte(reviveType);
+            await Session!.SendAsync(w.ToArray());
+        }
+
         public async ValueTask RequestTransferAsync(int mapId, string portalName)
         {
             var w = NewPacket(Session!, ClientOpcode.UserTransferFieldRequest);
@@ -318,5 +341,64 @@ public class MapTransferTests
         byte reason = await client.TransferRefused.Task.WaitAsync(cts.Token);
         Assert.Equal(1, reason); // TF_DISABLED_PORTAL
         Assert.Contains(fields.Get(100000000).Players, fp => fp.Character.Id == hero.Id); // unmoved
+    }
+
+    [Fact]
+    public async Task PortalScriptRequest_WithoutAScript_IsRefusedNotIgnored()
+    {
+        // The request locks the client until SetField or the refusal arrives — silence wedges it.
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Stepper", MapId = 100000000 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var maps = new InMemoryMapProvider(new[] { map });
+        var fields = new FieldRegistry(maps);
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        await client.RequestPortalScriptAsync("no_such_portal");
+
+        byte reason = await client.TransferRefused.Task.WaitAsync(cts.Token);
+        Assert.Equal(1, reason); // TF_DISABLED_PORTAL
+    }
+
+    [Fact]
+    public async Task Revive_InPlace_WhenReviveTypePositive()
+    {
+        // revive_type > 0 revives on the death map (ports mapChangePortal); 0 goes to the
+        // return town. Either way HP/MP come back full.
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character
+        {
+            AccountId = 1, WorldId = 0, Name = "Fallen", MapId = 100010000, Hp = 0, MaxHp = 500, MaxMp = 300,
+        });
+
+        var maps = new InMemoryMapProvider(new[]
+        {
+            new MapData { MapId = 100010000, ReturnMap = 100000000, Portals = Array.Empty<PortalData>() },
+            new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() },
+        });
+        var fields = new FieldRegistry(maps);
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        await client.RequestReviveAsync(reviveType: 1);
+
+        (int mapId, short hp) = await client.MapChanged.Task.WaitAsync(cts.Token);
+        Assert.Equal(100010000, mapId);      // revived where they died
+        Assert.Equal(500, hp);               // full HP
+        Assert.Equal(300, hero.Mp);          // full MP
     }
 }

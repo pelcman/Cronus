@@ -56,7 +56,13 @@
       ②マップ移動時に shop/storage/会話状態をクリア(ロック残留防止)。
       **休眠ギャップ**(未使用のため未修正・使う時に直す): SM_SAYIMAGE のcountバイト、
       SM_ASKNUMBER/QUIZ系のペイロード(現行スクリプトAPIに無い)
-- [ ] フィールド遷移 (`UserTransferFieldRequest` / `MigrateIn` / ポータル・帰還・死亡復帰)
+- [x] フィールド遷移 (`UserTransferFieldRequest` / `UserPortalScriptRequest` / 死亡復帰)
+      — 監査結果: 失敗時 `TransferFieldReqIgnored` は転送要求側では実装済みだった。
+      **修正2件**: ①ポータルスクリプト要求の失敗(未知ポータル/スクリプト無し/エンジン無効)が
+      無応答だった → 拒否パケットで排他ロックを解除 ②死亡復帰の `revive_type` を解釈
+      (>0 = その場復活、0 = 帰還マップ。HP/MP全快は一致済み)。
+      在マップテレポート(`PortalTeleportRequest`)はoracle自体が not coded — 未対応でOK。
+      MigrateIn/チャンネル移動は実機で常用済みのため対象外とした。
 - [ ] インベントリ (`InventoryOperation` の全モード / 使用・装備・移動・ドロップの応答契約、
       排他リクエストロックの解除条件を全パス列挙)
 - [ ] ショップ (`UserShopRequest` 各op / 開閉・売買・補充の応答)
