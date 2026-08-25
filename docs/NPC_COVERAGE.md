@@ -12,19 +12,15 @@ parcel = home delivery.
 ## Summary
 
 - NPCs spawning across all maps: **1447**
-- script: **202** (13%)
+- script: **211** (14%)
 - shop: **90** (6%)
 - quest-data: **499** (34%)
-- none: **656** (45%)
+- none: **647** (44%)
 
 ## Actionable queue (spawning, status=none, with a wz script hint)
 
 | NPC | 名前 | wzヒント | 代表マップ |
 |---|---|---|---|
-| 1002000 | ピル | script:rithTeleport | 104000000 港口 |
-| 1012002 | ビシャス | script:refine_henesys | 100000100 市場 |
-| 1012005 | クロイ | script:petmaster | 100000200 広場 |
-| 1012008 | カイジ | script:minigame00 | 100000203 ゲームパーク |
 | 1012113 | ウサクン | script:moonrabbit_bonus | 910010100 近道 他2 |
 | 1012114 | タイクン | script:moonrabbit_tiger | 910010000 月見草の坂 |
 | 1012115 | ヘネシス草むら | script:blackShadowHene1 | 100020000 東の草むら |
@@ -36,12 +32,9 @@ parcel = home delivery.
 | 1013200 | 赤ちゃんオオカミ | script:babyPig | 900020100 鬱蒼とした森 他1 |
 | 1013205 | フリエン | script:Afirentalk | 900030000 陣地裏手 |
 | 1013207 | クン | script:contimoveRitSDI | 200090080 용이 잠든 섬으로 他2 |
-| 1022003 | サンダー | script:refine_perion | 102000000 ぺリオン |
-| 1022004 | スミス | script:refine_perion2 | 102000000 ぺリオン |
 | 1022103 | 分数彫像 | script:s4strike_statue | 910210000 シャレニアン城門 |
 | 1022105 | ヘンケル | script:enter_warrior | 101040000 分かれ道-東 |
 | 1022107 | ペリオン警告板 | script:periPatrol | 101030000 東の峰 他4 |
-| 1032004 | ルイス | script:herb_out | 101000100 忍耐の森-1段階 他4 |
 | 1032109 | 魔法図書館隈 | script:blackShadowEli1 | 910110000 魔法図書館 |
 | 1032110 | 魔法図書館隈 | script:blackShadowEli2 | 910110000 魔法図書館 |
 | 1032111 | 小さい切り株 | script:giveSap | 101010103 渓流&lt;バンジージャンプ台&gt; |
@@ -79,7 +72,6 @@ parcel = home delivery.
 | 1072005 | 魔法使い転職教官 | script:inside_magician | 108000200 木のダンジョン1 他2 |
 | 1072006 | 弓使い転職教官 | script:inside_archer | 108000100 アリの巣1 他2 |
 | 1072007 | 盗賊転職教官 | script:inside_rogue | 108000400 盗賊の工事現場1 他2 |
-| 1091003 | セリル | script:refine_nautillus | 120000200 中央廊下 |
 | 1092016 | 輝く石 | script:nautil_stone | 120000301 動力室 |
 | 1092018 | ゴミ箱 | script:nautil_letter | 120000100 上階廊下 |
 | 1092090 | 母牛 | script:mom_cow | 912000100 ノーチラスの牛小屋  |
@@ -128,7 +120,6 @@ parcel = home delivery.
 | 2030014 | 古代氷石 | script:s4freeze_item | 921100100 氷の谷 |
 | 2032002 | アウラ | script:Zakum01 | 280010000 知られざる閉鉱 |
 | 2032003 | リラー | script:Zakum02 | 280020001 火山の息&lt;2段階&gt; |
-| 2040014 | チコ | script:minigame00 | 220000300 ルディブリアム住宅街 |
 | 2040020 | ジロクン | script:make_ludi2 | 220000303 ジロクンとペイの家 |
 | 2040021 | ペイ | script:make_ludi3 | 220000303 ジロクンとペイの家 |
 | 2040022 | ライドル | script:make_ludi4 | 220020600 オモチャ工場-機械室 |
@@ -675,7 +666,7 @@ parcel = home delivery.
 | 1001000 | シルバー | shop |  |  | 104000003 武器屋 |
 | 1001001 | ナターシャ | shop |  |  | 104000001 防具屋 |
 | 1001100 | ミナ | shop |  |  | 104000002 雑貨屋 |
-| 1002000 | ピル | none |  | script:rithTeleport | 104000000 港口 |
+| 1002000 | ピル | script |  | script:rithTeleport | 104000000 港口 |
 | 1002001 | テオ | quest-data | 27 |  | 104000000 港口 |
 | 1002002 | ペィソン | script | 2 | script:florina2 | 104000000 港口 |
 | 1002003 | モンロンジジ | script |  | script:friend00 | 104000000 港口 |
@@ -693,13 +684,13 @@ parcel = home delivery.
 | 1011100 | ルナ | shop |  |  | 100000102 雑貨屋 |
 | 1011101 | オシマ | shop |  |  | 100000100 市場 |
 | 1012000 | メイプル運輸大型タクシー | script |  | script:taxi2 | 100000000 ヘネシス |
-| 1012002 | ビシャス | none |  | script:refine_henesys | 100000100 市場 |
+| 1012002 | ビシャス | script |  | script:refine_henesys | 100000100 市場 |
 | 1012003 | 長老スタン | quest-data | 30 |  | 100000000 ヘネシス |
 | 1012004 | キュト | shop |  |  | 100000100 市場 他1 |
-| 1012005 | クロイ | none |  | script:petmaster | 100000200 広場 |
+| 1012005 | クロイ | script |  | script:petmaster | 100000200 広場 |
 | 1012006 | バルトス | quest-data | 8 | script:pet_lifeitem | 100000202 ペットの散歩路 |
 | 1012007 | プロド | quest-data | 1 | script:pet_letter | 100000202 ペットの散歩路 |
-| 1012008 | カイジ | none |  | script:minigame00 | 100000203 ゲームパーク |
+| 1012008 | カイジ | script |  | script:minigame00 | 100000203 ゲームパーク |
 | 1012009 | ゴールドマン | script |  |  | 100000200 広場 |
 | 1012100 | ヘレナ | script | 32 | script:bowman | 100000201 弓使い学院 |
 | 1012101 | マヤ | quest-data | 28 |  | 100000001 民家 |
@@ -741,8 +732,8 @@ parcel = home delivery.
 | 1022000 | コブシを開いて立て | script | 23 | script:fighter | 102000003 戦士の聖殿 |
 | 1022001 | メイプル運輸大型タクシー | script |  | script:taxi1 | 102000000 ぺリオン |
 | 1022002 | マンジ | quest-data | 29 | script:Manji | 102000000 ぺリオン |
-| 1022003 | サンダー | none |  | script:refine_perion | 102000000 ぺリオン |
-| 1022004 | スミス | none |  | script:refine_perion2 | 102000000 ぺリオン |
+| 1022003 | サンダー | script |  | script:refine_perion | 102000000 ぺリオン |
+| 1022004 | スミス | script |  | script:refine_perion2 | 102000000 ぺリオン |
 | 1022005 | 倉庫業者ゴールドマン | script |  |  | 102000000 ぺリオン |
 | 1022006 | ウィンスターン | quest-data | 28 |  | 101030401 東の岩山2 |
 | 1022007 | イヤン | quest-data | 20 |  | 102000000 ぺリオン |
@@ -761,7 +752,7 @@ parcel = home delivery.
 | 1032001 | ハインズ | script | 52 | script:magician | 101000003 魔法図書館 |
 | 1032002 | エトラン | quest-data | 3 | script:refine_ellinia | 101000000 エリニア |
 | 1032003 | シェイン | quest-data | 2 | script:herb_in | 101000000 エリニア |
-| 1032004 | ルイス | none |  | script:herb_out | 101000100 忍耐の森-1段階 他4 |
+| 1032004 | ルイス | script |  | script:herb_out | 101000100 忍耐の森-1段階 他4 |
 | 1032005 | エリニア高級タクシー | script |  | script:mTaxi | 101000000 エリニア |
 | 1032006 | 倉庫業者ゴールドマン | script |  |  | 101000000 エリニア |
 | 1032007 | ジョエル | script |  | script:sell_ticket | 101000300 エリニアステーション |
@@ -891,7 +882,7 @@ parcel = home delivery.
 | 1091000 | モガン | shop |  |  | 120000200 中央廊下 |
 | 1091001 | ロドス | shop |  |  | 120000200 中央廊下 |
 | 1091002 | ギャラリー | shop |  |  | 120000200 中央廊下 |
-| 1091003 | セリル | none |  | script:refine_nautillus | 120000200 中央廊下 |
+| 1091003 | セリル | script |  | script:refine_nautillus | 120000200 中央廊下 |
 | 1091004 | ドンツルレス | script |  |  | 120000200 中央廊下 |
 | 1092000 | タンユン | quest-data | 14 | script:nautil_cow | 120000103 食堂 |
 | 1092001 | ボニ | quest-data | 4 |  | 120000300 下階廊下 |
@@ -1120,7 +1111,7 @@ parcel = home delivery.
 | 2040011 | 作業員8 | quest-data | 4 |  | 221021100 エオス塔21階 |
 | 2040012 | 作業員9 | quest-data | 2 |  | 221020600 エオス塔7階 |
 | 2040013 | 作業員10 | quest-data | 6 |  | 221020200 エオス塔3階 |
-| 2040014 | チコ | none |  | script:minigame00 | 220000300 ルディブリアム住宅街 |
+| 2040014 | チコ | script |  | script:minigame00 | 220000300 ルディブリアム住宅街 |
 | 2040015 | 工場長カホ | quest-data | 4 |  | 220020300 オモチャ工場-メイン工程1 |
 | 2040016 | パイ | script |  | script:make_ludi1 | 220000300 ルディブリアム住宅街 |
 | 2040017 | プルレンジャーグリーン | quest-data | 6 |  | 221030400 ロスウェル草原4 |
