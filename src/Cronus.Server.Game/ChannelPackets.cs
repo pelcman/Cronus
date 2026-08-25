@@ -1601,8 +1601,7 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
-    /// <summary>Builds <c>LP_UserChat</c> (ports <c>ResCUser.UserChat</c>, JMS v186 path).</summary>
-/// <summary>
+    /// <summary>
     /// Builds <c>LP_UserSkillCancel</c> — tells onlookers a player's skill buff ended so its aura
     /// visuals stop (ports <c>ResCUserRemote.UserSkillCancel</c>: character id + skill id).
     /// </summary>
@@ -1614,7 +1613,32 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
-        public byte[] UserChat(int characterId, bool isGm, string message, bool onlyBalloon)
+    /// <summary>
+    /// Builds <c>LP_UserHit</c> — mirrors a player's incoming hit to onlookers so they see the
+    /// damage number and flinch animation (ports <c>ResCUserRemote.UserHit</c>, pre-302 layout).
+    /// A mob attack carries the attacker block; obstacle/stat hits carry none. <paramref
+    /// name="delta"/> is the number shown (usually the damage itself).
+    /// </summary>
+    public byte[] UserHit(int characterId, sbyte attackIdx, int damage, int mobTemplateId, byte left, int delta)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserHit);
+        w.WriteInt(characterId);
+        w.WriteByte((byte)attackIdx);
+        w.WriteInt(damage);
+        if (mobTemplateId != 0)
+        {
+            w.WriteInt(mobTemplateId);
+            w.WriteByte(left);
+            w.WriteByte(0);              // nReflect (reflect/power-guard block not modelled)
+            w.WriteByte(0);              // bGuard
+        }
+
+        w.WriteInt(delta);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_UserChat</c> (ports <c>ResCUser.UserChat</c>, JMS v186 path).</summary>
+    public byte[] UserChat(int characterId, bool isGm, string message, bool onlyBalloon)
     {
         PacketWriter w = NewPacket(ServerOpcode.UserChat);
         w.WriteInt(characterId);

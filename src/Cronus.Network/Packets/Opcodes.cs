@@ -118,6 +118,8 @@ public static class ServerOpcode
     public const string TransferFieldReqIgnored = "LP_TransferFieldReqIgnored";
 
     public const string UserSkillCancel = "LP_UserSkillCancel";
+
+    public const string UserHit = "LP_UserHit";
     public const string UserChat = "LP_UserChat";
     public const string UserEmotion = "LP_UserEmotion";
     public const string UserSitResult = "LP_UserSitResult";

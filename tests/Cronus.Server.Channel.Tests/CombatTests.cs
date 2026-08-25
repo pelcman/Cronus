@@ -293,6 +293,111 @@ public class CombatTests
         Assert.Equal(100, dmg);
     }
 
+    /// <summary>Reports a hit on entry and watches for another player's LP_UserHit mirror.</summary>
+    private sealed class HitReporter : PacketHandlerBase
+    {
+        private readonly int _characterId;
+        private readonly bool _reportsHit;
+        private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
+        private readonly int _opUserHit = ServerOps.Get("LP_UserHit");
+        private bool _sent;
+
+        public HitReporter(int characterId, bool reportsHit)
+        {
+            _characterId = characterId;
+            _reportsHit = reportsHit;
+        }
+
+        public TaskCompletionSource<(int Victim, sbyte AttackIdx, int Damage, int MobTemplate, int Delta)> SawHit { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask OnConnectedAsync(MapleSession session)
+        {
+            var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
+            w.WriteInt(_characterId);
+            w.WriteBytes(new byte[16]);
+            w.WriteShort(0);
+            w.WriteByte(0);
+            w.WriteLong(0);
+            await session.SendAsync(w.ToArray());
+        }
+
+        public override async ValueTask OnPacketAsync(MapleSession session, int opcode, PacketReader p)
+        {
+            if (opcode == _opSetField && _reportsHit && !_sent)
+            {
+                _sent = true;
+
+                // JMS v186 CP_UserHit, mob-physical form (-1): the mob attacker block trails.
+                var w = new PacketWriter(ClientOps.Get(ClientOpcode.UserHit), session.Config.PacketHeaderSize, session.Config.CodePage);
+                w.WriteInt(0);              // time
+                w.WriteByte(unchecked((byte)(-1))); // nAttackIdx = mob physical
+                w.WriteByte(0);             // nMagicElemAttr
+                w.WriteInt(37);             // nDamage
+                w.WriteInt(100100);         // mob template id
+                w.WriteInt(1);              // mob object id
+                w.WriteByte(0);             // nLeft
+                w.WriteByte(0);             // nReflect
+                w.WriteByte(0);             // unk
+                await session.SendAsync(w.ToArray());
+            }
+            else if (opcode == _opUserHit)
+            {
+                int victim = p.ReadInt();
+                sbyte idx = (sbyte)p.ReadByte();
+                int damage = p.ReadInt();
+                int template = 0;
+                template = p.ReadInt();
+                p.ReadByte();               // left
+                p.ReadByte();               // reflect
+                p.ReadByte();               // guard
+                int delta = p.ReadInt();
+                SawHit.TrySetResult((victim, idx, damage, template, delta));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UserHit_MirrorsToOtherPlayers()
+    {
+        // The oracle broadcasts LP_UserHit on every reported hit so onlookers see the damage
+        // number and flinch (OnUserHit's unconditional broadcastMessage).
+        var repo = new InMemoryCharacterRepository();
+        Character victim = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Victim", MapId = 100000000, Hp = 500, MaxHp = 500 });
+        Character bystander = repo.Create(new Character { AccountId = 2, WorldId = 0, Name = "Bystand", MapId = 100000000 });
+
+        var map = new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() };
+        var fields = new FieldRegistry(new InMemoryMapProvider(new[] { map }));
+
+        using var cts = new CancellationTokenSource(Timeout);
+
+        var onlooker = new HitReporter(bystander.Id, reportsHit: false);
+        var onlookerHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var b2s = new Pipe();
+        var s2b = new Pipe();
+        await using var oServer = new MapleSession(b2s.Reader, s2b.Writer, ServerConfig.Jms186, SessionRole.Server, onlookerHandler);
+        await using var oClient = new MapleSession(s2b.Reader, b2s.Writer, ServerConfig.Jms186, SessionRole.Client, onlooker);
+        _ = oServer.RunAsync(cts.Token);
+        _ = oClient.RunAsync(cts.Token);
+
+        var reporter = new HitReporter(victim.Id, reportsHit: true);
+        var reporterHandler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields);
+        var a2s = new Pipe();
+        var s2a = new Pipe();
+        await using var rServer = new MapleSession(a2s.Reader, s2a.Writer, ServerConfig.Jms186, SessionRole.Server, reporterHandler);
+        await using var rClient = new MapleSession(s2a.Reader, a2s.Writer, ServerConfig.Jms186, SessionRole.Client, reporter);
+        _ = rServer.RunAsync(cts.Token);
+        _ = rClient.RunAsync(cts.Token);
+
+        (int who, sbyte idx, int dmg, int template, int delta) = await onlooker.SawHit.Task.WaitAsync(cts.Token);
+        Assert.Equal(victim.Id, who);
+        Assert.Equal(-1, idx);           // mob physical
+        Assert.Equal(37, dmg);
+        Assert.Equal(100100, template);  // the attacker block rode along
+        Assert.Equal(37, delta);
+        Assert.Equal(500 - 37, victim.Hp);
+    }
+
     private sealed class EffectWatcher : PacketHandlerBase
     {
         private readonly int _characterId;

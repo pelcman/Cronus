@@ -506,17 +506,64 @@ public sealed partial class ChannelHandler
             return;
         }
 
-        // JMS v186 CP_UserHit prefix: [time:4][nAttackIdx:1][nMagicElemAttr:1][nDamage:4] ...
-        packet.ReadInt();   // time
-        packet.ReadByte();  // nAttackIdx
-        packet.ReadByte();  // nMagicElemAttr
-        int damage = DamageValidator.ClampLine(packet.ReadInt()); // bound the client-reported hit
-        if (damage <= 0)
+        // JMS v186 CP_UserHit: [time:4][nAttackIdx:1][nMagicElemAttr:1][nDamage:4], then a body
+        // by attack index (ports OnUserHit; the v186 index table is Mob_Magic=0, Mob_Physical=-1,
+        // Obstacle=-2, Stat=-3, Counter=-1000).
+        packet.ReadInt();                          // time
+        sbyte attackIdx = (sbyte)packet.ReadByte();
+        packet.ReadByte();                         // nMagicElemAttr
+        int rawDamage = packet.ReadInt();
+
+        int mobTemplateId = 0;
+        byte left = 0;
+        switch (attackIdx)
         {
-            return; // a miss / no damage
+            case -2 or -3:                         // obstacle / stat damage — no attacker block
+                if (packet.Remaining >= 2)
+                {
+                    packet.ReadShort();            // dwObstacleData
+                }
+
+                break;
+
+            case 0 or -1:                          // mob magic / physical attack
+                if (packet.Remaining >= 11)
+                {
+                    mobTemplateId = packet.ReadInt();
+                    packet.ReadInt();              // mob object id
+                    left = packet.ReadByte();
+                    packet.ReadByte();             // nReflect (power guard not modelled)
+                    packet.ReadByte();             // unk
+                }
+
+                break;
+
+            default:
+                return;                            // -1000 counter / not-coded forms
         }
 
+        if (rawDamage < 0)
+        {
+            return; // the fake-skill (-1) form needs a fake-skill registry we don't keep
+        }
+
+        int damage = DamageValidator.ClampLine(rawDamage);
         Character c = _player.Character;
+
+        // Everyone else sees the hit — the damage number (or MISS at 0) and the flinch (ports
+        // the unconditional broadcastMessage in every OnUserHit branch).
+        if (_field is not null)
+        {
+            await _field.BroadcastAsync(
+                _packets.UserHit(c.Id, attackIdx, damage, mobTemplateId, left, delta: damage),
+                exceptCharacterId: c.Id).ConfigureAwait(false);
+        }
+
+        if (damage <= 0)
+        {
+            return; // a miss — mirrored above, nothing to apply
+        }
+
         _player.LastActiveTick = Environment.TickCount64; // taking a hit counts as activity
         c.Hp = (short)Math.Max(0, c.Hp - damage);          // 0 HP = dead (client shows the tombstone)
 
