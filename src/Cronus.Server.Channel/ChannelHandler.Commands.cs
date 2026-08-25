@@ -678,8 +678,11 @@ public sealed partial class ChannelHandler
 
     private async ValueTask HandleSelectNpcAsync(MapleSession session, PacketReader packet)
     {
-        // One conversation at a time; ignore a new NPC while a script is still running.
-        if (_player is null || _conversation is { IsEnded: false })
+        // One conversation at a time; ignore a new NPC while a script is still running — and
+        // while a shop or the storage window is open (the oracle holds its conversation lock
+        // for those too: OnUserSelectNpc bails when getConversation() != 0, which sendShop and
+        // trunk set. A dialog opening over a live shop window desyncs the client's UI state).
+        if (_player is null || _conversation is { IsEnded: false } || _openShop is not null || _openStorage is not null)
         {
             return;
         }
@@ -1298,6 +1301,14 @@ public sealed partial class ChannelHandler
     {
         FieldPlayer player = _player!;
         Field oldField = _field!;
+
+        // A map change tears down any open window client-side; drop the matching server state so
+        // stale shop/storage/dialog locks can't wedge NPC clicks on the new map (the oracle
+        // clears its conversation flag the same way).
+        _openShop = null;
+        _openStorage = null;
+        _conversation?.End();
+        _conversation = null;
 
         // Summons don't cross maps (a documented simplification — the reference re-spawns them).
         foreach (FieldSummon summon in oldField.RemoveSummonsOf(player.Character.Id))
