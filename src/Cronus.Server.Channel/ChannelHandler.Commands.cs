@@ -1075,6 +1075,7 @@ public sealed partial class ChannelHandler
         warp: (map, portal) => MovePlayerToMapAsync(session, map, portal),
         openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
         openStorage: () => OpenStorageAsync(session),
+        openParcel: () => session.SendAsync(_packets.ParcelOpen(fromNpc: true)),
         gainItem: (itemId, quantity) => ScriptGainItemAsync(session, itemId, quantity),
         itemCount: itemId => CountInventoryItem(_player!.Character, itemId),
         effectOf: EffectResolverFor(_player!.Character),

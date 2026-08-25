@@ -1637,6 +1637,29 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>
+    /// Builds <c>LP_Parcel</c> OPEN (0x0A) — the home-delivery window from NPC ドイ (ports
+    /// <c>ResCParcelDlg.Open</c>: opener flag 0 = an NPC conversation, 1 = the express notice).
+    /// </summary>
+    public byte[] ParcelOpen(bool fromNpc)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Parcel);
+        w.WriteByte(0x0A);
+        w.WriteByte(fromNpc ? (byte)0 : (byte)1);
+        w.WriteByte(0);
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds an <c>LP_Parcel</c> single-byte result (ports <c>ResCParcelDlg</c>'s
+    /// action table: 0x13 = 発送しました, 0x0C = メル不足, 0x0D = 間違った要請, 0x14 = 原因不明…).</summary>
+    public byte[] ParcelResult(byte action)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Parcel);
+        w.WriteByte(action);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_UserChat</c> (ports <c>ResCUser.UserChat</c>, JMS v186 path).</summary>
     public byte[] UserChat(int characterId, bool isGm, string message, bool onlyBalloon)
     {

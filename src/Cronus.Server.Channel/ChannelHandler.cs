@@ -132,6 +132,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     private readonly int _opTransferField;
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
+    private readonly int _opParcel;
     private readonly int _opPortalScript;
     private readonly int _opWhisper;
     private readonly int _opMessenger;
@@ -286,6 +287,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _opTransferField = clientOpcodes.Get(ClientOpcode.UserTransferFieldRequest);
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
+        _opParcel = clientOpcodes.Get(ClientOpcode.UserParcelRequest);
         _opPortalScript = clientOpcodes.Get(ClientOpcode.UserPortalScriptRequest);
         _opWhisper = clientOpcodes.Get(ClientOpcode.Whisper);
         _opMessenger = clientOpcodes.Get(ClientOpcode.Messenger);
@@ -559,6 +561,10 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         else if (opcode == _opPortalScript)
         {
             await HandlePortalScriptAsync(session, packet).ConfigureAwait(false);
+        }
+        else if (opcode == _opParcel)
+        {
+            await HandleParcelRequestAsync(session, packet).ConfigureAwait(false);
         }
         else if (opcode == _opScriptAnswer)
         {

@@ -12,10 +12,10 @@ parcel = home delivery.
 ## Summary
 
 - NPCs spawning across all maps: **1447**
-- script: **211** (14%)
+- script: **212** (14%)
 - shop: **90** (6%)
 - quest-data: **499** (34%)
-- none: **647** (44%)
+- none: **646** (44%)
 
 ## Actionable queue (spawning, status=none, with a wz script hint)
 
@@ -1507,7 +1507,7 @@ parcel = home delivery.
 | 9001107 | 案内うさぎ | none |  | script:outRabbitJump | 922231000 月うさぎの遊び場 他1 |
 | 9001108 | 案内うさぎ | none |  | script:moonFlower | 922230000 月の国 他21 |
 | 9010000 | イベントガイド | script | 305 | script:gachaponStamp | 2000000 サウスペリ 他15 |
-| 9010009 | ドイ | none |  | parcel | 100000000 ヘネシス 他15 |
+| 9010009 | ドイ | script |  | parcel | 100000000 ヘネシス 他15 |
 | 9010010 | カサンドラ | quest-data | 471 | script:kasandra_7th | 100000000 ヘネシス 他18 |
 | 9010014 | アルミ | quest-data | 2 |  | 100000200 広場 |
 | 9010017 | 開発者の人形 | none |  | script:test | 180000000 撮影現場 |

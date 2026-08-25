@@ -21,6 +21,7 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<int, int, ValueTask>? _warp;
     private readonly Func<int, ValueTask>? _openShop;
     private readonly Func<ValueTask>? _openStorage;
+    private readonly Func<ValueTask>? _openParcel;
     private readonly Func<int, int, ValueTask>? _gainItem;
     private readonly Func<int, int>? _itemCount;
     private readonly CharacterProgression.EffectResolver? _effectOf;
@@ -39,6 +40,7 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<int, int, ValueTask>? warp = null,
         Func<int, ValueTask>? openShop = null,
         Func<ValueTask>? openStorage = null,
+        Func<ValueTask>? openParcel = null,
         Func<int, int, ValueTask>? gainItem = null,
         Func<int, int>? itemCount = null,
         CharacterProgression.EffectResolver? effectOf = null,
@@ -56,6 +58,7 @@ public sealed class ChannelPlayer : INpcPlayer
         _warp = warp;
         _openShop = openShop;
         _openStorage = openStorage;
+        _openParcel = openParcel;
         _gainItem = gainItem;
         _itemCount = itemCount;
         _effectOf = effectOf;
@@ -282,6 +285,10 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void openStorage()
         => _openStorage?.Invoke().AsTask().GetAwaiter().GetResult();
+
+    /// <summary>Opens the home-delivery (宅配) window, as NPC ドイ does.</summary>
+    public void openParcel()
+        => _openParcel?.Invoke().AsTask().GetAwaiter().GetResult();
 
     public void spawnMob(int mobId, int count)
         => _spawnMob?.Invoke(mobId, count).AsTask().GetAwaiter().GetResult();

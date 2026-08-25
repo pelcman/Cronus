@@ -568,6 +568,32 @@ public sealed partial class ChannelHandler
         await _field.BroadcastAsync(_packets.DropEnterFieldItem(drop)).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Handles <c>CP_UserParcelRequest</c> (the home-delivery window ドイ opens). The dialog
+    /// shell ports <c>ReqCParcelDlg</c>: SEND = 0x03, CLOSE = 0x08. The oracle never decodes the
+    /// send payload (it blind-ACKs), so actually transferring items has no byte oracle yet —
+    /// sending is refused with 間違った要請 (0x0D) to keep the sender's items intact, and the
+    /// payload lands in the CRONUS_DEBUG wire log for the future real implementation.
+    /// </summary>
+    private async ValueTask HandleParcelRequestAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || packet.Remaining < 1)
+        {
+            return;
+        }
+
+        byte action = packet.ReadByte();
+        switch (action)
+        {
+            case 0x03: // SEND — refuse safely (see summary); the wire log captured the payload
+                await session.SendAsync(_packets.ParcelResult(0x0D)).ConfigureAwait(false);
+                break;
+
+            case 0x08: // CLOSE — nothing to tear down server-side (matches the oracle)
+                break;
+        }
+    }
+
     /// <summary>Opens an NPC shop for this session: binds it and sends <c>LP_OpenShopDlg</c>.</summary>
     private async ValueTask OpenShopAsync(MapleSession session, Shop shop)
     {
