@@ -1076,6 +1076,8 @@ public sealed partial class ChannelHandler
         openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
         openStorage: () => OpenStorageAsync(session),
         openParcel: () => session.SendAsync(_packets.ParcelOpen(fromNpc: true)),
+        parcelCount: () => _parcels?.LoadFor(_player!.Character.Id).Count ?? 0,
+        receiveParcels: async () => (await ReceiveParcelsAsync(session).ConfigureAwait(false)).Delivered,
         gainItem: (itemId, quantity) => ScriptGainItemAsync(session, itemId, quantity),
         itemCount: itemId => CountInventoryItem(_player!.Character, itemId),
         effectOf: EffectResolverFor(_player!.Character),

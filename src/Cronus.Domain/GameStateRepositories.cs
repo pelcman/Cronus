@@ -66,3 +66,72 @@ public interface IHiredMerchantRepository
 
     void Delete(int ownerId);
 }
+
+/// <summary>
+/// One undelivered home-delivery (宅配) parcel: an item instance and/or meso waiting for the
+/// recipient to collect at NPC ドイ. The full <see cref="InventoryItem"/> rides along so equip
+/// stats survive the trip.
+/// </summary>
+public sealed class ParcelData
+{
+    /// <summary>Database key (0 until first saved).</summary>
+    public int Id { get; set; }
+
+    public int ToCharacterId { get; set; }
+
+    public string FromName { get; set; } = string.Empty;
+
+    public int Meso { get; set; }
+
+    public InventoryItem? Item { get; set; }
+
+    /// <summary>FILETIME the parcel was sent.</summary>
+    public long SentAt { get; set; }
+}
+
+/// <summary>Persistence port for parcels (items in transit must survive a restart).</summary>
+public interface IParcelRepository
+{
+    IReadOnlyList<ParcelData> LoadFor(int characterId);
+
+    void Save(ParcelData parcel);
+
+    void Delete(int parcelId);
+}
+
+/// <summary>An in-memory parcel store for tests / DB-less runs.</summary>
+public sealed class InMemoryParcelRepository : IParcelRepository
+{
+    private readonly List<ParcelData> _parcels = new();
+    private int _nextId;
+
+    public IReadOnlyList<ParcelData> LoadFor(int characterId)
+    {
+        lock (_parcels)
+        {
+            return _parcels.Where(p => p.ToCharacterId == characterId).ToList();
+        }
+    }
+
+    public void Save(ParcelData parcel)
+    {
+        lock (_parcels)
+        {
+            if (parcel.Id == 0)
+            {
+                parcel.Id = ++_nextId;
+            }
+
+            _parcels.RemoveAll(p => p.Id == parcel.Id);
+            _parcels.Add(parcel);
+        }
+    }
+
+    public void Delete(int parcelId)
+    {
+        lock (_parcels)
+        {
+            _parcels.RemoveAll(p => p.Id == parcelId);
+        }
+    }
+}

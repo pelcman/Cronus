@@ -570,10 +570,11 @@ public sealed partial class ChannelHandler
 
     /// <summary>
     /// Handles <c>CP_UserParcelRequest</c> (the home-delivery window ドイ opens). The dialog
-    /// shell ports <c>ReqCParcelDlg</c>: SEND = 0x03, CLOSE = 0x08. The oracle never decodes the
-    /// send payload (it blind-ACKs), so actually transferring items has no byte oracle yet —
-    /// sending is refused with 間違った要請 (0x0D) to keep the sender's items intact, and the
-    /// payload lands in the CRONUS_DEBUG wire log for the future real implementation.
+    /// shell ports <c>ReqCParcelDlg</c> (SEND = 0x03, CLOSE = 0x08) and the result codes come
+    /// from <c>ResCParcelDlg</c>'s table. The SEND payload layout is NOT in the reference (it
+    /// blind-ACKs); this decode was recovered from live-client wire captures (2026-08-26):
+    /// <c>[tab:1][slot:2][qty:2][meso:4][recipient:str][flag:1]</c> — one attached item slot
+    /// (tab 0 = none) plus meso. Delivery is server-side: the recipient collects at ドイ.
     /// </summary>
     private async ValueTask HandleParcelRequestAsync(MapleSession session, PacketReader packet)
     {
@@ -583,15 +584,160 @@ public sealed partial class ChannelHandler
         }
 
         byte action = packet.ReadByte();
-        switch (action)
+        if (action == 0x08)
         {
-            case 0x03: // SEND — refuse safely (see summary); the wire log captured the payload
-                await session.SendAsync(_packets.ParcelResult(0x0D)).ConfigureAwait(false);
-                break;
-
-            case 0x08: // CLOSE — nothing to tear down server-side (matches the oracle)
-                break;
+            return; // CLOSE — nothing to tear down server-side (matches the oracle)
         }
+
+        if (action != 0x03)
+        {
+            return;
+        }
+
+        if (_parcels is null || packet.Remaining < 9)
+        {
+            await session.SendAsync(_packets.ParcelResult(ParcelBadRequest)).ConfigureAwait(false);
+            return;
+        }
+
+        int tab = packet.ReadByte();
+        short slot = packet.ReadShort();
+        int qty = packet.ReadShort();
+        int meso = packet.ReadInt();
+        string recipientName = packet.Remaining >= 2 ? packet.ReadString() : string.Empty;
+
+        Character c = _player.Character;
+        Character? recipient = _characters.FindByName(recipientName);
+        if (recipient is null)
+        {
+            await session.SendAsync(_packets.ParcelResult(ParcelBadRecipient)).ConfigureAwait(false);
+            return;
+        }
+
+        if (recipient.AccountId == c.AccountId)
+        {
+            await session.SendAsync(_packets.ParcelResult(ParcelSameAccount)).ConfigureAwait(false);
+            return;
+        }
+
+        InventoryItem? attached = null;
+        if (tab is >= 1 and <= 5)
+        {
+            InventoryItem? item = Inventory.ItemAt(c, tab, slot);
+            if (item is null || qty < 1 || (tab != 1 && item.Quantity < qty))
+            {
+                await session.SendAsync(_packets.ParcelResult(ParcelBadRequest)).ConfigureAwait(false);
+                return;
+            }
+
+            attached = item;
+        }
+
+        if (meso < 0 || meso > c.Meso || (attached is null && meso == 0))
+        {
+            await session.SendAsync(_packets.ParcelResult(ParcelNoMoney)).ConfigureAwait(false);
+            return;
+        }
+
+        // Take the goods from the sender: equips and whole stacks travel as the instance so
+        // stats survive; a partial bundle splits off a copy (the trunk-deposit pattern).
+        var changes = new List<InventoryChange>();
+        InventoryItem? shipped = null;
+        if (attached is not null)
+        {
+            if (tab == 1 || qty >= attached.Quantity)
+            {
+                c.EquippedItems.Remove(attached);
+                attached.Position = 0;
+                shipped = attached;
+                changes.Add(new InventoryChange(InvMode.Remove, tab, slot, null, 0));
+            }
+            else
+            {
+                attached.Quantity -= (short)qty;
+                shipped = new InventoryItem { ItemId = attached.ItemId, Quantity = (short)qty };
+                changes.Add(new InventoryChange(InvMode.Update, tab, slot, attached, attached.Quantity));
+            }
+        }
+
+        c.Meso -= meso;
+        _characters.Save(c);
+        _parcels.Save(new ParcelData
+        {
+            ToCharacterId = recipient.Id,
+            FromName = c.Name,
+            Meso = meso,
+            Item = shipped,
+            SentAt = CharacterDataEncoder.FileTimeNow(),
+        });
+
+        if (changes.Count > 0)
+        {
+            await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+        await session.SendAsync(_packets.ParcelResult(ParcelSent)).ConfigureAwait(false);
+    }
+
+    // ResCParcelDlg result codes (v186).
+    private const byte ParcelNoMoney = 0x0C;
+    private const byte ParcelBadRequest = 0x0D;
+    private const byte ParcelBadRecipient = 0x0E;
+    private const byte ParcelSameAccount = 0x0F;
+    private const byte ParcelSent = 0x13;
+
+    /// <summary>
+    /// Hands every parcel waiting for this character over the counter (the ドイ script's
+    /// receive flow): items keep their instances, meso rides along, and delivery stops at the
+    /// first parcel that doesn't fit the inventory. Returns (delivered, remaining).
+    /// </summary>
+    private async ValueTask<(int Delivered, int Remaining)> ReceiveParcelsAsync(MapleSession session)
+    {
+        if (_parcels is null || _player is null)
+        {
+            return (0, 0);
+        }
+
+        Character c = _player.Character;
+        IReadOnlyList<ParcelData> pending = _parcels.LoadFor(c.Id);
+        int delivered = 0;
+        foreach (ParcelData parcel in pending)
+        {
+            if (parcel.Item is { } item
+                && !Inventory.CanAdd(c, item.ItemId, item.Quantity,
+                        _items.GetConsume(item.ItemId)?.SlotMax ?? Inventory.DefaultSlotMax))
+            {
+                break; // no room — this parcel (and the rest) wait for another visit
+            }
+
+            var changes = new List<InventoryChange>();
+            if (parcel.Item is { } deliver)
+            {
+                changes.Add(Inventory.Place(c, deliver)); // preserves equip stats
+            }
+
+            if (parcel.Meso > 0)
+            {
+                c.Meso = (int)Math.Clamp((long)c.Meso + parcel.Meso, 0, int.MaxValue);
+            }
+
+            _characters.Save(c);
+            _parcels.Delete(parcel.Id);
+            delivered++;
+
+            if (changes.Count > 0)
+            {
+                await session.SendAsync(_packets.InventoryOperation(changes)).ConfigureAwait(false);
+            }
+
+            if (parcel.Meso > 0)
+            {
+                await session.SendAsync(_packets.StatChanged(c, StatFlag.Meso)).ConfigureAwait(false);
+            }
+        }
+
+        return (delivered, pending.Count - delivered);
     }
 
     /// <summary>Opens an NPC shop for this session: binds it and sends <c>LP_OpenShopDlg</c>.</summary>

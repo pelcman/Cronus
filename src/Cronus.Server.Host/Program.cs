@@ -43,7 +43,7 @@ WarnUnresolved("server", serverOps);
 
 // Use MySQL when a connection string is configured (CRONUS_DB env var), else fall back to the
 // in-memory stores so the server runs with zero external dependencies for local testing.
-(IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo, IGuildRepository? guildRepo, IHiredMerchantRepository? merchantRepo) = CreateRepositories();
+(IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo, IGuildRepository? guildRepo, IHiredMerchantRepository? merchantRepo, IParcelRepository parcelRepo) = CreateRepositories();
 // Accounts auto-register on first login unless CRONUS_AUTO_REGISTER disables it (0/false/off).
 bool autoRegister = Environment.GetEnvironmentVariable("CRONUS_AUTO_REGISTER")?.Trim().ToLowerInvariant()
     is not ("0" or "false" or "off" or "no");
@@ -181,7 +181,7 @@ for (int i = 0; i < channelCount; i++)
         new IPEndPoint(IPAddress.Any, channelPort + i),
         config,
         () => new LoggingHandler(
-            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, accounts: accounts, itemCatalog: itemCatalog, mapCatalog: mapCatalog, questNpcs: questNpcs, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
+            new ChannelHandler(clientOps, serverOps, characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, accounts: accounts, itemCatalog: itemCatalog, mapCatalog: mapCatalog, questNpcs: questNpcs, parcels: parcelRepo, npcNames: npcNames, styles: styles, channelEndpoints: channelEndpoints, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null),
             $"channel{channelId}", verbose: wireDebug),
         keepAlive));
 }
@@ -462,7 +462,7 @@ static void WarnUnresolved(string which, OpcodeTable table)
     }
 }
 
-static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?, IHiredMerchantRepository?) CreateRepositories()
+static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?, IHiredMerchantRepository?, IParcelRepository) CreateRepositories()
 {
     string? connectionString = Environment.GetEnvironmentVariable("CRONUS_DB");
 
@@ -470,7 +470,7 @@ static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRe
     if (string.Equals(connectionString, "memory", StringComparison.OrdinalIgnoreCase))
     {
         Console.WriteLine("[db] CRONUS_DB=memory — using in-memory stores (not persistent).");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null);
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null, new InMemoryParcelRepository());
     }
 
     // A connection string selects MySQL (multi-process / production deployments).
@@ -486,7 +486,7 @@ static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRe
         catch (Exception ex)
         {
             Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory stores.");
-            return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null);
+            return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null, new InMemoryParcelRepository());
         }
     }
 
@@ -504,15 +504,16 @@ static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRe
     catch (Exception ex)
     {
         Console.WriteLine($"[db] SQLite unavailable ({ex.Message}); falling back to in-memory stores.");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null);
+        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null, new InMemoryParcelRepository());
     }
 }
 
-static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?, IHiredMerchantRepository?) DbRepositories(Func<CronusDbContext> factory)
+static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?, IHiredMerchantRepository?, IParcelRepository) DbRepositories(Func<CronusDbContext> factory)
     => (
         new DbAccountRepository(factory),
         new DbCharacterRepository(factory),
         new DbStorageRepository(factory),
         new DbKeymapRepository(factory),
         new DbGuildRepository(factory),
-        new DbHiredMerchantRepository(factory));
+        new DbHiredMerchantRepository(factory),
+        new DbParcelRepository(factory));

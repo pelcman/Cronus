@@ -33,6 +33,8 @@ public sealed class CronusDbContext : DbContext
 
     public DbSet<HiredMerchantEntity> HiredMerchants => Set<HiredMerchantEntity>();
 
+    public DbSet<ParcelEntity> Parcels => Set<ParcelEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
@@ -96,6 +98,11 @@ public sealed class CronusDbContext : DbContext
 
         var merchant = modelBuilder.Entity<HiredMerchantEntity>();
         merchant.ToTable("hiredmerch");
+
+        var parcel = modelBuilder.Entity<ParcelEntity>();
+        parcel.ToTable("parcels");
+        parcel.HasKey(x => x.Id);
+        parcel.HasIndex(x => x.ToCharacterId);
         merchant.HasKey(m => m.OwnerId);
         merchant.Property(m => m.OwnerId).ValueGeneratedNever();
         merchant.Property(m => m.OwnerName).HasMaxLength(13);

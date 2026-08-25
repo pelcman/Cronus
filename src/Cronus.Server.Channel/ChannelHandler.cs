@@ -62,6 +62,9 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     /// <summary>Which NPCs have quests (their clicks stay silent for the client's quest UI).</summary>
     private readonly IQuestNpcIndex? _questNpcs;
 
+    /// <summary>Undelivered home-delivery parcels; null = the 宅配 send/receive is disabled.</summary>
+    private readonly IParcelRepository? _parcels;
+
     /// <summary>Every channel's advertised endpoint (index = channel id); null = single channel.</summary>
     private readonly IReadOnlyList<System.Net.IPEndPoint>? _channelEndpoints;
 
@@ -190,6 +193,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         IItemCatalog? itemCatalog = null,
         IMapCatalog? mapCatalog = null,
         IQuestNpcIndex? questNpcs = null,
+        IParcelRepository? parcels = null,
         IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
         IReadOnlyList<FieldRegistry>? worldFields = null,
         System.Net.IPEndPoint? cashShopEndpoint = null,
@@ -222,6 +226,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _itemCatalog = itemCatalog;
         _mapCatalog = mapCatalog;
         _questNpcs = questNpcs;
+        _parcels = parcels;
         _channelEndpoints = channelEndpoints;
         _worldFields = worldFields;
         _cashShopEndpoint = cashShopEndpoint;

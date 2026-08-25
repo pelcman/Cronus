@@ -247,3 +247,73 @@ public sealed class DbGuildRepository : IGuildRepository
         return true;
     }
 }
+
+/// <summary>One row of the <c>parcels</c> table: an undelivered 宅配 (item as JSON).</summary>
+public sealed class ParcelEntity
+{
+    public int Id { get; set; }
+
+    public int ToCharacterId { get; set; }
+
+    public string FromName { get; set; } = string.Empty;
+
+    public int Meso { get; set; }
+
+    public string ItemJson { get; set; } = "null";
+
+    public long SentAt { get; set; }
+}
+
+/// <summary>EF Core-backed <see cref="IParcelRepository"/>.</summary>
+public sealed class DbParcelRepository : IParcelRepository
+{
+    private static readonly JsonSerializerOptions JsonOptions = new();
+
+    private readonly Func<CronusDbContext> _contextFactory;
+
+    public DbParcelRepository(Func<CronusDbContext> contextFactory) => _contextFactory = contextFactory;
+
+    public IReadOnlyList<ParcelData> LoadFor(int characterId)
+    {
+        using CronusDbContext db = _contextFactory();
+        return db.Parcels.Where(e => e.ToCharacterId == characterId).ToList().Select(e => new ParcelData
+        {
+            Id = e.Id,
+            ToCharacterId = e.ToCharacterId,
+            FromName = e.FromName,
+            Meso = e.Meso,
+            Item = JsonSerializer.Deserialize<InventoryItem>(e.ItemJson, JsonOptions),
+            SentAt = e.SentAt,
+        }).ToList();
+    }
+
+    public void Save(ParcelData parcel)
+    {
+        using CronusDbContext db = _contextFactory();
+        ParcelEntity? entity = parcel.Id != 0 ? db.Parcels.Find(parcel.Id) : null;
+        if (entity is null)
+        {
+            entity = new ParcelEntity();
+            db.Parcels.Add(entity);
+        }
+
+        entity.ToCharacterId = parcel.ToCharacterId;
+        entity.FromName = parcel.FromName;
+        entity.Meso = parcel.Meso;
+        entity.ItemJson = JsonSerializer.Serialize(parcel.Item, JsonOptions);
+        entity.SentAt = parcel.SentAt;
+        db.SaveChanges();
+        parcel.Id = entity.Id;
+    }
+
+    public void Delete(int parcelId)
+    {
+        using CronusDbContext db = _contextFactory();
+        ParcelEntity? entity = db.Parcels.Find(parcelId);
+        if (entity is not null)
+        {
+            db.Parcels.Remove(entity);
+            db.SaveChanges();
+        }
+    }
+}
