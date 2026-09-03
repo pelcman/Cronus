@@ -36,7 +36,7 @@ public static class CharacterProgression
         while (needed > 0 && exp >= needed && c.Level < ExpTable.MaxLevel)
         {
             exp -= needed;
-            LevelUp(c, effectOf);
+            changed |= LevelUp(c, effectOf);
             changed |= StatFlag.Level | StatFlag.MaxHp | StatFlag.Hp
                      | StatFlag.MaxMp | StatFlag.Mp | StatFlag.Ap | StatFlag.Sp;
             needed = ExpTable.ExpForLevel(c.Level);
@@ -56,7 +56,7 @@ public static class CharacterProgression
         StatFlag changed = 0;
         for (int i = 0; i < levels && c.Level < ExpTable.MaxLevel; i++)
         {
-            LevelUp(c, effectOf);
+            changed |= LevelUp(c, effectOf);
             changed |= StatFlag.Level | StatFlag.MaxHp | StatFlag.Hp
                      | StatFlag.MaxMp | StatFlag.Mp | StatFlag.Ap | StatFlag.Sp;
         }
@@ -225,7 +225,9 @@ public static class CharacterProgression
         return changed;
     }
 
-    private static void LevelUp(Character c, EffectResolver? effectOf)
+    /// <summary>One level-up with its growth. Returns any EXTRA stat the level touched beyond
+    /// the usual level/HP/MP/AP/SP set (STR, when the beginner auto-assign fires).</summary>
+    private static StatFlag LevelUp(Character c, EffectResolver? effectOf)
     {
         c.Level++;
 
@@ -264,8 +266,24 @@ public static class CharacterProgression
         if (!IsBeginnerJob(c.Job))
         {
             c.Sp = (short)Math.Min(short.MaxValue, c.Sp + SpPerLevel);
+            return 0;
         }
+
+        // Beginners through level 10 get every unspent AP poured into STR automatically
+        // (ports MapleCharacter.levelUp: `if (level <= 10) { str += remainingAp; remainingAp = 0; }`
+        // — evaluated on the NEW level, and beginners earn no SP).
+        if (c.Level <= BeginnerAutoAssignMaxLevel)
+        {
+            c.Str = (short)Math.Min(short.MaxValue, c.Str + c.Ap);
+            c.Ap = 0;
+            return StatFlag.Str;
+        }
+
+        return 0;
     }
+
+    /// <summary>The last level at which a beginner's AP is auto-assigned to STR.</summary>
+    private const int BeginnerAutoAssignMaxLevel = 10;
 
     /// <summary>
     /// The exp lost on death (ports <c>MapleCharacter.playerDead</c>): a share of the level's

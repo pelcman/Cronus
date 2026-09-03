@@ -54,11 +54,13 @@ public class ProgressionTests
     public void GainExp_Beginner_GetsNoSp()
     {
         var c = new Character { Name = "N", Level = 1, Exp = 0, Job = 0 };
+        short strBefore = c.Str;
         CharacterProgression.GainExp(c, 15); // exactly one level
 
         Assert.Equal(2, c.Level);
-        Assert.Equal(0, c.Sp); // beginners get no SP
-        Assert.Equal(5, c.Ap);
+        Assert.Equal(0, c.Sp);                 // beginners get no SP
+        Assert.Equal(0, c.Ap);                 // ...and through level 10 their AP auto-assigns
+        Assert.Equal(strBefore + 5, c.Str);    // into STR (MapleCharacter.levelUp)
     }
 
     [Fact]
@@ -277,5 +279,46 @@ public class ProgressionTests
         Assert.Equal((StatFlag)0, CharacterProgression.SpendAllAbilityPoints(c, new[] { (StatFlag.MaxHp, 5) }));
         Assert.Equal((StatFlag)0, CharacterProgression.SpendAllAbilityPoints(c, new[] { (StatFlag.Str, -1), (StatFlag.Dex, 6) }));
         Assert.Equal(5, c.Ap); // nothing spent
+    }
+
+    [Fact]
+    public void LevelUp_Beginner_AutoAssignsApToStr_ThroughLevel10()
+    {
+        // Ports MapleCharacter.levelUp: a beginner's unspent AP goes to STR while the NEW level
+        // is <= 10, and beginners earn no SP.
+        var c = new Character { Name = "Lv", Job = 0, Level = 1, Str = 4, Ap = 0, Sp = 0, MaxHp = 50, MaxMp = 5 };
+
+        StatFlag changed = CharacterProgression.ForceLevelUps(c, 9); // 1 -> 10
+
+        Assert.Equal(10, c.Level);
+        Assert.Equal(0, c.Ap);                 // everything auto-spent
+        Assert.Equal(4 + 9 * 5, c.Str);        // 5 AP per level, all into STR
+        Assert.Equal(0, c.Sp);                 // beginners get no SP
+        Assert.True(changed.HasFlag(StatFlag.Str));
+    }
+
+    [Fact]
+    public void LevelUp_Beginner_KeepsApFromLevel11()
+    {
+        var c = new Character { Name = "Lv", Job = 0, Level = 10, Str = 49, Ap = 0, MaxHp = 50, MaxMp = 5 };
+
+        StatFlag changed = CharacterProgression.ForceLevelUps(c, 1); // 10 -> 11
+
+        Assert.Equal(11, c.Level);
+        Assert.Equal(5, c.Ap);                 // past 10 the AP is the player's to spend
+        Assert.Equal(49, c.Str);
+        Assert.False(changed.HasFlag(StatFlag.Str));
+    }
+
+    [Fact]
+    public void LevelUp_NonBeginner_KeepsAp_AndGainsSp()
+    {
+        var c = new Character { Name = "Lv", Job = 100, Level = 5, Str = 35, Ap = 0, Sp = 0, MaxHp = 200, MaxMp = 50 };
+
+        CharacterProgression.ForceLevelUps(c, 1); // 5 -> 6, still <= 10 but not a beginner
+
+        Assert.Equal(5, c.Ap);
+        Assert.Equal(35, c.Str);
+        Assert.Equal(3, c.Sp);
     }
 }
