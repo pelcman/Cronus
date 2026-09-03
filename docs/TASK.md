@@ -172,7 +172,8 @@ AGENTS.md の「Deferred」を再評価して潰す:
       oracleが総INT(装備込み)、うちは基礎INT。
 - [ ] **ダメージ計算の設計メモ**: 与ダメ・被ダメとも**クライアントが計算**し、サーバーは
       適用のみ(oracle `OnUserHit`/攻撃処理とも同じ。oracleは上限検証すらしない)。
-      うちは独自に99,999/行の上限のみ。装備・ステ・バフの反映はサーバーが送る
+      うちは任意の行上限のみ(2026-08-26: デフォルト無効、有効時50,000,000 — `GameConstants`
+      / `CRONUS_DAMAGE_CAP_ENABLED` / `CRONUS_DAMAGE_CAP`)。装備・ステ・バフの反映はサーバーが送る
       CharacterData(golden vector検証済)/装備ステ(wz由来)/TemporaryStatSet(スキルX値)の
       正しさに依存。将来の締め付け候補: ステ由来の最大ダメ検証(oracle無し=創作になる)。
 

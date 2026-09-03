@@ -1,22 +1,22 @@
+using Cronus.Common;
+
 namespace Cronus.Server.Game;
 
 /// <summary>
-/// Server-authoritative sanity checks on client-reported attack damage. MapleStory sends damage
-/// from the client (the norm for the era), so the server can't recompute it without full skill /
-/// weapon / stat formulas — but it can reject values that no legitimate pre-Big-Bang client could
-/// produce. The concrete invariant used here is the hard per-line damage cap: pre-Big-Bang JMS
-/// (v186, before the Big Bang raised it) clamps every damage line to 99,999 client-side, so any
-/// line above that is impossible from a real client and is clamped down. This turns
-/// <c>ApplyAttackDamageAsync</c> from "trust the client" into "trust but bound" — the server
-/// authority the networking design calls for (see CLAUDE.md §2), without needing the full formula.
+/// Server-side handling of client-reported attack damage. MapleStory computes damage on the
+/// client (the era's design; the reference server applies it unvalidated), so the server can't
+/// recompute it without the full skill / weapon / stat formulas. What it CAN do is bound each
+/// line — an optional switch (<see cref="GameConstants.DamageCapEnabled"/>, default off) that
+/// clamps every line to <see cref="GameConstants.DamageCap"/> (default 50,000,000). Off, damage
+/// passes through exactly as reported (critical bit stripped, negatives floored); on, it becomes
+/// "trust but bound" — the server authority the networking design calls for (CLAUDE.md §2).
 /// </summary>
 public static class DamageValidator
 {
-    /// <summary>
-    /// Pre-Big-Bang JMS damage cap per hit line. A real v186 client cannot render or send a line
-    /// above this, so anything larger is a corrupted or forged value.
-    /// </summary>
-    public const int MaxDamagePerLine = 99_999;
+    /// <summary>The per-line ceiling in force: the configured cap, or "no limit" when the switch
+    /// is off. (Authentic v186 clients render at most 99,999 per line.)</summary>
+    public static int MaxDamagePerLine
+        => GameConstants.DamageCapEnabled ? GameConstants.DamageCap : int.MaxValue;
 
     /// <summary>High bit of a damage int is the "critical" flag, not part of the magnitude.</summary>
     private const int CriticalBit = unchecked((int)0x80000000);
@@ -28,22 +28,25 @@ public static class DamageValidator
         return dmg < 0 ? 0 : dmg;
     }
 
-    /// <summary>Clamps one damage line to the legal range [0, <see cref="MaxDamagePerLine"/>].</summary>
+    /// <summary>Clamps one damage line to [0, <see cref="MaxDamagePerLine"/>] — a no-op beyond
+    /// the critical-bit strip while the cap switch is off.</summary>
     public static int ClampLine(int rawDamage)
     {
         int dmg = Magnitude(rawDamage);
-        return dmg > MaxDamagePerLine ? MaxDamagePerLine : dmg;
+        int cap = MaxDamagePerLine;
+        return dmg > cap ? cap : dmg;
     }
 
     /// <summary>
-    /// True if any line in <paramref name="target"/> exceeds the cap — i.e. this attack carries a
-    /// value a legitimate client could not have produced (a cheat/corruption signal).
+    /// True if any line in <paramref name="target"/> exceeds the cap (a cheat/corruption signal).
+    /// Always false while the cap switch is off.
     /// </summary>
     public static bool IsSuspicious(AttackTarget target)
     {
+        int cap = MaxDamagePerLine;
         foreach (int line in target.Damages)
         {
-            if (Magnitude(line) > MaxDamagePerLine)
+            if (Magnitude(line) > cap)
             {
                 return true;
             }

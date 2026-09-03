@@ -44,6 +44,22 @@ WarnUnresolved("server", serverOps);
 // Use MySQL when a connection string is configured (CRONUS_DB env var), else fall back to the
 // in-memory stores so the server runs with zero external dependencies for local testing.
 (IAccountRepository accounts, ICharacterRepository characters, IStorageRepository? storageRepo, IKeymapRepository? keymapRepo, IGuildRepository? guildRepo, IHiredMerchantRepository? merchantRepo, IParcelRepository parcelRepo) = CreateRepositories();
+// Damage cap (GameConstants defaults: OFF, 50,000,000). CRONUS_DAMAGE_CAP_ENABLED=1/true/on
+// turns the per-line clamp on; CRONUS_DAMAGE_CAP sets the ceiling.
+if (Environment.GetEnvironmentVariable("CRONUS_DAMAGE_CAP_ENABLED")?.Trim().ToLowerInvariant() is { } capSwitch)
+{
+    GameConstants.DamageCapEnabled = capSwitch is "1" or "true" or "on" or "yes";
+}
+
+if (int.TryParse(Environment.GetEnvironmentVariable("CRONUS_DAMAGE_CAP"), out int capValue) && capValue > 0)
+{
+    GameConstants.DamageCap = capValue;
+}
+
+Console.WriteLine(GameConstants.DamageCapEnabled
+    ? $"[combat] damage cap ON — {GameConstants.DamageCap:N0} per line"
+    : "[combat] damage cap OFF — client-reported damage applied as-is");
+
 // Accounts auto-register on first login unless CRONUS_AUTO_REGISTER disables it (0/false/off).
 bool autoRegister = Environment.GetEnvironmentVariable("CRONUS_AUTO_REGISTER")?.Trim().ToLowerInvariant()
     is not ("0" or "false" or "off" or "no");

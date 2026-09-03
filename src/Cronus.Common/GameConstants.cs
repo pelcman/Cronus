@@ -55,6 +55,24 @@ public static class GameConstants
     /// <summary>Largest meso amount a player may throw on the ground (reference: 50000).</summary>
     public const int MesoDropMax = 50_000;
 
+    // ---- Combat -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Whether the server clamps client-reported damage lines at all. Default OFF: damage is
+    /// computed client-side (the era's design; the reference validates nothing) and passes
+    /// through as reported. Turn on to bound forged/corrupted values at <see cref="DamageCap"/>.
+    /// Overridable from .env: CRONUS_DAMAGE_CAP_ENABLED.
+    /// </summary>
+    public static bool DamageCapEnabled { get; set; } = false;
+
+    /// <summary>
+    /// The per-line damage ceiling applied when <see cref="DamageCapEnabled"/> is on.
+    /// Default 50,000,000. (Authentic pre-Big-Bang v186 clients render at most 99,999 per line;
+    /// the higher default leaves room for modified clients / custom balance.) Overridable from
+    /// .env: CRONUS_DAMAGE_CAP.
+    /// </summary>
+    public static int DamageCap { get; set; } = 50_000_000;
+
     // ---- Restrictions -------------------------------------------------------------------
 
     /// <summary>

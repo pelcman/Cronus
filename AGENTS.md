@@ -535,7 +535,8 @@ Each milestone means adding one "working vertical slice".
       portable (cash) chair items aren't validated against inventory yet — any seat id is accepted.
 - [x] **M18: Damage validation (server authority)** — `DamageValidator` bounds client-reported
       attack damage to what a legitimate pre-Big-Bang v186 client can produce: the hard per-line
-      cap of 99,999 (`MaxDamagePerLine`), critical bit stripped, negatives floored.
+      cap (`MaxDamagePerLine` — OFF by default since 2026-08-26, 50,000,000 when enabled via
+      `GameConstants.DamageCapEnabled` / `CRONUS_DAMAGE_CAP*`), critical bit stripped, negatives floored.
       `ApplyAttackDamageAsync` now applies `ValidatedDamage(target)` (clamped-line sum) not trusting
       `target.TotalDamage`, and `CP_UserHit` clamps the reported hit too. Closes the "trusts
       client-reported damage" soft spot flagged in CLAUDE.md §2. Follow-ups: per-skill/weapon damage
