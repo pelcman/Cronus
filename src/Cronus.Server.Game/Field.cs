@@ -400,6 +400,7 @@ public sealed class Field
                 Foothold = foothold,
                 MaxHp = maxHp,
                 Hp = maxHp,
+                Mp = (short)Math.Clamp(stats?.MaxMp ?? 0, 0, short.MaxValue), // mob skills / conMP draw on this
                 Exp = stats?.Exp ?? 0,
                 MobTime = -1,
                 TagColor = stats?.TagColor ?? 0,
@@ -486,6 +487,7 @@ public sealed class Field
                 Foothold = spawn.Foothold,
                 MaxHp = maxHp,
                 Hp = maxHp,
+                Mp = (short)Math.Clamp(stats?.MaxMp ?? 0, 0, short.MaxValue), // mob skills / conMP draw on this
                 Exp = stats?.Exp ?? 0,
                 MobTime = spawn.MobTime,
                 TagColor = stats?.TagColor ?? 0,

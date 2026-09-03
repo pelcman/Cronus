@@ -73,6 +73,15 @@ public static class GameConstants
     /// </summary>
     public static int DamageCap { get; set; } = 50_000_000;
 
+    /// <summary>
+    /// Whether mob attacks inflict player debuffs (poison, seal, darkness, …). OFF: the reference
+    /// server never applies them (its MobSkill.applyEffect only touches mob stats) and the v186
+    /// disease form of LP_TemporaryStatSet — high mask words plus the level/skill packing — has
+    /// no byte oracle, so sending it blind is the same risk class as the card-effect crash. The
+    /// attack data is parsed (MobAttackInfo.DiseaseSkill/Level) ready for a live-verified encoding.
+    /// </summary>
+    public static bool PlayerDiseasesEnabled { get; set; } = false;
+
     // ---- Restrictions -------------------------------------------------------------------
 
     /// <summary>

@@ -2,6 +2,18 @@ using System.Collections.Concurrent;
 
 namespace Cronus.Data;
 
+/// <summary>
+/// One of a mob's attacks (<c>attack{n}/info</c>), the server-relevant part (ports
+/// <c>MobAttackInfo</c> as <c>MobWz.getMobAttackInfo</c> reads it): a deadly attack leaves the
+/// victim at 1 HP/MP, <c>mpBurn</c> drains MP instead of HP, <c>disease</c>/<c>level</c> name a mob
+/// skill (a player debuff — parsed, not yet applied: see <c>GameConstants.PlayerDiseasesEnabled</c>),
+/// and <c>conMP</c> is what the attack costs the mob.
+/// </summary>
+public sealed record MobAttackInfo(bool DeadlyAttack, int MpBurn, int DiseaseSkill, int DiseaseLevel, int MpCon)
+{
+    public static readonly MobAttackInfo None = new(false, 0, 0, 0, 0);
+}
+
 /// <summary>Server-relevant stats for a monster template (from a Mob <c>.img</c>: <c>info/*</c>).</summary>
 public sealed class MobData
 {
@@ -30,6 +42,18 @@ public sealed class MobData
     /// <summary>Mobs spawned in place when this one dies (<c>info/revive</c> — boss phases).</summary>
     public IReadOnlyList<int> Revives { get; init; } = Array.Empty<int>();
 
+    /// <summary>The template this mob borrows its attacks/animations from (<c>info/link</c>), 0 = none.</summary>
+    public int Link { get; init; }
+
+    /// <summary>Attacks by attack index (0 = <c>attack1</c>), only the ones carrying something
+    /// server-relevant. Resolved through <see cref="Link"/> by the provider.</summary>
+    public IReadOnlyDictionary<int, MobAttackInfo> Attacks { get; init; } = new Dictionary<int, MobAttackInfo>();
+
+    /// <summary>The server-relevant info of attack <paramref name="attackIdx"/> (0-based, as the
+    /// client reports it in CP_UserHit), or <see cref="MobAttackInfo.None"/>.</summary>
+    public MobAttackInfo AttackAt(int attackIdx)
+        => Attacks.TryGetValue(attackIdx, out MobAttackInfo? a) ? a : MobAttackInfo.None;
+
     /// <summary>Parses a Mob <c>.img</c> WZ document's <c>info</c> subtree.</summary>
     public static MobData FromWz(int templateId, WzData mobImg)
     {
@@ -45,7 +69,38 @@ public sealed class MobData
             TagBgColor = info?.GetInt("hpTagBgcolor") ?? 0,
             Skills = ParseSkills(info?.Child("skill")),
             Revives = ParseRevives(info?.Child("revive")),
+            Link = info?.GetInt("link") ?? 0,
+            Attacks = ParseAttacks(mobImg),
         };
+    }
+
+    /// <summary>Reads every <c>attack{n}/info</c> that carries a server-relevant flag (ports
+    /// <c>MobWz.getMobAttackInfo</c>: deadlyAttack = key present; the rest default 0).</summary>
+    private static IReadOnlyDictionary<int, MobAttackInfo> ParseAttacks(WzData mobImg)
+    {
+        var attacks = new Dictionary<int, MobAttackInfo>();
+        foreach ((string name, WzData node) in mobImg.Children)
+        {
+            if (!name.StartsWith("attack", StringComparison.Ordinal)
+                || !int.TryParse(name.AsSpan("attack".Length), out int number)
+                || node.Child("info") is not { } info)
+            {
+                continue;
+            }
+
+            var a = new MobAttackInfo(
+                DeadlyAttack: info.Child("deadlyAttack") is not null,
+                MpBurn: info.GetInt("mpBurn"),
+                DiseaseSkill: info.GetInt("disease"),
+                DiseaseLevel: info.GetInt("level"),
+                MpCon: info.GetInt("conMP"));
+            if (a != MobAttackInfo.None)
+            {
+                attacks[number - 1] = a;
+            }
+        }
+
+        return attacks;
     }
 
     private static IReadOnlyList<int> ParseRevives(WzData? reviveDir)
@@ -117,7 +172,34 @@ public sealed class WzMobProvider : IMobProvider
     private MobData? Load(int templateId)
     {
         string? xml = _store.ReadText(MobImageRel(templateId));
-        return xml is null ? null : MobData.FromWz(templateId, WzData.ParseText(xml));
+        if (xml is null)
+        {
+            return null;
+        }
+
+        MobData mob = MobData.FromWz(templateId, WzData.ParseText(xml));
+
+        // A linked mob keeps its own stats but borrows the attack table of its link target
+        // (ports getMobAttackInfo's `info/link` hop).
+        if (mob.Link > 0 && mob.Link != templateId && GetMob(mob.Link) is { } linked && linked.Attacks.Count > 0)
+        {
+            mob = new MobData
+            {
+                TemplateId = mob.TemplateId,
+                MaxHp = mob.MaxHp,
+                MaxMp = mob.MaxMp,
+                Exp = mob.Exp,
+                Level = mob.Level,
+                TagColor = mob.TagColor,
+                TagBgColor = mob.TagBgColor,
+                Skills = mob.Skills,
+                Revives = mob.Revives,
+                Link = mob.Link,
+                Attacks = linked.Attacks,
+            };
+        }
+
+        return mob;
     }
 
     /// <summary>Store-relative form of <see cref="MobImagePath"/>.</summary>

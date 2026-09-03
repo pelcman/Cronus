@@ -167,8 +167,15 @@
 
 AGENTS.md の「Deferred」を再評価して潰す:
 
-- [ ] **mob のステータスバフ / プレイヤー状態異常**(毒・封印・暗闇…) — リファレンスでは
-      dead code だが実クライアントは対応 → 契約監査(フェーズ1スキル系)とセットで
+- [~] **Mob攻撃の特殊効果**(2026-09-03) — oracle `OnUserHit` の MobAttackInfo ブロックを逐語移植:
+      **deadlyAttack**(表示は hp−1、HP/MPを1に)、**mpBurn**(MPのみ減少、HPは無傷)、
+      **conMP**(攻撃ごとにMobのMP消費。Mobの MP を `MaxMp` でスポーン時に初期化する修正も同梱)。
+      攻撃データは `attack{N}/info` から `MobAttackInfo` としてパース(`info/link` 追従、
+      oracle `MobWz.getMobAttackInfo` どおり。実データ: deadly 51 / mpBurn 6 / disease 167 攻撃)。
+      **状態異常(毒・封印・暗闇…)は未適用**: oracleの `MobSkill.applyEffect` はMob自身のバフのみで
+      プレイヤーへの病気付与が**存在せず**、v186の病気形 TemporaryStatSet(上位マスク語+level/skill
+      パッキング)のバイトオラクルも無い(カード効果ID型のクラッシュ地帯)。データ配管は済ませ
+      `GameConstants.PlayerDiseasesEnabled=false` で封印。有効化には `/booktest` 式の実機二分探索が必要。
 - [ ] **マスタリーブック**(現在: wz最大まで直接上げる簡易仕様) — 本仕様に寄せるか判断
 - [ ] **ギルドBBS**(LP opcode がリファレンスでも未解決) — 保留のまま可
 - [ ] **アライアンス** — 保留のまま可

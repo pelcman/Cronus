@@ -515,6 +515,7 @@ public sealed partial class ChannelHandler
         int rawDamage = packet.ReadInt();
 
         int mobTemplateId = 0;
+        int mobObjectId = 0;
         byte left = 0;
         switch (attackIdx)
         {
@@ -526,11 +527,11 @@ public sealed partial class ChannelHandler
 
                 break;
 
-            case 0 or -1:                          // mob magic / physical attack
+            case >= -1:                            // mob attack (index N = its attack{N+1}; -1 = plain)
                 if (packet.Remaining >= 11)
                 {
                     mobTemplateId = packet.ReadInt();
-                    packet.ReadInt();              // mob object id
+                    mobObjectId = packet.ReadInt();
                     left = packet.ReadByte();
                     packet.ReadByte();             // nReflect (power guard not modelled)
                     packet.ReadByte();             // unk
@@ -550,12 +551,28 @@ public sealed partial class ChannelHandler
         int damage = DamageValidator.ClampLine(rawDamage);
         Character c = _player.Character;
 
+        // The attack's server-side extras (ports OnUserHit's MobAttackInfo block): a deadly
+        // attack shows (hp-1) and leaves 1 HP / 1 MP; an MP burn drains MP and leaves HP alone;
+        // either way the mob pays the attack's conMP. Only a landed mob attack qualifies.
+        MobAttackInfo attack = MobAttackInfo.None;
+        FieldMob? attacker = null;
+        if (damage > 0 && attackIdx >= 0 && mobTemplateId != 0 && _field is not null)
+        {
+            attacker = _field.FindMob(mobObjectId);
+            if (attacker is not null && attacker.TemplateId == mobTemplateId)
+            {
+                attack = _fields.MobProvider?.GetMob(mobTemplateId)?.AttackAt(attackIdx) ?? MobAttackInfo.None;
+            }
+        }
+
+        int delta = attack.DeadlyAttack ? Math.Max(1, c.Hp - 1) : damage; // the number shown
+
         // Everyone else sees the hit — the damage number (or MISS at 0) and the flinch (ports
         // the unconditional broadcastMessage in every OnUserHit branch).
         if (_field is not null)
         {
             await _field.BroadcastAsync(
-                _packets.UserHit(c.Id, attackIdx, damage, mobTemplateId, left, delta: damage),
+                _packets.UserHit(c.Id, attackIdx, damage, mobTemplateId, left, delta),
                 exceptCharacterId: c.Id).ConfigureAwait(false);
         }
 
@@ -565,6 +582,30 @@ public sealed partial class ChannelHandler
         }
 
         _player.LastActiveTick = Environment.TickCount64; // taking a hit counts as activity
+
+        if (attacker is not null && attack.MpCon > 0)
+        {
+            attacker.Mp = (short)Math.Max(0, attacker.Mp - attack.MpCon);
+        }
+
+        if (attack.DeadlyAttack)
+        {
+            c.Hp = 1;
+            c.Mp = 1;
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Hp | StatFlag.Mp)).ConfigureAwait(false);
+            await NotifyPartyOfMyHpAsync(_player).ConfigureAwait(false);
+            return;
+        }
+
+        if (attack.MpBurn != 0)
+        {
+            c.Mp = (short)Math.Clamp(c.Mp - attack.MpBurn, 0, c.MaxMp);
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Mp)).ConfigureAwait(false);
+            return;
+        }
+
+        // Diseases (attack.DiseaseSkill): parsed but not applied — see GameConstants.PlayerDiseasesEnabled.
+
         c.Hp = (short)Math.Max(0, c.Hp - damage);          // 0 HP = dead (client shows the tombstone)
 
         StatFlag changed = StatFlag.Hp;
