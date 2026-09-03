@@ -167,12 +167,30 @@ Every player (you included) does this once, to their own JMS v186 client:
      `127.0.0.1:8484`).
    - Launch the client through EmuClient's `RunEmu` / `RunEmu64`.
 
-> The sample client in this workspace (`Client/MapleStory_v186/JMS_v186.1_L.exe`) is
-> pre-patched to connect to `127.0.0.1` only — good for the operator's local test, not
-> for friends. Friends use EmuClient with `LocalHost.ini` set to your IP.
+> **EmuClient, exactly (verified 2026-09-03).** In the client folder, two INI files matter —
+> both must keep **CRLF** line endings (the Win32 INI reader silently returns empty values
+> on LF-only files):
 >
-> TODO (finalize when we test remote play): document EmuClient `LocalHost.ini` exactly
-> and confirm the channel handoff works across the internet end-to-end.
+> ```ini
+> ; LocalHost.ini — every connection the client makes is rewritten to this address
+> [LocalHost]
+> ServerIP=219.100.161.153      ; <-- the server's public IP (LAN IP for a LAN party)
+> AuthHook=0
+> FixedPortNumber=0
+>
+> ; RunEmu.ini — what RunEmu launches; TargetEXE must point INSIDE this client folder
+> [RunEmu]
+> TargetEXE=C:\path	o	his\client\JMS_v186.1_L.exe
+> LoaderDLL=EmuLoader.dll
+> ```
+>
+> Launch with `RunEmu.exe` (it self-elevates). Because the redirect is in `LocalHost.ini`,
+> friends never need a re-patched exe — one line per PC. The channel handoff and the
+> cash-shop hop follow the server's **advertised** address, so `CRONUS_HOST` on the server
+> must be the same public IP: with it left at `127.0.0.1`, login succeeds but entering the
+> game sends the client to its own PC and drops. Rehearsed on 2026-09-03 with the server
+> advertising a non-loopback address and all bot steps (channel change, cash-shop round
+> trip) connecting through it.
 
 ---
 
