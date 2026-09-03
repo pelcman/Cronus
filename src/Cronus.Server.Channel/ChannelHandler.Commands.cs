@@ -1069,6 +1069,47 @@ public sealed partial class ChannelHandler
         cm.sendOk("はい、できあがり！お似合いですよ。");
     }
 
+    /// <summary>
+    /// Handles <c>CP_CONTISTATE</c> — the client asks for the ship's state on entering a station or
+    /// flight map (ports <c>ReqCField.OnContiState</c> verbatim): every station answers "docked"
+    /// (<c>CONTI_WAIT</c>), the two flight maps answer "in flight, mobs incoming"
+    /// (<c>CONTI_TARGET_MOVEFIELD</c> + <c>CONTI_MOBGEN</c>). The oracle sends no mob with MOBGEN;
+    /// spawning the Crimson Balrog here is our addition (once per empty flight map).
+    /// </summary>
+    private async ValueTask HandleContiStateAsync(MapleSession session, PacketReader packet)
+    {
+        if (_player is null || packet.Remaining < 4)
+        {
+            return;
+        }
+
+        packet.ReadInt();                                  // the map id the client thinks it's in
+        int mapId = _player.Character.MapId;               // trust our own record
+        switch (mapId)
+        {
+            case 104020110:                                // Ellinia station (post-BB layout)
+            case 101000300: case 200000111:                // Ellinia <-> Orbis
+            case 200000121: case 220000110:                // Orbis <-> Ludibrium
+            case 200000151: case 260000100:                // Orbis <-> Ariant
+            case 240000110: case 200000131:                // Orbis <-> Leafre
+                await session.SendAsync(_packets.ContiState(ChannelPackets.ContiWait)).ConfigureAwait(false);
+                break;
+
+            case 200090010:                                // riding to Orbis
+            case 200090000:                                // riding to Ellinia
+                await session.SendAsync(_packets.ContiMove(ChannelPackets.ContiTargetMoveField, ChannelPackets.ContiMobGen)).ConfigureAwait(false);
+                if (_field is not null && !_field.Mobs.Any(m => !m.IsDead))
+                {
+                    await ScriptSpawnMobAsync(CrimsonBalrogMobId, 1).ConfigureAwait(false);
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>クリムゾンバルログ — the airship raider.</summary>
+    private const int CrimsonBalrogMobId = 9300210;
+
     /// <summary>The <c>player</c> object handed to NPC / quest / portal scripts.</summary>
     private ChannelPlayer CreateScriptPlayer(MapleSession session) => new(
         _player!.Character, _characters, session, _packets,
@@ -1077,6 +1118,8 @@ public sealed partial class ChannelHandler
         openStorage: () => OpenStorageAsync(session),
         openParcel: () => session.SendAsync(_packets.ParcelOpen(fromNpc: true)),
         parcelCount: () => _parcels?.LoadFor(_player!.Character.Id).Count ?? 0,
+        airshipBoarding: () => AirshipSchedule.IsBoarding(DateTime.UtcNow),
+        airshipMinutes: () => (int)Math.Ceiling(AirshipSchedule.UntilDeparture(DateTime.UtcNow).TotalMinutes),
         receiveParcels: async () => (await ReceiveParcelsAsync(session).ConfigureAwait(false)).Delivered,
         gainItem: (itemId, quantity) => ScriptGainItemAsync(session, itemId, quantity),
         itemCount: itemId => CountInventoryItem(_player!.Character, itemId),

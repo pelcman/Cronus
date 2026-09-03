@@ -257,6 +257,12 @@ public sealed class FieldPlayer
     /// <summary>The player's summoned pet, or null (single pet, index 0).</summary>
     public ActivePet? Pet { get; set; }
 
+    /// <summary>
+    /// Moves this player to a map, set by the owning channel handler. Lets server-side schedules
+    /// (the airships) move passengers exactly the way an NPC script's <c>player.warp</c> does.
+    /// </summary>
+    public Func<int, int, ValueTask>? WarpAsync { get; set; }
+
     /// <summary>The ad board (黒板) message standing over the player, or null.</summary>
     public string? AdBoard { get; set; }
 

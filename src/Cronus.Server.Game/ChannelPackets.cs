@@ -1660,6 +1660,30 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    // OpsContiMove (v186 keeps the declared values).
+    public const byte ContiWait = 1;
+    public const byte ContiMobGen = 4;
+    public const byte ContiTargetMoveField = 10;
+
+    /// <summary>Builds <c>LP_CONTISTATE</c> — the ship's state for a station map the client just
+    /// entered (ports <c>ResCField_ContiMove.ContiState</c>: state, then a 0 "AppearShip" flag).</summary>
+    public byte[] ContiState(byte state)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ContiState);
+        w.WriteByte(state);
+        w.WriteByte(0);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_CONTIMOVE</c> (ports <c>ResCField_ContiMove.ContiMove</c>: two ops).</summary>
+    public byte[] ContiMove(byte first, byte second)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.ContiMove);
+        w.WriteByte(first);
+        w.WriteByte(second);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_UserChat</c> (ports <c>ResCUser.UserChat</c>, JMS v186 path).</summary>
     public byte[] UserChat(int characterId, bool isGm, string message, bool onlyBalloon)
     {

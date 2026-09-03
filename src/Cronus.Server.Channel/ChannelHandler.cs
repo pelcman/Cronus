@@ -136,6 +136,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     private readonly int _opSelectNpc;
     private readonly int _opScriptAnswer;
     private readonly int _opParcel;
+    private readonly int _opContiState;
     private readonly int _opPortalScript;
     private readonly int _opWhisper;
     private readonly int _opMessenger;
@@ -293,6 +294,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _opSelectNpc = clientOpcodes.Get(ClientOpcode.UserSelectNpc);
         _opScriptAnswer = clientOpcodes.Get(ClientOpcode.UserScriptMessageAnswer);
         _opParcel = clientOpcodes.Get(ClientOpcode.UserParcelRequest);
+        _opContiState = clientOpcodes.Get(ClientOpcode.ContiState);
         _opPortalScript = clientOpcodes.Get(ClientOpcode.UserPortalScriptRequest);
         _opWhisper = clientOpcodes.Get(ClientOpcode.Whisper);
         _opMessenger = clientOpcodes.Get(ClientOpcode.Messenger);
@@ -571,6 +573,10 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         {
             await HandleParcelRequestAsync(session, packet).ConfigureAwait(false);
         }
+        else if (opcode == _opContiState)
+        {
+            await HandleContiStateAsync(session, packet).ConfigureAwait(false);
+        }
         else if (opcode == _opScriptAnswer)
         {
             HandleScriptAnswer(packet);
@@ -705,6 +711,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         }
 
         var player = new FieldPlayer(character, session) { Channel = _channelId };
+        player.WarpAsync = (mapId, portal) => MovePlayerToMapAsync(session, mapId, portal); // for the airships
         character.LastChannel = _channelId; // the cash shop sends the client back here
         _player = player;
         session.UserData = character;

@@ -23,6 +23,8 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<ValueTask>? _openStorage;
     private readonly Func<ValueTask>? _openParcel;
     private readonly Func<int>? _parcelCount;
+    private readonly Func<bool>? _airshipBoarding;
+    private readonly Func<int>? _airshipMinutes;
     private readonly Func<ValueTask<int>>? _receiveParcels;
     private readonly Func<int, int, ValueTask>? _gainItem;
     private readonly Func<int, int>? _itemCount;
@@ -44,6 +46,8 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<ValueTask>? openStorage = null,
         Func<ValueTask>? openParcel = null,
         Func<int>? parcelCount = null,
+        Func<bool>? airshipBoarding = null,
+        Func<int>? airshipMinutes = null,
         Func<ValueTask<int>>? receiveParcels = null,
         Func<int, int, ValueTask>? gainItem = null,
         Func<int, int>? itemCount = null,
@@ -64,6 +68,8 @@ public sealed class ChannelPlayer : INpcPlayer
         _openStorage = openStorage;
         _openParcel = openParcel;
         _parcelCount = parcelCount;
+        _airshipBoarding = airshipBoarding;
+        _airshipMinutes = airshipMinutes;
         _receiveParcels = receiveParcels;
         _gainItem = gainItem;
         _itemCount = itemCount;
@@ -298,6 +304,12 @@ public sealed class ChannelPlayer : INpcPlayer
 
     /// <summary>How many parcels are waiting for this character.</summary>
     public int parcelCount() => _parcelCount?.Invoke() ?? 0;
+
+    /// <summary>Whether the airship waiting rooms are open right now.</summary>
+    public bool airshipBoarding() => _airshipBoarding?.Invoke() ?? true;
+
+    /// <summary>Minutes (rounded up) until the airships depart; 0 while they are in the air.</summary>
+    public int airshipMinutes() => _airshipMinutes?.Invoke() ?? 0;
 
     /// <summary>Delivers waiting parcels into the inventory; returns how many were handed over.</summary>
     public int receiveParcels()

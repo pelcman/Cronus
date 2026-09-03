@@ -12,10 +12,10 @@ parcel = home delivery.
 ## Summary
 
 - NPCs spawning across all maps: **1447**
-- script: **227** (15%)
+- script: **229** (15%)
 - shop: **90** (6%)
 - quest-data: **499** (34%)
-- none: **631** (43%)
+- none: **629** (43%)
 
 ## Actionable queue (spawning, status=none, with a wz script hint)
 
@@ -100,8 +100,6 @@ parcel = home delivery.
 | 1300013 | マックフィンイブグ | script:TD_MC_violetaEnter | 106021402 最後の城塔 |
 | 1300014 | セルフ | script:forself | 106020300 奥深きキノコの森 他2 |
 | 2010003 | ネーブ | script:make_orbis | 200000200 オルビス公園 |
-| 2012000 | イフ | script:sell_ticket | 200000100 オルビスチケット売場 |
-| 2012006 | イス | script:getAboard | 200000100 オルビスチケット売場 |
 | 2012027 | ヒューズ | script:elizaHarp1 | 920020000 エリジャーの庭園 |
 | 2012028 | ハープ弦&lt;レ&gt; | script:elizaHarp2 | 920020000 エリジャーの庭園 |
 | 2012029 | ハープ弦&lt;ミ&gt; | script:elizaHarp3 | 920020000 エリジャーの庭園 |
@@ -1004,13 +1002,13 @@ parcel = home delivery.
 | 2010007 | ヘラクル | script |  | script:guild_proc | 200000301 ギルド本部&lt;英雄の殿堂&gt; |
 | 2010008 | レア | script |  | script:guild_mark | 200000301 ギルド本部&lt;英雄の殿堂&gt; |
 | 2010009 | レナリウ | script |  | script:guild_union | 200000301 ギルド本部&lt;英雄の殿堂&gt; |
-| 2012000 | イフ | none |  | script:sell_ticket | 200000100 オルビスチケット売場 |
+| 2012000 | イフ | script |  | script:sell_ticket | 200000100 オルビスチケット売場 |
 | 2012001 | リニ | script |  | script:get_ticket | 200000111 ステーション&lt;エリニア行き&gt; |
 | 2012002 | エリン | script |  | script:goOutWaitingRoom | 200000112 控え室&lt;エリニア行き&gt; |
 | 2012003 | 妖精ネリ | shop |  |  | 200000001 武器屋 |
 | 2012004 | 妖精ヌリ | shop |  |  | 200000001 武器屋 |
 | 2012005 | 妖精エデル | shop |  |  | 200000002 雑貨屋 |
-| 2012006 | イス | none |  | script:getAboard | 200000100 オルビスチケット売場 |
+| 2012006 | イス | script |  | script:getAboard | 200000100 オルビスチケット売場 |
 | 2012007 | リンス | script |  | script:hair_orbis2 | 200000202 オルビスヘアーショップ |
 | 2012008 | ロミ | script |  | script:skin_orbis1 | 200000203 オルビススキンケアショップ |
 | 2012009 | 助手リーザ | script |  | script:face_orbis2 | 200000201 整形外科 |
