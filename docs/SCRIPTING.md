@@ -36,12 +36,19 @@ straight-line code.
 | `cm.sendNextPrev(text)` | text with Prev + Next | — |
 | `cm.askYesNo(text)` | a Yes/No prompt | `true` if Yes |
 | `cm.askAccept(text)` | an Accept/Decline prompt | `true` if Accept |
-| `cm.askMenu(text)` | a menu (use `#Ln#label#l` lines) | the selected index |
-| `cm.sendSimple(text)` | alias for `askMenu` | the selected index |
+| `cm.askMenu(text)` | a menu (use `#Ln#label#l` lines) | the selected id — always one of the `#L…#` ids offered |
+| `cm.sendSimple(text)` | alias for `askMenu` | the selected id |
 | `cm.askText(text)` | a text-entry box | the entered string |
 | `cm.dispose()` | ends the conversation | — |
 
 Menu markup: `"#L0#First#l\r\n#L1#Second#l"` renders two clickable choices returning `0` / `1`.
+
+The engine checks every menu answer against the `#L…#` ids the text offered: an answer naming any
+other id ends the conversation before the script sees it (so a taxi whose option ids are map ids
+can never be made to warp anywhere — the hole Riremito's jms_scripts leave open on purpose). Closing
+the menu ends the conversation too; a script never sees a `-1` pick. Keep the defensive
+`if (pick < 0 || pick >= list.length) return;` for readability anyway. `askAvatar` likewise rejects an
+index outside its candidates, and a prompt left unanswered for five minutes ends the conversation.
 
 ### `player`
 
@@ -51,7 +58,7 @@ Menu markup: `"#L0#First#l\r\n#L1#Second#l"` renders two clickable choices retur
 
 **Change** (each persists and updates the client):
 `gainMeso(n)` · `gainExp(n)` · `gainAp(n)` · `gainSp(n)` · `gainFame(n)` · `heal()` ·
-`setJob(job)` · `gainMaxHp(n)` · `gainMaxMp(n)` · `warp(mapId)` · `warp(mapId, portal)`
+`setJob(job)` · `gainMaxHp(n)` · `gainMaxMp(n)` · `warp(mapId)` · `warp(mapId, portal)` · `warpPortal(mapId, portalName)` (arrive at the wz `pn`, e.g. `out00`)
 
 **Items:** `gainItem(itemId, n)` (negative `n` takes items) · `haveItem(itemId)` ·
 `itemQuantity(itemId)`

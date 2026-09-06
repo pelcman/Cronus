@@ -1,28 +1,33 @@
-// ピル (リス港, wz script = rithTeleport) — ビクトリア各町への移動サービス。
-// 本来の演出のオラクルが無いため、タクシー同等の有料ワープとして実装。
+// ピル (リス港, wz script = rithTeleport) — ビクトリアアイランド各町へのタクシー(リス港を除く)。
+// 台詞は JMS 原文(Riremito/jms_scripts より)。料金はオラクルに値が無いため簡易(創作):
+// 1000メル、初心者(職業0)は1/10。行き先は6町に限定(選択肢IDはエンジン側で検証される)。
+var TOWNS = [
+    ["ヘネシス", 100000000, 1000],
+    ["エリニア", 101000000, 1000],
+    ["ペリオン", 102000000, 1000],
+    ["カニングシティー", 103000000, 1000],
+    ["リス港", 104000000, 800],
+    ["ノーチラス", 120000000, 1000]
+];
+function fare(base) {
+    return player.getJob() == 0 ? Math.floor(base / 10) : base;
+}
 function start() {
-    var towns = [
-        ["ヘネシス", 100000000, 1000],
-        ["エリニア", 101000000, 1000],
-        ["ペリオン", 102000000, 1000],
-        ["カニングシティ", 103000000, 1000],
-        ["ノーチラス", 120000000, 800]
-    ];
-    var menu = "リス港からどこへ向かうんだい?料金は前払いだよ。";
-    for (var i = 0; i < towns.length; i++) {
-        menu += "\r\n#L" + i + "#" + towns[i][0] + " (" + towns[i][2] + "メル)#l";
+    var here = player.getMapId();
+    var menu = "君は初心者ではないな？なら料金は規定どおりにいただくぜ？さあ、どの村へ行きたいんだい？";
+    for (var i = 0; i < TOWNS.length; i++) {
+        if (TOWNS[i][1] == here) continue;
+        menu += "\r\n#L" + i + "##b" + TOWNS[i][0] + " (" + fare(TOWNS[i][2]) + "メル)#k#l";
     }
     var pick = cm.askMenu(menu);
-    if (pick < 0 || pick >= towns.length) return;
-    var town = towns[pick];
-    if (player.getMapId() == town[1]) {
-        cm.sendOk("もうそこにいるじゃないか。");
+    if (pick < 0 || pick >= TOWNS.length || TOWNS[pick][1] == here) return;
+    var town = TOWNS[pick];
+    var cost = fare(town[2]);
+    if (!cm.askYesNo("ここではもう用事がないようですね。本当に#b" + town[0] + "#kへ移動しますか？(" + cost + "メル)")) return;
+    if (player.getMeso() < cost) {
+        cm.sendOk("メルが足りないようだな。料金は" + cost + "メルだ。");
         return;
     }
-    if (player.getMeso() < town[2]) {
-        cm.sendOk("メルが足りないようだね。" + town[2] + "メル必要だよ。");
-        return;
-    }
-    player.gainMeso(-town[2]);
+    player.gainMeso(-cost);
     player.warp(town[1]);
 }

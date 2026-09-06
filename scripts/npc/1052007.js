@@ -1,38 +1,38 @@
-// 停留所案内員 — 世界移動 (身内サーバー向け: 待ち時間なしの直行便)
+// 改札口 (地下鉄 切符売り場, wz script = subway_in) — 1号線・カニングスクエア駅・3号線工事場(切符制)への改札。
+// 選択肢と行き先は JMS 原文/Riremitoさん版準拠。工事場は入場券(4031036/37/38)と引き換えで B1/B2/B3 へ。行き先はこの5マップに限定。
+var SITES = [
+    ["工事場B1", 4031036, 103000900],
+    ["工事場B2", 4031037, 103000903],
+    ["工事場B3", 4031038, 103000906]
+];
 function start() {
-    var places = [
-        ["ヘネシス (ビクトリア)", 100000000, 1000],
-        ["リス港 (ビクトリア)", 104000000, 1000],
-        ["オルビス", 200000000, 5000],
-        ["エルナス", 211000000, 5000],
-        ["ルディブリアム", 220000000, 5000],
-        ["アクアリウム", 230000000, 5000],
-        ["リプレ", 240000000, 5000],
-        ["ムーラン", 250000000, 5000],
-        ["薬草町", 251000000, 5000],
-        ["アリアント", 260000000, 5000],
-        ["マガティア", 261000000, 5000],
-        ["時間の神殿", 270000100, 8000],
-        ["きのこ神社 (ジパング)", 800000000, 8000],
-        ["エレブ (シグナス騎士団)", 130000000, 5000],
-        ["リエン (アランの雪原)", 140000000, 5000]
-    ];
-    var menu = "どちらへ向かいますか?運賃は前払いです。";
-    for (var i = 0; i < places.length; i++) {
-        menu += "\r\n#L" + i + "#" + places[i][0] + " (" + places[i][2] + "メル)#l";
-    }
-    var pick = cm.askMenu(menu);
-    var dest = places[pick];
-    if (player.getMapId() == dest[1]) {
-        cm.sendOk("もうそこにいらっしゃいますよ。");
+    var pick = cm.askMenu("行先を選択してください。"
+        + "\r\n#L0##b#e1号線#n#k#l"
+        + "\r\n#L1##bカニングスクエア<地下鉄搭乗>#k#l"
+        + "\r\n#L2##b工事場#k#l");
+    if (pick == 0) {
+        player.warpPortal(103000101, "out00");
         return;
     }
-    if (player.getMeso() < dest[2]) {
-        cm.sendOk("メルが足りないようです。運賃は" + dest[2] + "メルです。");
+    if (pick == 1) {
+        player.warpPortal(103000310, "out00");
         return;
     }
-    if (cm.askYesNo(dest[0] + "行きは" + dest[2] + "メルです。よろしいですか?")) {
-        player.gainMeso(-dest[2]);
-        player.warp(dest[1]);
+    if (pick != 2) return;
+    var menu = "どの工事場に入りますか？入場券が必要です。";
+    var any = false;
+    for (var i = 0; i < SITES.length; i++) {
+        if (player.haveItem(SITES[i][1])) {
+            menu += "\r\n#L" + i + "##b" + SITES[i][0] + "#k#l";
+            any = true;
+        }
     }
+    if (!any) {
+        cm.sendOk("工事場の入場券をお持ちではないようです。切符は隣の#bウンイ#kが販売しています。");
+        return;
+    }
+    var site = cm.askMenu(menu);
+    if (site < 0 || site >= SITES.length || !player.haveItem(SITES[site][1])) return;
+    player.gainItem(SITES[site][1], -1);
+    player.warpPortal(SITES[site][2], "st00");
 }

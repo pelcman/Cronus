@@ -1,38 +1,18 @@
-// 停留所案内員 — 世界移動 (身内サーバー向け: 待ち時間なしの直行便)
+// ミュ (リプレ チケット売場, wz script = sell_ticket) — オルビス行きチケット(4031045)の販売。
+// 価格は OdinMS 系スクリプト値(30000メル、創作)、台詞は日本語化(創作)。
+var TICKET = 4031045;
+var PRICE = 30000;
 function start() {
-    var places = [
-        ["ヘネシス (ビクトリア)", 100000000, 1000],
-        ["リス港 (ビクトリア)", 104000000, 1000],
-        ["オルビス", 200000000, 5000],
-        ["エルナス", 211000000, 5000],
-        ["ルディブリアム", 220000000, 5000],
-        ["アクアリウム", 230000000, 5000],
-        ["リプレ", 240000000, 5000],
-        ["ムーラン", 250000000, 5000],
-        ["薬草町", 251000000, 5000],
-        ["アリアント", 260000000, 5000],
-        ["マガティア", 261000000, 5000],
-        ["時間の神殿", 270000100, 8000],
-        ["きのこ神社 (ジパング)", 800000000, 8000],
-        ["エレブ (シグナス騎士団)", 130000000, 5000],
-        ["リエン (アランの雪原)", 140000000, 5000]
-    ];
-    var menu = "どちらへ向かいますか?運賃は前払いです。";
-    for (var i = 0; i < places.length; i++) {
-        menu += "\r\n#L" + i + "#" + places[i][0] + " (" + places[i][2] + "メル)#l";
-    }
-    var pick = cm.askMenu(menu);
-    var dest = places[pick];
-    if (player.getMapId() == dest[1]) {
-        cm.sendOk("もうそこにいらっしゃいますよ。");
+    if (player.haveItem(TICKET)) {
+        cm.sendOk("#b#t" + TICKET + "##kはもうお持ちですね。乗船係の#bタミ#kにお見せください。");
         return;
     }
-    if (player.getMeso() < dest[2]) {
-        cm.sendOk("メルが足りないようです。運賃は" + dest[2] + "メルです。");
+    if (!cm.askYesNo("オシリア大陸のオルビスステーション行きの船のチケットを販売しています。料金は#b" + PRICE + "メル#kです。#b#t" + TICKET + "##kを購入しますか？")) return;
+    if (player.getMeso() < PRICE) {
+        cm.sendOk("メルが足りないようです。その他(ETC)欄の空きもご確認ください。");
         return;
     }
-    if (cm.askYesNo(dest[0] + "行きは" + dest[2] + "メルです。よろしいですか?")) {
-        player.gainMeso(-dest[2]);
-        player.warp(dest[1]);
-    }
+    player.gainMeso(-PRICE);
+    player.gainItem(TICKET, 1);
+    cm.sendOk("#b#t" + TICKET + "##kをどうぞ。乗船は#bタミ#kへ。");
 }

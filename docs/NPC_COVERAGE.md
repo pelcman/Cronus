@@ -12,10 +12,10 @@ parcel = home delivery.
 ## Summary
 
 - NPCs spawning across all maps: **1447**
-- script: **229** (15%)
+- script: **231** (15%)
 - shop: **90** (6%)
 - quest-data: **499** (34%)
-- none: **629** (43%)
+- none: **627** (43%)
 
 ## Actionable queue (spawning, status=none, with a wz script hint)
 
@@ -44,7 +44,6 @@ parcel = home delivery.
 | 1052008 | 宝箱 | script:subway_get1 | 103000902 B1&lt;地下鉄基地&gt; |
 | 1052009 | 宝箱 | script:subway_get2 | 103000905 B2&lt;地下鉄基地&gt; |
 | 1052010 | 宝箱 | script:subway_get3 | 103000909 B3&lt;地下鉄基地&gt; |
-| 1052011 | 出口 | script:subway_out | 103000900 B1&lt;1区域&gt; 他6 |
 | 1052013 | パソコン | script:go_pcmap | 193000000 ネットカフェ |
 | 1052107 | 小さな街灯 | script:sca_Shade | 103000105 1号線-4区 他1 |
 | 1052109 | 地下鉄のゴミ箱 | script:givebubbleDoll1 | 103000101 1号線-1区 |
@@ -151,7 +150,6 @@ parcel = home delivery.
 | 2101015 | アブドラ８世 | script:aMatchScore | 980010010 王の部屋 |
 | 2101016 | アレダ | script:aMatchRwd | 980010010 王の部屋 |
 | 2101017 | セザール | script:aMatchPlay | 980010100 一番目の闘技場&lt;控え室&gt; 他5 |
-| 2102000 | アセソン | script:get_ticket | 260000100 アリアント乗降場 |
 | 2103000 | 王宮オアシス | script:ariant_oasis | 260000300 アリアント宮殿 |
 | 2103001 | 秘密の壁 | script:secret_wall | 260000200 アリアント集落地 |
 | 2103002 | 王妃の飾り棚 | script:ariant_ring | 260000303 アリアント宮殿&lt;王室&gt; |
@@ -770,12 +768,12 @@ parcel = home delivery.
 | 1052003 | クリス | script |  | script:refine_kerning2 | 103000006 修理屋 |
 | 1052004 | 院長デンマ | script |  | script:face_henesys1 | 100000103 整形外科 |
 | 1052005 | 医者ヘッポコ | script |  | script:face_henesys2 | 100000103 整形外科 |
-| 1052006 | ウンイ | quest-data | 3 | script:subway_ticket | 103000100 切符売り場 |
+| 1052006 | ウンイ | script | 3 | script:subway_ticket | 103000100 切符売り場 |
 | 1052007 | 改札口 | script |  | script:subway_in | 103000100 切符売り場 |
 | 1052008 | 宝箱 | none |  | script:subway_get1 | 103000902 B1&lt;地下鉄基地&gt; |
 | 1052009 | 宝箱 | none |  | script:subway_get2 | 103000905 B2&lt;地下鉄基地&gt; |
 | 1052010 | 宝箱 | none |  | script:subway_get3 | 103000909 B3&lt;地下鉄基地&gt; |
-| 1052011 | 出口 | none |  | script:subway_out | 103000900 B1&lt;1区域&gt; 他6 |
+| 1052011 | 出口 | script |  | script:subway_out | 103000900 B1&lt;1区域&gt; 他6 |
 | 1052012 | モンロン | script |  | script:go_pc | 103000000 カニングシティー |
 | 1052013 | パソコン | none |  | script:go_pcmap | 193000000 ネットカフェ |
 | 1052014 | 自販機 | none |  |  | 193000000 ネットカフェ |
@@ -1027,7 +1025,7 @@ parcel = home delivery.
 | 2012023 | 紅葉玉 | quest-data | 6 | script:s4tornado | 200000300 出会いの丘 |
 | 2012024 | イグネト | script |  | script:goOutWaitingRoom | 200000152 控え室&lt;アリアント行き&gt; |
 | 2012025 | ゼラス | script |  | script:get_ticket | 200000151 ステーション&lt;アリアント行き&gt; |
-| 2012026 | エリジャー | script | 5 |  | 920020000 エリジャーの庭園 |
+| 2012026 | エリジャー | quest-data | 5 |  | 920020000 エリジャーの庭園 |
 | 2012027 | ヒューズ | none |  | script:elizaHarp1 | 920020000 エリジャーの庭園 |
 | 2012028 | ハープ弦&lt;レ&gt; | none |  | script:elizaHarp2 | 920020000 エリジャーの庭園 |
 | 2012029 | ハープ弦&lt;ミ&gt; | none |  | script:elizaHarp3 | 920020000 エリジャーの庭園 |
@@ -1333,7 +1331,7 @@ parcel = home delivery.
 | 2101016 | アレダ | none |  | script:aMatchRwd | 980010010 王の部屋 |
 | 2101017 | セザール | none |  | script:aMatchPlay | 980010100 一番目の闘技場&lt;控え室&gt; 他5 |
 | 2101018 | セザール | quest-data | 2 | script:aMatchMove | 102000000 ぺリオン 他2 |
-| 2102000 | アセソン | none |  | script:get_ticket | 260000100 アリアント乗降場 |
+| 2102000 | アセソン | script |  | script:get_ticket | 260000100 アリアント乗降場 |
 | 2102001 | シュリン | script |  | script:goOutWaitingRoom | 260000110 控え室&lt;オルビス行き&gt; |
 | 2102002 | シラス | script |  | script:sell_ticket | 260000100 アリアント乗降場 |
 | 2103000 | 王宮オアシス | none |  | script:ariant_oasis | 260000300 アリアント宮殿 |

@@ -1,27 +1,15 @@
-// メイプル運輸タクシー — ビクトリアアイランドの町へ移動
+// エリニア高級タクシー (エリニア, wz script = mTaxi) — アリの巣広場(105070001)行きの高級タクシー。行き先はここのみ。
+// 台詞と料金(10,000メル)は JMS 原文(Riremito/jms_scripts より)。初心者(職業0)の割引額1,000メルは GMS 準拠の創作。
+var DEST = 105070001;
 function start() {
-    var towns = [
-        ["ヘネシス", 100000000, 1000],
-        ["エリニア", 101000000, 1000],
-        ["ペリオン", 102000000, 1000],
-        ["カニングシティ", 103000000, 1000],
-        ["リス港", 104000000, 800],
-        ["ノーチラス", 120000000, 1000]
-    ];
-    var menu = "どこへ行きますか?料金は前払いです。";
-    for (var i = 0; i < towns.length; i++) {
-        menu += "\r\n#L" + i + "#" + towns[i][0] + " (" + towns[i][2] + "メル)#l";
-    }
-    var pick = cm.askMenu(menu);
-    var town = towns[pick];
-    if (player.getMapId() == town[1]) {
-        cm.sendOk("もうここにいますよ。");
+    var beginner = player.getJob() == 0;
+    var cost = beginner ? 1000 : 10000;
+    var shown = beginner ? "1,000" : "10,000";
+    if (!cm.askYesNo("初心者ではない方には決められた料金が請求されます。アリの巣広場はビクトリアアイランドの中央にあるダンジョンの奥の、24時間屋台が棲んでいるところです。#b" + shown + "メル#kでアリの巣広場まで如何でしょうか？")) return;
+    if (player.getMeso() < cost) {
+        cm.sendOk("メルが足りないようです。料金は" + shown + "メルです。");
         return;
     }
-    if (player.getMeso() < town[2]) {
-        cm.sendOk("メルが足りないようですね。");
-        return;
-    }
-    player.gainMeso(-town[2]);
-    player.warp(town[1]);
+    player.gainMeso(-cost);
+    player.warp(DEST);
 }

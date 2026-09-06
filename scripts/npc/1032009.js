@@ -1,13 +1,17 @@
-// プリン (控え室<オルビス行き>) — 出発待ちの案内。降りる場合はチケットを返して駅へ。
-var TICKET = 4031045;
+// プリン (エリニア 控え室<オルビス行き>, wz script = goOutWaitingRoom) — 控え室から昇降場へ戻る(チケットの返金なし)。
+// 台詞は OdinMS 系(GMS)の英文を日本語化(創作)。行き先は控え室に対応する昇降場のみ。
+var EXITS = [
+    [101000301, 101000300]
+];
 function start() {
-    var mins = player.airshipMinutes();
-    var pick = cm.askMenu("こちらはオルビス行きの控え室です。出発時刻になったら自動で飛行船へご案内します。"
-        + (mins > 0 ? "\r\n出発まであと約#b" + mins + "分#k。" : "\r\n#bまもなく出発です。#k")
-        + "\r\n#L0#待つ#l"
-        + "\r\n#L1#やっぱり降りる (チケットを返してもらう)#l");
-    if (pick == 1) {
-        player.gainItem(TICKET, 1);
-        player.warp(101000300);
+    var here = player.getMapId();
+    var station = EXITS[0][1];
+    for (var i = 0; i < EXITS.length; i++) {
+        if (EXITS[i][0] == here) station = EXITS[i][1];
     }
+    if (!cm.askYesNo("控え室から出ますか？出ることはできますが、チケットは返金されません。本当にこの部屋から出ますか？")) {
+        cm.sendOk("もうすぐ目的地に着きます。他の人と話でもしていれば、あっという間に着きますよ。");
+        return;
+    }
+    player.warp(station);
 }

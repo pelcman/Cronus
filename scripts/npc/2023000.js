@@ -1,29 +1,27 @@
-// 危険地域弾丸タクシー (エルナス, wz script = ossyria_taxi) — 雪原の危険地帯への送迎。
-// 行き先と料金は簡易仕様(創作)。マップIDは実データ検証済み。
+// 危険地域弾丸タクシー (エルナス/ルディブリアム/リプレ, wz script = ossyria_taxi) — 各町からダンジョン入口への直行タクシー。
+// 台詞と行き先は JMS 原文(Riremito/jms_scripts より): エルナス→氷の谷2、ルディブリアム→時間の通路、リプレ→龍の森の入口(町ごとに1か所)。
+// 料金はオラクルに値が無いため簡易(創作: 6000メル)。
+var ROUTES = [
+    [211000000, 211040200],
+    [220000000, 220050300],
+    [240000000, 240030000]
+];
+var FARE = 6000;
 function start() {
-    var spots = [
-        ["エルナス (村)", 211000000, 1000],
-        ["冷気の平原2", 211040000, 6000],
-        ["険しき絶壁1", 211040300, 6000],
-        ["死んだ木の森4", 211041400, 6000],
-        ["試練の洞窟1", 211042000, 6000],
-        ["ジャクムの祭壇入口", 211042400, 10000]
-    ];
-    var menu = "危険地域までひとっ走り、弾丸タクシーだ!どこまで行く?";
-    for (var i = 0; i < spots.length; i++) {
-        menu += "\r\n#L" + i + "#" + spots[i][0] + " (" + spots[i][2] + "メル)#l";
+    var here = player.getMapId();
+    var dest = 0;
+    for (var i = 0; i < ROUTES.length; i++) {
+        if (ROUTES[i][0] == here) dest = ROUTES[i][1];
     }
-    var pick = cm.askMenu(menu);
-    if (pick < 0 || pick >= spots.length) return;
-    var s = spots[pick];
-    if (player.getMapId() == s[1]) {
-        cm.sendOk("もうそこだぜ、旦那。");
+    if (dest == 0) {
+        cm.sendOk("ここからの運行はしていません。エルナス、ルディブリアム、リプレの町でお待ちしています。");
         return;
     }
-    if (player.getMeso() < s[2]) {
-        cm.sendOk("料金は前払い、" + s[2] + "メルだ。足りないぜ。");
+    if (!cm.askYesNo("こんにちは！ダンジョン行きの特急タクシーです。#m" + here + "#に乗って#b#m" + dest + "##kに移動しますか。費用は#b" + FARE + "メル#kです。")) return;
+    if (player.getMeso() < FARE) {
+        cm.sendOk("メルが足りないようです。料金は" + FARE + "メルです。");
         return;
     }
-    player.gainMeso(-s[2]);
-    player.warp(s[1]);
+    player.gainMeso(-FARE);
+    player.warp(dest);
 }
