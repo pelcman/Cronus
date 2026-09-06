@@ -234,7 +234,7 @@ foreach (FieldRegistry chFields in channelFields)
     tickTasks.Add(playerRegenSvc.RunAsync);
     tickTasks.Add(autoSaveSvc.RunAsync);
     tickTasks.Add(buffExpirySvc.RunAsync);
-    tickTasks.Add(new AirshipService(chFields).RunAsync);
+    tickTasks.Add(new AirshipService(chFields, new ChannelPackets(serverOps, config)).RunAsync);
 }
 
 using var cts = new CancellationTokenSource();

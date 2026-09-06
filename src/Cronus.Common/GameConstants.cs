@@ -82,6 +82,15 @@ public static class GameConstants
     /// </summary>
     public static bool PlayerDiseasesEnabled { get; set; } = false;
 
+    // ---- Airships -----------------------------------------------------------------------
+
+    /// <summary>Chance (0..1) that a flight is raided by the Balrog ship. Authentic runs were a
+    /// gamble; 1.0 makes every flight a raid (easy to verify — lower it for the real feel).</summary>
+    public static double AirshipBalrogChance { get; set; } = 1.0;
+
+    /// <summary>Crimson Balrogs that board when the enemy ship arrives.</summary>
+    public static int AirshipBalrogCount { get; set; } = 2;
+
     // ---- Restrictions -------------------------------------------------------------------
 
     /// <summary>

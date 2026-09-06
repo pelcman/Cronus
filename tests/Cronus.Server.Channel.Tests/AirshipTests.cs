@@ -161,12 +161,71 @@ public class AirshipTests
         Assert.Equal(0, appear);
     }
 
-    [Fact]
-    public async Task ContiState_OnTheFlightMap_AnswersMoveFieldWithMobGen()
+    private static readonly DateTime CycleStart = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    private static async Task<T> WithClockAsync<T>(DateTime moment, Func<Task<T>> body)
     {
-        (string kind, byte first, byte second) = await AskAsync(200090010); // riding to Orbis
+        Func<DateTime> old = AirshipSchedule.Clock;
+        AirshipSchedule.Clock = () => moment;
+        try { return await body(); }
+        finally { AirshipSchedule.Clock = old; }
+    }
+
+    [Fact]
+    public async Task ContiState_OnTheFlightMap_BeforeTheRaid_AnswersMoving()
+    {
+        // 00:10:30 — thirty seconds into the flight, the Balrog ship hasn't come yet.
+        (string kind, byte first, byte second) = await WithClockAsync(CycleStart.AddMinutes(10).AddSeconds(30), () => AskAsync(200090010));
+        Assert.Equal("move", kind);
+        Assert.Equal(ChannelPackets.ContiTargetMoveField, first);
+        Assert.Equal(ChannelPackets.ContiMoving, second);
+    }
+
+    [Fact]
+    public async Task ContiState_OnTheFlightMap_DuringTheRaid_AnswersMobGen()
+    {
+        // 00:12:00 — two minutes in, the enemy ship is alongside (a late joiner sees it too).
+        (string kind, byte first, byte second) = await WithClockAsync(CycleStart.AddMinutes(12), () => AskAsync(200090010));
         Assert.Equal("move", kind);
         Assert.Equal(ChannelPackets.ContiTargetMoveField, first);
         Assert.Equal(ChannelPackets.ContiMobGen, second);
+    }
+
+    // ---- the raid timeline and the service that runs it ---------------------------------
+
+    [Fact]
+    public void EnemyShip_ArrivesAMinuteIn_AndLeavesBeforeLanding()
+    {
+        Assert.Equal(EnemyShipState.None, AirshipSchedule.EnemyShipAt(CycleStart.AddMinutes(5)));                 // boarding
+        Assert.Equal(EnemyShipState.None, AirshipSchedule.EnemyShipAt(CycleStart.AddMinutes(10).AddSeconds(59)));  // calm skies
+        Assert.Equal(EnemyShipState.Present, AirshipSchedule.EnemyShipAt(CycleStart.AddMinutes(11)));              // +60s: raid
+        Assert.Equal(EnemyShipState.Present, AirshipSchedule.EnemyShipAt(CycleStart.AddMinutes(14).AddSeconds(29)));
+        Assert.Equal(EnemyShipState.Gone, AirshipSchedule.EnemyShipAt(CycleStart.AddMinutes(14).AddSeconds(30)));  // 30s before landing
+        Assert.Equal(EnemyShipState.None, AirshipSchedule.EnemyShipAt(CycleStart.AddMinutes(15)));                 // docked again
+    }
+
+    [Fact]
+    public async Task Raid_SpawnsBalrogsWhenTheShipArrives_AndRemovesThemWhenItLeaves()
+    {
+        var mobs = new InMemoryMobProvider(new[] { new MobData { TemplateId = AirshipService.CrimsonBalrogMobId, MaxHp = 60000 } });
+        var fields = new FieldRegistry(mobs: mobs);
+        var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
+        AirshipRoute route = AirshipRoute.ElliniaToOrbis;
+
+        var passenger = new FieldPlayer(new Character { Id = 1, Name = "Rider", MapId = route.FlightMapId }, null!) { X = 100, Y = -50 };
+        fields.Get(route.FlightMapId).Enter(passenger);
+
+        DateTime t0 = CycleStart.AddMinutes(10).AddSeconds(10); // in flight, before the raid
+        var svc = new AirshipService(fields, packets, clock: () => t0);
+        await svc.TickAsync(t0);                                             // learn the state
+
+        await svc.TickAsync(CycleStart.AddMinutes(11).AddSeconds(1));       // the enemy ship arrives
+        var raiders = fields.Get(route.FlightMapId).Mobs.Where(m => m.TemplateId == AirshipService.CrimsonBalrogMobId).ToList();
+        Assert.Equal(GameConstants.AirshipBalrogCount, raiders.Count);
+        Assert.All(raiders, m => Assert.Equal(100, m.X));                   // boarded at the passenger's feet
+        Assert.All(raiders, m => Assert.Equal(60000, m.MaxHp));
+
+        await svc.TickAsync(CycleStart.AddMinutes(14).AddSeconds(31));      // it peels away
+        Assert.DoesNotContain(fields.Get(route.FlightMapId).Mobs, m => m.TemplateId == AirshipService.CrimsonBalrogMobId);
     }
 }

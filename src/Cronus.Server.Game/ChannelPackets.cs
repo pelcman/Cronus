@@ -1662,7 +1662,9 @@ public sealed class ChannelPackets
 
     // OpsContiMove (v186 keeps the declared values).
     public const byte ContiWait = 1;
+    public const byte ContiMoving = 3;
     public const byte ContiMobGen = 4;
+    public const byte ContiMobDestroy = 5;
     public const byte ContiTargetMoveField = 10;
 
     /// <summary>Builds <c>LP_CONTISTATE</c> — the ship's state for a station map the client just

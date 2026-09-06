@@ -1071,10 +1071,12 @@ public sealed partial class ChannelHandler
 
     /// <summary>
     /// Handles <c>CP_CONTISTATE</c> — the client asks for the ship's state on entering a station or
-    /// flight map (ports <c>ReqCField.OnContiState</c> verbatim): every station answers "docked"
-    /// (<c>CONTI_WAIT</c>), the two flight maps answer "in flight, mobs incoming"
-    /// (<c>CONTI_TARGET_MOVEFIELD</c> + <c>CONTI_MOBGEN</c>). The oracle sends no mob with MOBGEN;
-    /// spawning the Crimson Balrog here is our addition (once per empty flight map).
+    /// flight map (ports <c>ReqCField.OnContiState</c>): every station answers "docked"
+    /// (<c>CONTI_WAIT</c>). On a flight map the oracle always answers <c>CONTI_MOBGEN</c> (the
+    /// Balrog ship is alongside from the first second — it never runs a timeline); we answer the
+    /// timeline's current state instead (<c>CONTI_MOVE</c> while the skies are clear, <c>MOBGEN</c>
+    /// while the raid is on), and the raid itself — enemy ship, Balrogs, departure — is driven by
+    /// <see cref="AirshipService"/>, never from this entry handshake.
     /// </summary>
     private async ValueTask HandleContiStateAsync(MapleSession session, PacketReader packet)
     {
@@ -1097,18 +1099,15 @@ public sealed partial class ChannelHandler
 
             case 200090010:                                // riding to Orbis
             case 200090000:                                // riding to Ellinia
-                await session.SendAsync(_packets.ContiMove(ChannelPackets.ContiTargetMoveField, ChannelPackets.ContiMobGen)).ConfigureAwait(false);
-                if (_field is not null && !_field.Mobs.Any(m => !m.IsDead))
-                {
-                    await ScriptSpawnMobAsync(CrimsonBalrogMobId, 1).ConfigureAwait(false);
-                }
-
+            {
+                bool raidOn = AirshipSchedule.EnemyShipAt(AirshipSchedule.Clock()) == EnemyShipState.Present;
+                await session.SendAsync(_packets.ContiMove(
+                    ChannelPackets.ContiTargetMoveField,
+                    raidOn ? ChannelPackets.ContiMobGen : ChannelPackets.ContiMoving)).ConfigureAwait(false);
                 break;
+            }
         }
     }
-
-    /// <summary>クリムゾンバルログ — the airship raider.</summary>
-    private const int CrimsonBalrogMobId = 9300210;
 
     /// <summary>The <c>player</c> object handed to NPC / quest / portal scripts.</summary>
     private ChannelPlayer CreateScriptPlayer(MapleSession session) => new(

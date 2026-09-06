@@ -411,6 +411,16 @@ public sealed class Field
         }
     }
 
+    /// <summary>Removes a runtime mob outright (the Balrog raiders leaving with their ship). The
+    /// caller announces it with <c>LP_MobLeaveField</c>. False when no such mob.</summary>
+    public bool RemoveMob(int objectId)
+    {
+        lock (_gate)
+        {
+            return _mobs.RemoveAll(m => m.ObjectId == objectId) > 0;
+        }
+    }
+
     /// <summary>Finds a spawned NPC by its runtime object id.</summary>
     public FieldNpc? FindNpc(int objectId)
     {
