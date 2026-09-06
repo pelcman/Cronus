@@ -35,6 +35,7 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<ValueTask<bool>>? _retrieveMerchant;
     private readonly Func<int, int, ValueTask>? _spawnMob;
     private readonly Func<int>? _mobCount;
+    private readonly Func<int, string, int?>? _findPortal;
 
     public ChannelPlayer(
         Character character,
@@ -57,7 +58,8 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<bool>? hasMerchant = null,
         Func<ValueTask<bool>>? retrieveMerchant = null,
         Func<int, int, ValueTask>? spawnMob = null,
-        Func<int>? mobCount = null)
+        Func<int>? mobCount = null,
+        Func<int, string, int?>? findPortal = null)
     {
         _character = character;
         _characters = characters;
@@ -80,6 +82,7 @@ public sealed class ChannelPlayer : INpcPlayer
         _retrieveMerchant = retrieveMerchant;
         _spawnMob = spawnMob;
         _mobCount = mobCount;
+        _findPortal = findPortal;
     }
 
     public string getName() => _character.Name;
@@ -204,6 +207,13 @@ public sealed class ChannelPlayer : INpcPlayer
     }
 
     public void warp(int mapId) => warp(mapId, 0);
+
+    /// <summary>
+    /// Warps to the portal named <paramref name="portalName"/> (the wz <c>pn</c>, e.g. the
+    /// <c>out00</c> the station scripts arrive at), or to portal 0 when the map has no such portal.
+    /// </summary>
+    public void warpPortal(int mapId, string portalName)
+        => warp(mapId, _findPortal?.Invoke(mapId, portalName) ?? 0);
 
     /// <summary>
     /// Warps the player via the channel's map-transfer path. Runs synchronously on the script

@@ -68,12 +68,12 @@ public class NpcScriptEngineTests
         Prompt menu = dialog.Take(cts.Token);
         Assert.Equal(5, menu.MessageType);
         Assert.Contains("Choose", menu.Text);
-        Assert.True(cm!.Advance(messageType: 5, action: 1, selection: 0, text: string.Empty));
+        Assert.Equal(NpcAnswerResult.Accepted, cm!.Advance(messageType: 5, action: 1, selection: 0, text: string.Empty));
 
         // 2) text prompt -> answer "Excalibur".
         Prompt text = dialog.Take(cts.Token);
         Assert.Equal(3, text.MessageType);
-        Assert.True(cm.Advance(messageType: 3, action: 1, selection: -1, text: "Excalibur"));
+        Assert.Equal(NpcAnswerResult.Accepted, cm.Advance(messageType: 3, action: 1, selection: -1, text: "Excalibur"));
 
         // 3) final say (ok) -> confirm content, then answer to let the script finish.
         Prompt ok = dialog.Take(cts.Token);
@@ -458,7 +458,7 @@ public class NpcScriptEngineTests
 
         Prompt avatar = dialog.Take(cts.Token);
         Assert.Equal(8, avatar.MessageType);
-        Assert.True(cm!.Advance(messageType: 8, action: 1, selection: 1, text: string.Empty));
+        Assert.Equal(NpcAnswerResult.Accepted, cm!.Advance(messageType: 8, action: 1, selection: 1, text: string.Empty));
 
         Prompt ok = dialog.Take(cts.Token);
         Assert.Equal("picked 1", ok.Text);
@@ -484,12 +484,130 @@ public class NpcScriptEngineTests
         Assert.NotNull(cm);
 
         dialog.Take(cts.Token);
-        Assert.True(cm!.Advance(messageType: 8, action: 0, selection: -1, text: string.Empty));
+        Assert.Equal(NpcAnswerResult.Accepted, cm!.Advance(messageType: 8, action: 0, selection: -1, text: string.Empty));
 
         Prompt ok = dialog.Take(cts.Token);
         Assert.Equal("cancelled", ok.Text);
         cm.Advance(messageType: 0, action: 1, selection: 0, text: string.Empty);
         WaitUntilEnded(cm, cts.Token);
+    }
+
+    [Fact]
+    public void AskMenu_SelectionNotOffered_EndsWithoutRunningTheScriptOn()
+    {
+        // The jms_scripts taxi shape: option ids are map ids and the script acts on whatever id
+        // comes back. A hand-crafted answer naming an unoffered id must never reach the script.
+        const int npcId = 9000010;
+        const string script = """
+            function start() {
+                var pick = cm.askMenu("Where to?\r\n#L101000000#Ellinia#l\r\n#L102000000#Perion#l");
+                cm.sendOk("warping to " + pick);
+            }
+            """;
+        var engine = new NpcScriptEngine(new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+        var dialog = new RecordingDialog();
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation cm = engine.Start(npcId, dialog, null)!;
+        dialog.Take(cts.Token);
+
+        Assert.Equal(NpcAnswerResult.Rejected, cm.Advance(messageType: 5, action: 1, selection: 240000000, text: string.Empty));
+
+        WaitUntilEnded(cm, cts.Token);
+        Assert.Single(dialog.Recorded);          // the menu only — no "warping to" line
+    }
+
+    [Fact]
+    public void AskMenu_OfferedIdsNeedNotBeIndexes()
+    {
+        const int npcId = 9000011;
+        const string script = """
+            function start() {
+                var pick = cm.askMenu("Where to?\r\n#L101000000#Ellinia#l\r\n#L102000000#Perion#l");
+                cm.sendOk("warping to " + pick);
+            }
+            """;
+        var engine = new NpcScriptEngine(new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+        var dialog = new RecordingDialog();
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation cm = engine.Start(npcId, dialog, null)!;
+        dialog.Take(cts.Token);
+
+        Assert.Equal(NpcAnswerResult.Accepted, cm.Advance(messageType: 5, action: 1, selection: 102000000, text: string.Empty));
+
+        Prompt ok = dialog.Take(cts.Token);
+        Assert.Equal("warping to 102000000", ok.Text);
+    }
+
+    [Fact]
+    public void AskMenu_ClosedWithoutPicking_EndsTheConversation()
+    {
+        // action 0 is the menu being closed (the oracle: a JMS menu pick is always action 1) —
+        // the script must not run on with a bogus -1 pick.
+        const int npcId = 9000012;
+        const string script = """
+            function start() {
+                var pick = cm.askMenu("Choose:\r\n#L0#A#l\r\n#L1#B#l");
+                cm.sendOk("picked " + pick);
+            }
+            """;
+        var engine = new NpcScriptEngine(new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+        var dialog = new RecordingDialog();
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation cm = engine.Start(npcId, dialog, null)!;
+        dialog.Take(cts.Token);
+
+        Assert.Equal(NpcAnswerResult.Accepted, cm.Advance(messageType: 5, action: 0, selection: -1, text: string.Empty));
+
+        WaitUntilEnded(cm, cts.Token);
+        Assert.Single(dialog.Recorded);
+    }
+
+    [Fact]
+    public void AskAvatar_IndexOutsideTheCandidates_EndsTheConversation()
+    {
+        const int npcId = 9000013;
+        const string script = """
+            function start() {
+                var pick = cm.askAvatar("Pick a style:", [30030, 30040]);
+                cm.sendOk("picked " + pick);
+            }
+            """;
+        var engine = new NpcScriptEngine(new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+        var dialog = new RecordingDialog();
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation cm = engine.Start(npcId, dialog, null)!;
+        dialog.Take(cts.Token);
+
+        Assert.Equal(NpcAnswerResult.Rejected, cm.Advance(messageType: 8, action: 1, selection: 5, text: string.Empty));
+
+        WaitUntilEnded(cm, cts.Token);
+        Assert.Single(dialog.Recorded);
+    }
+
+    [Fact]
+    public void UnansweredPrompt_TimesOutAndEnds_InsteadOfContinuingWithAStaleAnswer()
+    {
+        const int npcId = 9000014;
+        const string script = """
+            function start() {
+                cm.askMenu("Choose:\r\n#L0#A#l");
+                cm.sendOk("continued");
+            }
+            """;
+        var engine = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }), answerTimeoutMs: 200);
+        var dialog = new RecordingDialog();
+
+        using var cts = new CancellationTokenSource(Timeout);
+        NpcConversation cm = engine.Start(npcId, dialog, null)!;
+        dialog.Take(cts.Token);
+
+        WaitUntilEnded(cm, cts.Token);           // nobody answers
+        Assert.Single(dialog.Recorded);          // and "continued" never shows
     }
 
     private static void WaitUntilEnded(NpcConversation cm, CancellationToken ct)

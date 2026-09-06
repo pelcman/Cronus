@@ -244,13 +244,16 @@ public class NpcDialogFlowTests
         Assert.Equal(5, menu.MessageType);
 
         // The malformed answer (action claims a selection int that isn't there) would previously
-        // over-read and disconnect the session. Now the read is guarded, so the script advances
-        // with no selection (-1) and the session survives: its next prompt still arrives.
+        // over-read and disconnect the session. Now the read is guarded: no selection could be
+        // read, so the answer names nothing the menu offered and the engine ends the dialog
+        // without running the script on — and the session survives.
         await client.AnswerTruncatedAsync(messageType: 5, action: 1);
 
-        ScriptPrompt next = client.Prompts.Take(cts.Token);
-        Assert.Equal(0, next.MessageType);       // the sendOk line, not a dropped connection
-        Assert.Equal("done -1", next.Text);      // no selection was read
+        Assert.False(client.Prompts.TryTake(out _, 300)); // no "done" line
+
+        await client.ReselectAsync(npcId);       // a fresh NPC selection still gets its prompt
+        ScriptPrompt again = client.Prompts.Take(cts.Token);
+        Assert.Equal(5, again.MessageType);
     }
 
     /// <summary>Enters, selects an NPC, and signals when a second SetField (the warp) arrives.</summary>
@@ -475,6 +478,62 @@ public class NpcDialogFlowTests
         ScriptPrompt prompt = client.Prompts.Take(cts.Token);
         Assert.Equal(0, prompt.MessageType);
         Assert.Equal("Hi from 9010000!", prompt.Text);
+    }
+
+    [Fact]
+    public async Task MenuAnswerOutsideTheOfferedOptions_NeverReachesTheScript()
+    {
+        // Riremito's jms_scripts taxi shape: the option id IS the destination map and the script
+        // warps to whatever id comes back — an unchecked answer could name any map ("どのmapでも
+        // 飛べる"). Over the real wire, an unoffered id must end the dialog with no warp.
+        const int npcId = 9010000;
+        const string script = """
+            function start() {
+                var pick = cm.askMenu("Where to?\r\n#L101000000#Ellinia#l\r\n#L102000000#Perion#l");
+                player.warp(pick);
+            }
+            """;
+
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Rider", MapId = 100000000 });
+        var maps = new InMemoryMapProvider(new[]
+        {
+            new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() },
+            new MapData { MapId = 101000000, Portals = Array.Empty<PortalData>() },
+            new MapData { MapId = 102000000, Portals = Array.Empty<PortalData>() },
+            new MapData { MapId = 240000000, Portals = Array.Empty<PortalData>() }, // real map, never offered
+        });
+        var fields = new FieldRegistry(maps);
+        var scripts = new NpcScriptEngine(
+            new DictionaryNpcScriptSource(new Dictionary<int, string> { [npcId] = script }));
+
+        var client = new NpcClient(hero.Id, npcId);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps, npcScripts: scripts);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        await using var serverSession = new MapleSession(
+            clientToServer.Reader, serverToClient.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
+        await using var clientSession = new MapleSession(
+            serverToClient.Reader, clientToServer.Writer, ServerConfig.Jms186, SessionRole.Client, client);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        _ = serverSession.RunAsync(cts.Token);
+        _ = clientSession.RunAsync(cts.Token);
+
+        ScriptPrompt menu = client.Prompts.Take(cts.Token);
+        Assert.Equal(5, menu.MessageType);
+
+        await client.AnswerAsync(messageType: 5, action: 1, selection: 240000000);
+
+        // Nothing follows: no warp (a SetField would make the client re-select and prompt again).
+        Assert.False(client.Prompts.TryTake(out _, 300));
+        Assert.Equal(100000000, hero.MapId);
+
+        // The dialog slot is free again: the next click gets the menu.
+        await client.ReselectAsync(npcId);
+        ScriptPrompt again = client.Prompts.Take(cts.Token);
+        Assert.Equal(5, again.MessageType);
     }
 
     [Fact]

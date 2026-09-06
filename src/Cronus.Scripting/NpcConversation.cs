@@ -1,8 +1,26 @@
+using System.Text.RegularExpressions;
+
 namespace Cronus.Scripting;
 
 /// <summary>Thrown inside a script's thread to unwind it when the conversation ends.</summary>
 public sealed class ConversationEndedException : Exception
 {
+}
+
+/// <summary>What <see cref="NpcConversation.Advance"/> did with a client answer.</summary>
+public enum NpcAnswerResult
+{
+    /// <summary>The answer matched the pending prompt: the script continues (or the dialog ended normally).</summary>
+    Accepted,
+
+    /// <summary>No prompt was pending, or the answer named another message type — ignored.</summary>
+    Mismatched,
+
+    /// <summary>
+    /// The answer picked an option the prompt never offered. Only a hand-crafted packet does
+    /// that; the conversation was ended without running the script any further.
+    /// </summary>
+    Rejected,
 }
 
 /// <summary>
@@ -13,12 +31,16 @@ public sealed class ConversationEndedException : Exception
 /// </summary>
 public sealed class NpcConversation : IDisposable
 {
+    /// <summary>A menu option marker, <c>#L&lt;id&gt;#</c>; the id is what the client echoes as its selection.</summary>
+    private static readonly Regex MenuOption = new(@"#L(\d+)#", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly INpcDialog _dialog;
     private readonly SemaphoreSlim _answerReady = new(0, 1);
     private readonly int _timeoutMs;
 
     private volatile bool _ended;
     private int _lastMessageType = -1;
+    private HashSet<int>? _offered;
     private int _action;
     private int _selection;
     private string _text = string.Empty;
@@ -60,9 +82,14 @@ public sealed class NpcConversation : IDisposable
         return _action == 1;
     }
 
+    /// <summary>
+    /// Shows a menu and returns the id of the option the player picked — always one of the
+    /// <c>#L&lt;id&gt;#</c> ids in <paramref name="text"/>. An answer naming any other id ends the
+    /// conversation before the script sees it (see <see cref="OfferedSelections"/>).
+    /// </summary>
     public int askMenu(string text)
     {
-        Prompt(ScriptMessageType.AskMenu, () => _dialog.AskMenu(NpcId, text));
+        Prompt(ScriptMessageType.AskMenu, () => _dialog.AskMenu(NpcId, text), OfferedSelections(text));
         return _selection;
     }
 
@@ -77,11 +104,12 @@ public sealed class NpcConversation : IDisposable
 
     /// <summary>
     /// Shows the style-picker (SM_ASKAVATAR) over the candidate hair/face/skin ids and returns
-    /// the chosen index into <paramref name="styles"/>, or -1 if the player cancelled.
+    /// the chosen index into <paramref name="styles"/>, or -1 if the player cancelled. An index
+    /// outside the candidates ends the conversation instead.
     /// </summary>
     public int askAvatar(string text, params int[] styles)
     {
-        Prompt(ScriptMessageType.AskAvatar, () => _dialog.AskAvatar(NpcId, text, styles));
+        Prompt(ScriptMessageType.AskAvatar, () => _dialog.AskAvatar(NpcId, text, styles), new HashSet<int>(Enumerable.Range(0, styles.Length)));
         return _action == 0 ? -1 : _selection;
     }
 
@@ -90,31 +118,68 @@ public sealed class NpcConversation : IDisposable
 
     public void dispose() => End();
 
+    /// <summary>
+    /// The selection ids a menu text offers — every <c>#L&lt;id&gt;#</c> in it. The client sends
+    /// its pick back as a plain int, so a hand-crafted answer could otherwise name any value: a
+    /// taxi script whose option ids are map ids and which warps to the id it gets back would then
+    /// fly anywhere (Riremito's jms_scripts leave exactly that hole open on purpose — the fix is
+    /// to check the id against what was offered, which the engine does here for every script).
+    /// </summary>
+    public static HashSet<int> OfferedSelections(string menuText)
+    {
+        var ids = new HashSet<int>();
+        foreach (Match m in MenuOption.Matches(menuText))
+        {
+            if (int.TryParse(m.Groups[1].ValueSpan, out int id))
+            {
+                ids.Add(id);
+            }
+        }
+
+        return ids;
+    }
+
     // --- Host-facing side ---
 
     /// <summary>
-    /// Delivers the client's answer, unblocking the script. Returns false if it does not match
-    /// the pending prompt. An escape (<paramref name="action"/> == -1) ends the conversation.
+    /// Delivers the client's answer, unblocking the script. An escape (<paramref name="action"/>
+    /// == -1) or a closed menu ends the conversation; a menu/avatar selection that was never
+    /// offered ends it too and is reported as <see cref="NpcAnswerResult.Rejected"/>.
     /// </summary>
-    public bool Advance(int messageType, int action, int selection, string text)
+    public NpcAnswerResult Advance(int messageType, int action, int selection, string text)
     {
         if (_ended || messageType != _lastMessageType)
         {
-            return false;
+            return NpcAnswerResult.Mismatched;
         }
 
         if (action == -1)
         {
             End();
-            return true;
+            return NpcAnswerResult.Accepted;
+        }
+
+        // A menu is answered with action 1 and the picked id (the oracle: "JMS is always 1");
+        // anything else is the dialog being closed, and the script gets no pick to act on.
+        if (messageType == (int)ScriptMessageType.AskMenu && action != 1)
+        {
+            End();
+            return NpcAnswerResult.Accepted;
+        }
+
+        if (action != 0 && _offered is not null && !_offered.Contains(selection))
+        {
+            End();
+            return NpcAnswerResult.Rejected;
         }
 
         _action = action;
         _selection = selection;
         _text = text;
         _lastMessageType = -1;
+        _offered = null;
         _answerReady.Release();
-        return true;
+        return NpcAnswerResult.Accepted;
     }
 
     /// <summary>Ends the conversation, unblocking any waiting script thread so it can unwind.</summary>
@@ -136,7 +201,7 @@ public sealed class NpcConversation : IDisposable
         }
     }
 
-    private void Prompt(ScriptMessageType type, Action send)
+    private void Prompt(ScriptMessageType type, Action send, HashSet<int>? offered = null)
     {
         if (_ended)
         {
@@ -144,11 +209,15 @@ public sealed class NpcConversation : IDisposable
         }
 
         _lastMessageType = (int)type;
+        _offered = offered;
         send();
 
-        _answerReady.Wait(_timeoutMs);
-        if (_ended)
+        bool answered = _answerReady.Wait(_timeoutMs);
+        if (_ended || !answered)
         {
+            // Unanswered for the whole window: end here rather than let the script run on with
+            // the previous answer still in _selection as if the player had just picked it.
+            End();
             throw new ConversationEndedException();
         }
     }

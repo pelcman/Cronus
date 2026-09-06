@@ -1113,6 +1113,7 @@ public sealed partial class ChannelHandler
     private ChannelPlayer CreateScriptPlayer(MapleSession session) => new(
         _player!.Character, _characters, session, _packets,
         warp: (map, portal) => MovePlayerToMapAsync(session, map, portal),
+        findPortal: (map, name) => _maps.GetMap(map)?.FindPortal(name)?.Id,
         openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
         openStorage: () => OpenStorageAsync(session),
         openParcel: () => session.SendAsync(_packets.ParcelOpen(fromNpc: true)),
@@ -1272,7 +1273,14 @@ public sealed partial class ChannelHandler
             }
         }
 
-        conversation.Advance(messageType, action, selection, text);
+        if (conversation.Advance(messageType, action, selection, text) == NpcAnswerResult.Rejected)
+        {
+            // The answer named an option the menu never offered — only a hand-crafted packet does
+            // that (Riremito: taxi menus whose ids are map ids would otherwise warp anywhere). The
+            // engine has already ended the dialog; free the slot so the next NPC click works.
+            _conversation = null;
+            Console.WriteLine($"[npc] {_player?.Character.Name}: answered npc {conversation.NpcId} with unoffered option {selection} — dialog closed");
+        }
     }
 
     private async ValueTask HandleTransferFieldAsync(MapleSession session, PacketReader packet)

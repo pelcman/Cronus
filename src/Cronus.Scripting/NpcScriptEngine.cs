@@ -13,11 +13,15 @@ public sealed class NpcScriptEngine
 {
     private readonly INpcScriptSource _scripts;
     private readonly INpcScriptSource? _questScripts;
+    private readonly int _answerTimeoutMs;
 
-    public NpcScriptEngine(INpcScriptSource scripts, INpcScriptSource? questScripts = null)
+    /// <param name="answerTimeoutMs">How long a prompt waits for the client's answer before the
+    /// conversation is ended (the upstream default is five minutes).</param>
+    public NpcScriptEngine(INpcScriptSource scripts, INpcScriptSource? questScripts = null, int answerTimeoutMs = 300_000)
     {
         _scripts = scripts;
         _questScripts = questScripts;
+        _answerTimeoutMs = answerTimeoutMs;
     }
 
     /// <summary>
@@ -33,7 +37,7 @@ public sealed class NpcScriptEngine
             return null;
         }
 
-        var conversation = new NpcConversation(npcId, dialog);
+        var conversation = new NpcConversation(npcId, dialog, _answerTimeoutMs);
         var thread = new Thread(() => Run(code, conversation, player, "cm", "start"))
         {
             IsBackground = true,
@@ -58,7 +62,7 @@ public sealed class NpcScriptEngine
             return null;
         }
 
-        var conversation = new NpcConversation(npcId, dialog);
+        var conversation = new NpcConversation(npcId, dialog, _answerTimeoutMs);
         var thread = new Thread(() => Run(code, conversation, player, "qm", ending ? "end" : "start"))
         {
             IsBackground = true,
