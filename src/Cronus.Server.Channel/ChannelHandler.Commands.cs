@@ -1216,26 +1216,37 @@ public sealed partial class ChannelHandler
     private static readonly UInt128 GmMoveMask =
         (UInt128.One << BuffEffect.Speed) | (UInt128.One << BuffEffect.Jump) | (UInt128.One << BuffEffect.Booster);
 
-    /// <summary>/gmfly's one stat: Flying (CTS bit 80) = 1, reason skill 1026, a day long.</summary>
+    /// <summary>/gmfly's one stat: Flying (CTS bit 80) = 1 with the soaring skill 1026 as its
+    /// reason — the one place that reason belongs (see <see cref="GmMoveReasonSkill"/>).</summary>
     internal static readonly BuffStat[] GmFlyBuffs = [new(BuffEffect.Flying, 1, 1026, 86_400_000)];
 
     private static readonly UInt128 GmFlyMask = UInt128.One << BuffEffect.Flying;
 
+    /// <summary>The reason (skill id) on /gmmove's Speed and Jump stats: Haste (4101004), a skill
+    /// that grants exactly those two, so the buff icon reads right. It must NOT be the soaring
+    /// skill 1026 (天の翼 / 플라잉): the client treats stats carrying a soaring reason as flight, which
+    /// is /gmfly's job, not /gmmove's.</summary>
+    public const int GmMoveReasonSkill = 4101004;
+
+    /// <summary>The reason on /gmmove's Booster stat: Sword Booster (1101004); any booster skill's
+    /// icon will do, the effect comes from the value.</summary>
+    public const int GmMoveBoosterReasonSkill = 1101004;
+
     /// <summary>The /gmmove temporary stats for multipliers of the 100% base: Speed +(N×100−100),
     /// Jump likewise, and the Booster offset from <see cref="GmMoveBooster"/> when it is not 0. A
     /// stock client clamps them (140% / 123% / degree 2); DevTools/clientpatch_speedcap.py removes
-    /// the clamps. The reason is skill 1026 (플라잉 / 天の翼, a beginner skill this client has an
-    /// icon for); the day-long duration is a formality — the command clears them.</summary>
+    /// the clamps. Reasons are <see cref="GmMoveReasonSkill"/> / <see cref="GmMoveBoosterReasonSkill"/>;
+    /// the day-long duration is a formality — the command clears them.</summary>
     internal static BuffStat[] GmMoveBuffs(double speedTimes, double jumpTimes, int booster)
     {
         var stats = new List<BuffStat>
         {
-            new(BuffEffect.Speed, (short)Math.Clamp(Math.Round(speedTimes * 100 - 100), 0, short.MaxValue), 1026, 86_400_000),
-            new(BuffEffect.Jump, (short)Math.Clamp(Math.Round(jumpTimes * 100 - 100), 0, short.MaxValue), 1026, 86_400_000),
+            new(BuffEffect.Speed, (short)Math.Clamp(Math.Round(speedTimes * 100 - 100), 0, short.MaxValue), GmMoveReasonSkill, 86_400_000),
+            new(BuffEffect.Jump, (short)Math.Clamp(Math.Round(jumpTimes * 100 - 100), 0, short.MaxValue), GmMoveReasonSkill, 86_400_000),
         };
         if (booster != 0)
         {
-            stats.Add(new BuffStat(BuffEffect.Booster, (short)booster, 1026, 86_400_000));
+            stats.Add(new BuffStat(BuffEffect.Booster, (short)booster, GmMoveBoosterReasonSkill, 86_400_000));
         }
 
         return stats.ToArray();

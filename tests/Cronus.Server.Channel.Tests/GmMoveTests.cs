@@ -129,7 +129,11 @@ public class GmMoveTests
         Assert.Equal(0u, set.Words[2]);                                                 // word[1]
         Assert.Equal((1u << BuffEffect.Speed) | (1u << BuffEffect.Jump) | (1u << BuffEffect.Booster), set.Words[3]); // word[0]
         // 3x / 1.8x / 2x: frame time (d+10)/16 = 1/2 -> degree -2; no weapon -> speed 6 -> Booster -8.
-        Assert.Equal(new[] { (200, 1026), (80, 1026), (-8, 1026) }, set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray());
+        // Reasons: Haste for Speed/Jump, a booster skill for Booster — never the soaring skill 1026,
+        // which would make the client fly (/gmfly's job).
+        Assert.Equal(new[] { (200, ChannelHandler.GmMoveReasonSkill), (80, ChannelHandler.GmMoveReasonSkill), (-8, ChannelHandler.GmMoveBoosterReasonSkill) },
+            set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray());
+        Assert.All(set.Entries, e => Assert.NotEqual(1026, e.Reason));
         Assert.All(set.Entries, e => Assert.Equal(86_400_000, e.Duration));
 
         // A hit lands on the wire, but HP stays put and no StatChanged follows (the entry sends one).
