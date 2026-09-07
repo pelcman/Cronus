@@ -2000,12 +2000,8 @@ public sealed class ChannelPackets
     /// </summary>
     public byte[] TemporaryStatSet(IReadOnlyList<BuffStat> stats)
     {
-        ulong mask = BuffEffect.Mask64(stats);
         PacketWriter w = NewPacket(ServerOpcode.TemporaryStatSet);
-        w.WriteInt(0);                                 // mask word[3]
-        w.WriteInt(0);                                 // mask word[2]
-        w.WriteInt((int)(uint)(mask >> 32));           // mask word[1] (bits 32-63)
-        w.WriteInt((int)(uint)mask);                   // mask word[0]
+        WriteMask128(w, BuffEffect.Mask128(stats));
         foreach (BuffStat s in stats)
         {
             w.WriteShort(s.Value);       // nValue (2 bytes in v186)
@@ -2020,18 +2016,27 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary>The 128-bit CTS mask as the client reads it: word[3], word[2], word[1], word[0].</summary>
+    private static void WriteMask128(PacketWriter w, UInt128 mask)
+    {
+        w.WriteInt((int)(uint)(mask >> 96));
+        w.WriteInt((int)(uint)(mask >> 64));
+        w.WriteInt((int)(uint)(mask >> 32));
+        w.WriteInt((int)(uint)mask);
+    }
+
     /// <summary>
     /// Builds <c>LP_TemporaryStatReset</c> — clears the given CTS mask (ports
     /// <c>ResCWvsContext.TemporaryStatReset</c>, JMS v186): the 128-bit mask (reverse word order) and
     /// a trailing 0 byte. <paramref name="word0Mask"/> holds the simple-stat bits (word[0]).
     /// </summary>
-    public byte[] TemporaryStatReset(ulong mask)
+    public byte[] TemporaryStatReset(ulong mask) => TemporaryStatReset((UInt128)mask);
+
+    /// <summary>The 128-bit form — bits 64+ (Flying is 80) live in mask word[2]/word[3].</summary>
+    public byte[] TemporaryStatReset(UInt128 mask)
     {
         PacketWriter w = NewPacket(ServerOpcode.TemporaryStatReset);
-        w.WriteInt(0);
-        w.WriteInt(0);
-        w.WriteInt((int)(uint)(mask >> 32));
-        w.WriteInt((int)(uint)mask);
+        WriteMask128(w, mask);
         w.WriteByte(0);
         return w.ToArray();
     }

@@ -242,6 +242,10 @@ public sealed class FieldPlayer
     /// <summary>Janken (RPS) win streak; -1 after a loss, reset on game start.</summary>
     public int RpsStreak { get; set; }
 
+    /// <summary>/gmmove: no damage taken, no skill MP cost or cooldown. The client-side half is the
+    /// Speed/Jump/Flying temporary stats the command sends.</summary>
+    public bool GmMove { get; set; }
+
     /// <summary>
     /// <see cref="Environment.TickCount64"/> of the player's last move/attack. Natural HP/MP
     /// regen only kicks in after they've been idle for a bit (see <c>PlayerRegenService</c>).

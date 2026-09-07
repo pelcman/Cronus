@@ -18,14 +18,18 @@ public static class BuffEffect
 {
     // Generic CTS bit indices for JMS v186 (OpsSecondaryStat.init, JMS >= 186 branch), shared by
     // item and skill buffs.
-    internal const int Pad = 0;
-    internal const int Pdd = 1;
-    internal const int Mad = 2;
-    internal const int Mdd = 3;
-    internal const int Acc = 4;
-    internal const int Eva = 5;
-    internal const int Speed = 7;
-    internal const int Jump = 8;
+    public const int Pad = 0;
+    public const int Pdd = 1;
+    public const int Mad = 2;
+    public const int Mdd = 3;
+    public const int Acc = 4;
+    public const int Eva = 5;
+    public const int Speed = 7;
+    public const int Jump = 8;
+
+    /// <summary>CTS_Flying (OpsSecondaryStat.init, JMS v186: bit 80 — mask word[2]): the client
+    /// switches to flying movement while it is set (the beginner flying skills, /gmmove).</summary>
+    public const int Flying = 80;
 
     /// <summary>The active buff stats a consumable grants, in ascending bit order (empty if none).</summary>
     public static List<BuffStat> FromSpec(ConsumeSpec spec)
@@ -57,6 +61,18 @@ public static class BuffEffect
 
     /// <summary>The mask word[0] (the only word simple potion stats use) for a set of buff stats.</summary>
     public static uint Word0Mask(IEnumerable<BuffStat> stats) => (uint)Mask64(stats);
+
+    /// <summary>The full 128-bit CTS mask (bits 0-127; word[n] = bits 32n..32n+31) for a set of stats.</summary>
+    public static UInt128 Mask128(IEnumerable<BuffStat> stats)
+    {
+        UInt128 mask = UInt128.Zero;
+        foreach (BuffStat s in stats)
+        {
+            mask |= UInt128.One << s.Bit;
+        }
+
+        return mask;
+    }
 
     /// <summary>The CTS mask covering bits 0-63 (word[0] low, word[1] high) for a set of stats.</summary>
     public static ulong Mask64(IEnumerable<BuffStat> stats)

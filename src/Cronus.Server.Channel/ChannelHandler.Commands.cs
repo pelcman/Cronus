@@ -107,6 +107,38 @@ public sealed partial class ChannelHandler
                     .ConfigureAwait(false);
                 break;
 
+            case "gmmove":
+            {
+                // GM movement mode. Server half: a flag (no damage taken, no skill MP cost, no
+                // cooldown). Client half: Speed/Jump/Flying temporary stats — the pre-BB client caps
+                // speed at 140 and jump at 123 (CUser::GetSpeed/GetJump), so the +200 speed lands
+                // on that cap; Flying (CTS bit 80) is what lets the character leave the ground.
+                bool? requested = parts.Length < 2 ? null
+                    : parts[1].Equals("on", StringComparison.OrdinalIgnoreCase) ? true
+                    : parts[1].Equals("off", StringComparison.OrdinalIgnoreCase) ? false
+                    : null;
+                if (parts.Length >= 2 && requested is null)
+                {
+                    await ReplyAsync(session, "使い方: /gmmove [on|off]").ConfigureAwait(false);
+                    break;
+                }
+
+                bool on = requested ?? !_player!.GmMove;
+                _player!.GmMove = on;
+                if (on)
+                {
+                    await session.SendAsync(_packets.TemporaryStatSet(GmMoveBuffs)).ConfigureAwait(false);
+                    await ReplyAsync(session, "gmmove: ON — 速度/ジャンプ最大+飛行、被ダメージ無効、スキルのMP消費・クールタイム無し").ConfigureAwait(false);
+                }
+                else
+                {
+                    await session.SendAsync(_packets.TemporaryStatReset(BuffEffect.Mask128(GmMoveBuffs))).ConfigureAwait(false);
+                    await ReplyAsync(session, "gmmove: OFF").ConfigureAwait(false);
+                }
+
+                break;
+            }
+
             case "conti" when parts.Length >= 3:
             {
                 // Live bisect for the airship packets the oracle never verified: sends one
@@ -1117,6 +1149,16 @@ public sealed partial class ChannelHandler
     /// while the raid is on), and the raid itself — enemy ship, Balrogs, departure — is driven by
     /// <see cref="AirshipService"/>, never from this entry handshake.
     /// </summary>
+    /// <summary>The /gmmove temporary stats: speed and jump at the client's caps plus Flying (CTS
+    /// bit 80). The reason is skill 1026 (플라잉 / 天の翼, the beginner flying skill this client has
+    /// an icon for); the day-long duration is a formality — the command clears them.</summary>
+    private static readonly BuffStat[] GmMoveBuffs =
+    {
+        new(BuffEffect.Speed, 200, 1026, 86_400_000),
+        new(BuffEffect.Jump, 23, 1026, 86_400_000),
+        new(BuffEffect.Flying, 1, 1026, 86_400_000),
+    };
+
     /// <summary>
     /// The station departure board: a map with a wz <c>clock</c> node shows the server machine's
     /// local time, sent once on entry (ports TacosMap.addPlayer's hasClock branch — LP_Clock type 1

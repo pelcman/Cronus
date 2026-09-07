@@ -240,6 +240,11 @@ AGENTS.md の「Deferred」を再評価して潰す:
       / `CRONUS_DAMAGE_CAP_ENABLED` / `CRONUS_DAMAGE_CAP`)。装備・ステ・バフの反映はサーバーが送る
       CharacterData(golden vector検証済)/装備ステ(wz由来)/TemporaryStatSet(スキルX値)の
       正しさに依存。将来の締め付け候補: ステ由来の最大ダメ検証(oracle無し=創作になる)。
+- [x] **`/gmmove`**(2026-09-07) — GM移動モード。サーバー側フラグ(被ダメージ無効・スキルMP消費/
+      クールタイム無し)+一時ステータス Speed+200/Jump+23/**Flying**(CTS bit 80、JMS186の
+      `OpsSecondaryStat.init` 準拠、理由=スキル1026 플라잉)。`LP_TemporaryStatSet/Reset` を128bit
+      マスク対応に拡張(bit≥64は word[2]/[3])。速度はクライアント上限140%で頭打ち(3倍は不可)。
+      **飛行状態の実機挙動は未検証**。
 - [x] **存在しないマップに保存されたキャラの救済**(2026-09-07) — `/warp` の打ち間違いで
       データの無いマップIDに飛ぶと、SetField でクライアントが落ち、再ログインでも同じ地点で落ちて
       復帰不能だった。対策2段: ① `/warp <id>` は Map.wz に無いIDを拒否(`IMapProvider.KnowsAllMaps`
@@ -254,6 +259,14 @@ AGENTS.md の「Deferred」を再評価して潰す:
 - [ ] **Java差分ハーネス自動化** — 同一bot操作を両サーバーに流してバイト差分を出す
       スクリプト(`CRONUS_BOT_CAPTURE` の拡張)
 - [ ] **長時間ソーク** — 実クライアント放置+bot併走を数時間、メモリ/切断監視
+- [x] **wz 編集環境**(2026-09-07) — `DevTools/wz.bat`(`DevTools/WzTool`, 実装は `src/Cronus.Data/Wz/`):
+      .img のプロパティ木リーダー/ライター(文字列重複表・拡張ブロック・キャンバス/サウンド原文複製)、
+      アーカイブ再構築(ヘッダ複製・ディレクトリ再直列化・未変更 img はバイト複製)、キャンバス復号→PNG、
+      `graft`(別 wz からノード移植、鍵差は平文 zlib に正規化)、`verify`(全 img 解析比較)。
+      **Map.wz 598MB を無変更で再構築 → 5983 img 全一致(0.9秒)** を確認。往復テスト7件。
+      使い方と移植レシピ(飛行船バルログ船 / アバター)は [WZ_TOOLING.md](WZ_TOOLING.md)。
+      バルログ船画像の移植は `DevTools/wz_graft_airship.bat <移植元 Map.wz>` — **移植元(97が実画像の
+      Map.wz)がこのマシンに無いため未実施**。残: 新規 img の追加、PNG→キャンバス取り込み。
 - [x] **クラッシュ報告の定型化** — `DevTools/wirelog.py`(2026-08-26)。切断ごとに直前の
       送受信をopcode名+要旨(クエストid/NPC/ポータル名/チャット等)付きで注釈表示。
       `--summary`(opcode頻度)、`--opcode XXXX`(単一opcode追跡)。4681クラッシュ解析を

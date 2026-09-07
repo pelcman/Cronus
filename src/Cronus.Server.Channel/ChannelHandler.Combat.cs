@@ -163,7 +163,7 @@ public sealed partial class ChannelHandler
         int level = c.Skills.TryGetValue(attack.SkillId, out int lvl) && lvl > 0 ? lvl : 1;
         attack.SkillLevel = level;
 
-        if (_skills.GetSkillEffect(attack.SkillId, level) is { MpCon: > 0 } effect && c.Mp >= effect.MpCon)
+        if (!_player.GmMove && _skills.GetSkillEffect(attack.SkillId, level) is { MpCon: > 0 } effect && c.Mp >= effect.MpCon)
         {
             c.Mp = (short)(c.Mp - effect.MpCon);
             _characters.Save(c);
@@ -581,6 +581,11 @@ public sealed partial class ChannelHandler
             return; // a miss — mirrored above, nothing to apply
         }
 
+        if (_player.GmMove)
+        {
+            return; // /gmmove: onlookers saw the hit, but nothing is taken
+        }
+
         _player.LastActiveTick = Environment.TickCount64; // taking a hit counts as activity
 
         if (attacker is not null && attack.MpCon > 0)
@@ -759,15 +764,16 @@ public sealed partial class ChannelHandler
             await session.SendAsync(_packets.StatChanged(c, 0)).ConfigureAwait(false); // unknown skill
             return;
         }
-        if (effect.MpCon > 0 && c.Mp >= effect.MpCon)
+        if (!_player.GmMove && effect.MpCon > 0 && c.Mp >= effect.MpCon)
         {
             c.Mp = (short)(c.Mp - effect.MpCon);
             _characters.Save(c);
             await session.SendAsync(_packets.StatChanged(c, StatFlag.Mp)).ConfigureAwait(false);
         }
 
-        // A cooldown skill starts the client's cooldown timer (the client blocks recasts).
-        if (effect.CooltimeSec > 0)
+        // A cooldown skill starts the client's cooldown timer (the client blocks recasts) —
+        // not under /gmmove.
+        if (effect.CooltimeSec > 0 && !_player.GmMove)
         {
             await session.SendAsync(_packets.SkillCooltimeSet(skillId, effect.CooltimeSec)).ConfigureAwait(false);
         }
