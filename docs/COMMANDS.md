@@ -238,8 +238,10 @@ Replies with your `(x, y)` position and map id — handy when authoring NPC/port
 ### `/gmmove [on|off]`
 Toggles GM movement mode (no argument flips it). While on: speed and jump sit at the client's caps
 (140% / 123%) and the Flying temporary stat lets you leave the ground; hits show their number but
-take no HP; skills cost no MP and have no cooldown. The client caps speed at 140%, so "3x" is not
-reachable. Re-logging turns it off.
+take no HP; skills cost no MP and have no cooldown. A stock client caps speed at 140% and jump at
+123% and only flies on maps flagged `info/fly` (72 of them); `DevTools\clientpatch_speedcap.py apply`
+(300% / 180%) and `DevTools\wz_enable_fly.bat` (fly anywhere) lift both — see
+[CLIENT_PATCHES.md](CLIENT_PATCHES.md). Re-logging turns it off.
 
 ### `/conti state|move <a> [b]`
 Sends one airship effect packet to **you only**: `/conti state 4 1` is `LP_CONTISTATE [4][1]`,

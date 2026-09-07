@@ -7,6 +7,7 @@
 //   wz rewrite <file.wz> --out <new.wz>          rebuild unchanged (the round-trip check)
 //   wz graft   <src.wz> <src path> <dst.wz> <dst path> --out <new.wz> [--no-verify]
 //   wz verify  <a.wz> <b.wz>                     compare every image's parsed content
+//   wz set-int <file.wz> <image glob> <node path> <value> --out <new.wz>   mass-edit one int
 //
 // A path is "<dir>/<name>.img[/node/node…]", e.g. Obj/vehicle.img/ship/ossyria/97.
 using System.Diagnostics;
@@ -32,6 +33,7 @@ try
         "rewrite" => Rewrite(args),
         "graft" => Graft(args),
         "verify" => Verify(args),
+        "set-int" => SetInt(args),
         _ => Usage(),
     };
 }
@@ -52,7 +54,9 @@ static int Usage()
           wz rewrite <file.wz> --out <new.wz>
           wz graft   <src.wz> <src path> <dst.wz> <dst path> --out <new.wz> [--no-verify]
           wz verify  <a.wz> <b.wz>
+          wz set-int <file.wz> <image glob> <node path> <value> --out <new.wz> [--no-verify]
         path = <dir>/<name>.img[/node/…]   e.g. Obj/vehicle.img/ship/ossyria/97
+        image glob = archive paths with * wildcards, e.g. "Map*/*.img" (every map)
         """);
     return 1;
 }
@@ -274,10 +278,98 @@ static int Verify(string[] args)
     return VerifyFiles(args[1], args[2], expectDifferent: null);
 }
 
+/// <summary>Sets (or adds) one int node in every image matching a glob — e.g. info/fly = 1 on
+/// every map so the Flying temporary stat works everywhere, not just on the 72 fly maps.</summary>
+static int SetInt(string[] args)
+{
+    string? out_ = Option(args, "--out");
+    if (args.Length < 5 || out_ is null || !int.TryParse(args[4], out int value))
+    {
+        return Usage();
+    }
+
+    var sw = Stopwatch.StartNew();
+    var glob = new System.Text.RegularExpressions.Regex(
+        "^" + System.Text.RegularExpressions.Regex.Escape(args[2].Replace('\\', '/').Trim('/')).Replace("\\*", "[^/]*") + "$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    string[] nodePath = args[3].Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+    if (nodePath.Length == 0)
+    {
+        throw new ArgumentException("a node path is required (e.g. info/fly)");
+    }
+
+    using WzArchive a = WzArchive.Open(args[1]);
+    var replaced = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+    int created = 0, updated = 0, unchanged = 0;
+    foreach (WzImageEntry image in a.Images)
+    {
+        if (!glob.IsMatch(image.ArchivePath))
+        {
+            continue;
+        }
+
+        (WzNode root, WzCrypto crypto) = WzImageReader.ReadWithCrypto(a, image);
+        WzNode parent = root;
+        for (int i = 0; i < nodePath.Length - 1; i++)
+        {
+            WzNode? next = parent.Child(nodePath[i]);
+            if (next is null)
+            {
+                next = new WzNode(nodePath[i], WzNodeKind.Property);
+                parent.Children.Add(next);
+            }
+
+            parent = next;
+        }
+
+        WzNode? leaf = parent.Child(nodePath[^1]);
+        if (leaf is null)
+        {
+            parent.Children.Add(new WzNode(nodePath[^1], WzNodeKind.Int) { TypeCode = 3, IntValue = value });
+            created++;
+        }
+        else if (leaf.Kind is WzNodeKind.Int or WzNodeKind.Short or WzNodeKind.Long)
+        {
+            if (leaf.IntValue == value)
+            {
+                unchanged++;
+                continue;
+            }
+
+            leaf.IntValue = value;
+            updated++;
+        }
+        else
+        {
+            throw new InvalidDataException($"{image.ArchivePath}/{args[3]} is {leaf.Describe()}, not an int");
+        }
+
+        replaced[image.ArchivePath] = WzImageWriter.Serialize(root, crypto);
+    }
+
+    if (replaced.Count == 0)
+    {
+        Console.WriteLine($"nothing to change ({unchanged} already at {value})");
+        return 0;
+    }
+
+    WzArchiveWriter.Rewrite(a, out_, replaced);
+    Console.WriteLine($"set {args[3]} = {value}: {created} added, {updated} updated, {unchanged} already there; wrote {out_} in {sw.Elapsed.TotalSeconds:F1}s");
+    if (Flag(args, "--no-verify"))
+    {
+        return 0;
+    }
+
+    return VerifyFilesSet(args[1], out_, new HashSet<string>(replaced.Keys, StringComparer.OrdinalIgnoreCase));
+}
+
 /// <summary>Parses every image of both archives and compares the results. When
 /// <paramref name="expectDifferent"/> names an image, that one must differ (and still parse);
 /// every other image must be identical.</summary>
 static int VerifyFiles(string aPath, string bPath, string? expectDifferent)
+    => VerifyFilesSet(aPath, bPath, expectDifferent is null ? null : new HashSet<string>(new[] { expectDifferent }, StringComparer.OrdinalIgnoreCase));
+
+static int VerifyFilesSet(string aPath, string bPath, HashSet<string>? expectDifferentSet)
 {
     var sw = Stopwatch.StartNew();
     using WzArchive a = WzArchive.Open(aPath);
@@ -285,8 +377,7 @@ static int VerifyFiles(string aPath, string bPath, string? expectDifferent)
     Console.WriteLine($"verify: {Path.GetFileName(aPath)} (v{a.Version} iv={a.IvName}, {a.Images.Count} images) vs {Path.GetFileName(bPath)} (v{b.Version} iv={b.IvName}, {b.Images.Count} images)");
 
     var bImages = b.Images.ToDictionary(i => i.ArchivePath, StringComparer.OrdinalIgnoreCase);
-    int same = 0, different = 0, missing = 0, failed = 0;
-    bool expectedSeen = false;
+    int same = 0, different = 0, missing = 0, failed = 0, changedAsIntended = 0;
     foreach (WzImageEntry image in a.Images)
     {
         if (!bImages.TryGetValue(image.ArchivePath, out WzImageEntry? other))
@@ -309,7 +400,7 @@ static int VerifyFiles(string aPath, string bPath, string? expectDifferent)
             continue;
         }
 
-        bool isExpected = expectDifferent is not null && string.Equals(image.ArchivePath, expectDifferent, StringComparison.OrdinalIgnoreCase);
+        bool isExpected = expectDifferentSet is not null && expectDifferentSet.Contains(image.ArchivePath);
         if (xa == xb)
         {
             same++;
@@ -320,8 +411,11 @@ static int VerifyFiles(string aPath, string bPath, string? expectDifferent)
         }
         else if (isExpected)
         {
-            expectedSeen = true;
-            Console.WriteLine($"  [changed as intended] {image.ArchivePath}");
+            changedAsIntended++;
+            if (changedAsIntended <= 5)
+            {
+                Console.WriteLine($"  [changed as intended] {image.ArchivePath}");
+            }
         }
         else
         {
@@ -334,8 +428,9 @@ static int VerifyFiles(string aPath, string bPath, string? expectDifferent)
     }
 
     int extra = b.Images.Count - (a.Images.Count - missing);
-    Console.WriteLine($"verify: {same} identical, {different} unexpectedly different, {missing} missing, {extra} extra, {failed} unparseable ({sw.Elapsed.TotalSeconds:F1}s)");
-    bool ok = different == 0 && missing == 0 && extra == 0 && failed == 0 && (expectDifferent is null || expectedSeen);
+    Console.WriteLine($"verify: {same} identical, {changedAsIntended} changed as intended, {different} unexpectedly different, {missing} missing, {extra} extra, {failed} unparseable ({sw.Elapsed.TotalSeconds:F1}s)");
+    bool ok = different == 0 && missing == 0 && extra == 0 && failed == 0
+        && (expectDifferentSet is null || changedAsIntended == expectDifferentSet.Count);
     Console.WriteLine(ok ? "verify: OK" : "verify: FAILED");
     return ok ? 0 : 3;
 }

@@ -27,7 +27,12 @@ DevTools\wz png     <file.wz> <canvas path> <out.png>      キャンバスを PN
 DevTools\wz rewrite <file.wz> --out <new.wz>               無変更で再構築 → 自動 verify(往復チェック)
 DevTools\wz graft   <src.wz> <src path> <dst.wz> <dst path> --out <new.wz> [--no-verify]
 DevTools\wz verify  <a.wz> <b.wz>                          全 img の解析結果を比較
+DevTools\wz set-int <file.wz> <image glob> <node path> <値> --out <new.wz>   一括で int を設定/追加
 ```
+
+`set-int` はグロブ(`Map/Map*/*.img` など)に合う全 img を解析し、ノードパスの int を書き換え(無ければ
+追加)て再構築します。例: 全マップに飛行フラグ `info/fly=1`(`DevTools\wz_enable_fly.bat` の中身)。
+実 Map.wz で 5536 img を書き換え(72 枚は元から fly=1)、verify で「変更した img だけが変わっている」ことを確認しています(10秒)。
 
 `path` は `<ディレクトリ>/<名前>.img[/ノード/ノード…]` です。例: `Obj/vehicle.img/ship/ossyria/97`。
 
@@ -58,6 +63,14 @@ DevTools\wz graft other\Map.wz Obj/vehicle.img/ship/ossyria/97 ^
                   Client\MapleStory_v186_edit\Map.wz Obj/vehicle.img/ship/ossyria/97 ^
                   --out Client\MapleStory_v186_edit\Map.wz.new
 ```
+
+## 例1b: 全マップで飛行を許可する(`/gmmove` 用)
+
+```
+DevTools\wz_enable_fly.bat [<クライアントのフォルダ>]
+```
+
+詳細は [CLIENT_PATCHES.md](CLIENT_PATCHES.md)。
 
 ## 例2: 別バージョンのアバター(装備)を移植する
 
