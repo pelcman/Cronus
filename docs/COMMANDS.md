@@ -96,6 +96,7 @@ name and warps you to their map. Names are case-insensitive; you get
 `'<name>' はオンラインではありません` when the player isn't on this channel (or is yourself).
 Map ids work even for maps without wz data (the client draws the map from its own files) — if you
 end up somewhere broken, `/warp 100000000` (Henesys) gets you home.
+A map id the client has no data for is refused ("マップ … は存在しません") — entering such a map crashes the client.
 
 ```
 /warp 100010000     ← a low-level hunting map (snails/mushrooms)

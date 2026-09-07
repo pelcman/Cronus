@@ -91,6 +91,15 @@ public static class GameConstants
     /// <summary>レッサーバルログ (8150000) that board when the enemy ship arrives.</summary>
     public static int AirshipBalrogCount { get; set; } = 2;
 
+    // ---- Fields -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Where a character wakes up when the map they were saved on has no data (a /warp to a
+    /// non-existent id): ヘネシス. Entering a map the client does not know crashes it on SetField,
+    /// so the login path relocates them here first (創作 — the reference trusts the saved map).
+    /// </summary>
+    public static int RescueMapId { get; set; } = 100000000;
+
     // ---- Restrictions -------------------------------------------------------------------
 
     /// <summary>

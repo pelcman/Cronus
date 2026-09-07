@@ -203,6 +203,81 @@ public class MapTransferTests
     }
 
     [Fact]
+    public async Task Login_OnAMapWithoutData_IsRescuedToTheRescueTown()
+    {
+        // A character saved on a map the client has no data for (a /warp typo) would crash the
+        // client on SetField at every login. With an authoritative map set, entry relocates them.
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Lost", MapId = 999999999 });
+        var maps = new InMemoryMapProvider(new[]
+        {
+            new MapData { MapId = GameConstants.RescueMapId, Portals = Array.Empty<PortalData>() },
+        }, authoritative: true);
+        var fields = new FieldRegistry(maps);
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        await WaitUntilAsync(() => fields.Get(GameConstants.RescueMapId).Players.Any(fp => fp.Character.Id == hero.Id), cts.Token);
+        Assert.Equal(GameConstants.RescueMapId, hero.MapId);
+        Assert.Equal(GameConstants.RescueMapId, repo.Find(hero.Id)!.MapId); // persisted, so the next login is fine too
+    }
+
+    [Fact]
+    public async Task Login_OnAMapWithoutData_IsNotRescued_WhenTheMapSetIsPartial()
+    {
+        // Seeded/test providers are not the whole world: a missing map means "not loaded here".
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Seeded", MapId = 104040000 });
+        var maps = new InMemoryMapProvider(new[] { new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() } });
+        var fields = new FieldRegistry(maps);
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        await WaitUntilAsync(() => fields.Get(104040000).Players.Any(fp => fp.Character.Id == hero.Id), cts.Token);
+        Assert.Equal(104040000, hero.MapId);
+    }
+
+    [Fact]
+    public async Task WarpCommand_RefusesAMapWithoutData()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Typo", MapId = 100000000 });
+        var maps = new InMemoryMapProvider(new[]
+        {
+            new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() },
+        }, authoritative: true);
+        var fields = new FieldRegistry(maps);
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        await WaitUntilAsync(() => fields.Get(100000000).Players.Any(fp => fp.Character.Id == hero.Id), cts.Token);
+
+        await client.ChatAsync("/warp 999999999");
+
+        Task done = await Task.WhenAny(client.MapChanged.Task, Task.Delay(300, cts.Token));
+        Assert.NotSame(client.MapChanged.Task, done);   // no SetField for a map that does not exist
+        Assert.Equal(100000000, hero.MapId);
+    }
+
+    [Fact]
     public async Task EnteringAMapWithoutAClock_SendsNoClock()
     {
         var repo = new InMemoryCharacterRepository();

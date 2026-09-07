@@ -51,6 +51,14 @@ public sealed partial class ChannelHandler
                 // is an online player whose map we jump to.
                 if (int.TryParse(parts[1], out int warpMapId))
                 {
+                    // A map this data set does not have would crash the client on SetField — and
+                    // again on every re-login, since the map is saved. Refuse it here.
+                    if (_maps.KnowsAllMaps && _maps.GetMap(warpMapId) is null)
+                    {
+                        await ReplyAsync(session, $"マップ {warpMapId} は存在しません（データがありません）").ConfigureAwait(false);
+                        break;
+                    }
+
                     await MovePlayerToMapAsync(session, warpMapId, spawnPortal: 0).ConfigureAwait(false);
                     break;
                 }
@@ -1148,11 +1156,9 @@ public sealed partial class ChannelHandler
             case 200090000:                                // riding to Ellinia
             {
                 // Calm skies: no reply (the oracle answers only its station list and the flight
-                // maps; a CONTIMOVE(10, 3) "moving" reply was tried live and drew nothing, so it is
-                // gone). Mid-raid joiner: the same enemy-ship announcement the raid broadcasts.
+                // maps). Mid-raid joiner: the oracle's MOBGEN reply — the enemy ship is alongside.
                 if (AirshipSchedule.EnemyShipAt(AirshipSchedule.Clock()) == EnemyShipState.Present)
                 {
-                    await session.SendAsync(_packets.ContiState(ChannelPackets.ContiMobGen, appearShip: 1)).ConfigureAwait(false);
                     await session.SendAsync(_packets.ContiMove(ChannelPackets.ContiTargetMoveField, ChannelPackets.ContiMobGen)).ConfigureAwait(false);
                 }
 

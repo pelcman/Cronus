@@ -260,6 +260,22 @@ public sealed class AirshipService
             FieldMob mob = field.SpawnMob(RaiderMobId, stats, (short)x, (short)y, foothold: 0);
             ids.Add(mob.ObjectId);
             await field.BroadcastAsync(_packets.MobEnterField(mob)).ConfigureAwait(false);
+
+            // Mob AI runs on a controlling client. Nobody applies for control of a mob that appears
+            // far off the deck (a live raid left both Balrogs frozen with no CP_MobMove ever sent),
+            // so hand them to the first passenger — the same as MobRespawnService does.
+            mob.ControllerId = anchor.Character.Id;
+            if (anchor.Session is not null)
+            {
+                try
+                {
+                    await anchor.Session.SendAsync(_packets.MobChangeController(mob, aggro: true)).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    mob.ControllerId = -1; // the passenger is going away; CP_MobApplyCtrl re-homes it
+                }
+            }
         }
 
         _raiders[flightMapId] = ids;
@@ -280,13 +296,14 @@ public sealed class AirshipService
     }
 
     /// <summary>
-    /// Tells everyone on the flight map that the Balrog ship arrives / leaves. The oracle has no
-    /// verified packet for this (its OnContiState replies CONTIMOVE(TARGET_MOVEFIELD, MOBGEN) on
-    /// entry and nothing else); a live ride showed that CONTIMOVE(10, 4) alone draws no ship. So
-    /// the client gets both candidates: LP_CONTISTATE(state, appearShip=1) — the packet the
-    /// stations use for their docked ship, with the "CShip::AppearShip" flag set — and the
-    /// oracle's CONTIMOVE. `/conti` sends either by hand for the live bisect; whichever the client
-    /// honours becomes the only one sent.
+    /// Tells everyone on the flight map that the Balrog ship arrives / leaves:
+    /// LP_CONTIMOVE(TARGET_MOVEFIELD, MOBGEN / MOBDESTROY) — the oracle's entry reply and, byte
+    /// for byte, HeavenMS's crogBoatPacket that the GMS v83 client draws its Crimson Balrog ship
+    /// for. On this JMS v186 client nothing appears, and the reason is the data, not the packet:
+    /// the ship object the flight maps name (Map/Obj/vehicle.img/ship/ossyria/97) is a 1×1 blank
+    /// canvas in the client's Map.wz (98/99, the passenger ships, are 564×549 / 545×746). Every
+    /// CONTISTATE/CONTIMOVE variant was tried live via /conti with no effect. Restoring the
+    /// cutscene means patching that image into the client's Map.wz.
     /// </summary>
     public async ValueTask AnnounceEnemyShipAsync(Field field, bool arriving)
     {
@@ -295,9 +312,9 @@ public sealed class AirshipService
             return;
         }
 
-        byte state = arriving ? ChannelPackets.ContiMobGen : ChannelPackets.ContiMobDestroy;
-        await field.BroadcastAsync(_packets.ContiState(state, appearShip: arriving ? (byte)1 : (byte)0)).ConfigureAwait(false);
-        await field.BroadcastAsync(_packets.ContiMove(ChannelPackets.ContiTargetMoveField, state)).ConfigureAwait(false);
+        await field.BroadcastAsync(_packets.ContiMove(
+            ChannelPackets.ContiTargetMoveField,
+            arriving ? ChannelPackets.ContiMobGen : ChannelPackets.ContiMobDestroy)).ConfigureAwait(false);
     }
 
     /// <summary>The Balrog ship peels away before landing: the client hides it (CONTI_MOBDESTROY)

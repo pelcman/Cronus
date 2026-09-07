@@ -710,6 +710,17 @@ public sealed partial class ChannelHandler : PacketHandlerBase
             return;
         }
 
+        // A character parked on a map this data set does not have (a /warp to a bad id, a map
+        // removed from the data) crashes the client the moment SetField arrives — and again on every
+        // re-login. Park them in the rescue town instead (創作: the reference trusts the saved map).
+        if (_maps.KnowsAllMaps && _maps.GetMap(character.MapId) is null)
+        {
+            Console.WriteLine($"[field] {character.Name}: saved map {character.MapId} has no data — rescued to {GameConstants.RescueMapId}");
+            character.MapId = GameConstants.RescueMapId;
+            character.Portal = 0;
+            _characters.Save(character);
+        }
+
         var player = new FieldPlayer(character, session) { Channel = _channelId };
         player.WarpAsync = (mapId, portal) => MovePlayerToMapAsync(session, mapId, portal); // for the airships
         character.LastChannel = _channelId; // the cash shop sends the client back here

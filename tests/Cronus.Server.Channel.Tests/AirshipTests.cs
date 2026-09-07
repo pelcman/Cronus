@@ -191,14 +191,14 @@ public class AirshipTests
     }
 
     [Fact]
-    public async Task ContiState_OnTheFlightMap_DuringTheRaid_AnnouncesTheEnemyShip()
+    public async Task ContiState_OnTheFlightMap_DuringTheRaid_AnswersMobGen()
     {
-        // 00:12:00 — two minutes in, the enemy ship is alongside: a late joiner gets the same
-        // announcement the raid broadcast, LP_CONTISTATE(MOBGEN, appear=1) first.
-        (string kind, byte state, byte appear) = await WithClockAsync(CycleStart.AddMinutes(12), () => AskAsync(200090010));
-        Assert.Equal("state", kind);
-        Assert.Equal(ChannelPackets.ContiMobGen, state);
-        Assert.Equal(1, appear);
+        // 00:12:00 — two minutes in, the enemy ship is alongside: a late joiner gets the oracle's
+        // reply, CONTIMOVE(TARGET_MOVEFIELD, MOBGEN) — the same packet the raid broadcasts.
+        (string kind, byte first, byte second) = await WithClockAsync(CycleStart.AddMinutes(12), () => AskAsync(200090010));
+        Assert.Equal("move", kind);
+        Assert.Equal(ChannelPackets.ContiTargetMoveField, first);
+        Assert.Equal(ChannelPackets.ContiMobGen, second);
     }
 
     // ---- the raid timeline and the service that runs it ---------------------------------
@@ -241,6 +241,7 @@ public class AirshipTests
         Assert.All(raiders, m => Assert.Equal(-221 - AirshipService.RaiderSpawnHeight, (int)m.Y)); // above the enemy ship, not at the passenger
         Assert.All(raiders, m => Assert.Equal(60000, m.MaxHp));
         Assert.Equal(raiders.Count, raiders.Select(m => (int)m.X).Distinct().Count());               // spread out, not stacked
+        Assert.All(raiders, m => Assert.Equal(passenger.Character.Id, m.ControllerId));           // someone runs their AI
 
         await svc.TickAsync(CycleStart.AddMinutes(14).AddSeconds(31));      // it peels away
         Assert.DoesNotContain(fields.Get(route.FlightMapId).Mobs, m => m.TemplateId == AirshipService.RaiderMobId);
