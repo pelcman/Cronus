@@ -53,15 +53,15 @@ DevTools\wz_graft_airship.bat <移植元の Map.wz> [<クライアントのフ�
 
 このバッチは、移植元の `97` を確認(1×1 なら中止)→ `Map.wz.new` を生成 → verify → 元の `Map.wz` を
 `Map.wz.bak` に退避 → 差し替え、まで行います。クライアントのフォルダ既定は `.env` の
-`CRONUS_CLIENT`… ではなく、実際に遊ぶ **`Client\MapleStory_v186_edit`** です(引数で変更可)。
+`CRONUS_CLIENT`… ではなく、ショートカットが実際に起動する **`Client\MapleStory_v186`** です(引数で変更可。`_edit` は公開IP設定の2つ目のコピー)。
 手動で行う場合:
 
 ```
 DevTools\wz ls    other\Map.wz Obj/vehicle.img/ship/ossyria/97        (実画像か確認)
 DevTools\wz png   other\Map.wz Obj/vehicle.img/ship/ossyria/97 ship97.png
 DevTools\wz graft other\Map.wz Obj/vehicle.img/ship/ossyria/97 ^
-                  Client\MapleStory_v186_edit\Map.wz Obj/vehicle.img/ship/ossyria/97 ^
-                  --out Client\MapleStory_v186_edit\Map.wz.new
+                  Client\MapleStory_v186\Map.wz Obj/vehicle.img/ship/ossyria/97 ^
+                  --out Client\MapleStory_v186\Map.wz.new
 ```
 
 ## 例1b: 全マップで飛行を許可する(`/gmmove` 用)

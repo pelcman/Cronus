@@ -37,7 +37,9 @@ bypass is what lets a modified exe run, exactly as with Riremito's own edits to 
 """
 import os, sys
 
-DEFAULT_EXE = r"C:\Users\chro\Desktop\MS1PrivSvr\Client\MapleStory_v186_edit\JMS_v186.1_L.exe"
+# The client the desktop shortcut launches (RunEmu.ini TargetEXE). Client\MapleStory_v186_edit is a
+# second copy with the public-IP LocalHost.ini; pass its exe explicitly to patch that one.
+DEFAULT_EXE = r"C:\Users\chro\Desktop\MS1PrivSvr\Client\MapleStory_v186\JMS_v186.1_L.exe"
 
 # (file offset of the signature, signature bytes as in the original build, offset of the patch
 #  within the signature, patched bytes, description)

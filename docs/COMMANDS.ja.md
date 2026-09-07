@@ -33,6 +33,7 @@
 | `/pos` | 自分の座標とマップ ID を表示 |
 | `/conti state|move <値1> [値2]` | 飛行船の演出パケットを自分にだけ試験送信(実機切り分け用) |
 | `/gmmove [on|off|<速度倍率> [<ジャンプ倍率> [<攻撃速度倍率>]]]` | GM移動モード: 速度・ジャンプ・攻撃速度の倍率指定、被ダメージ無効、スキルのMP消費・クールタイム無し |
+| `/gmfly [on|off]` | GM飛行モード: Flying 一時ステータス(info/fly=1 のマップで有効、wz_enable_fly.bat 適用後は全マップ) |
 
 ### キャラクター
 
@@ -248,6 +249,14 @@ GM移動モードを切り替えます(引数なしでトグル、既定は速�
 
 無改変のクライアントでは速度 140% / ジャンプ 123% / 攻撃速度は最速段階(2)で頭打ちになります。
 `DevTools\clientpatch_speedcap.py apply` で3つとも上限が外れます([CLIENT_PATCHES.md](CLIENT_PATCHES.md))。
+ログインし直すと OFF に戻ります。飛行は別コマンド `/gmfly` です。
+
+### `/gmfly [on|off]`
+GM飛行モードを切り替えます(引数なしでトグル)。`Flying` 一時ステータス(CTS bit 80、天の翼/플라잉
+スキル 1026 が付けるもの)を自分に付けるだけで、`/gmmove` とは独立です。クライアントはこのステータスを
+マップデータの `info/fly` が 1 のマップ(v186 では72枚: リプレ天空地域、母船、時間の神殿への飛行船など)
+でだけ飛行として扱うので、どこでも飛ぶには `DevTools\wz_enable_fly.bat` で起動しているクライアントの
+Map.wz を差し替えます([CLIENT_PATCHES.md](CLIENT_PATCHES.md))。OFF で Flying だけを外します。
 ログインし直すと OFF に戻ります。
 
 ### `/conti state|move <値1> [値2]`

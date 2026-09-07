@@ -269,7 +269,12 @@ AGENTS.md の「Deferred」を再評価して潰す:
       **追補5(同日, 実機報告)**: それでもステータス窓は 140% / 123% → 窓の描画関数(exe 0x5DAA32〜)が
       SecondaryStat の GetSpeed()/GetJump()(丸め無しの合計)を呼び、描画時に自前で min(140/190) と
       「>123 なら 123」を掛けていた。徒歩・乗り物・ペット乗車の3経路、6か所を追加(合計27か所)し適用済み。
-      実機で `/gmmove 3 5 5` の表示と実移動を再確認待ち。
+      **追補6(同日, ユーザー報告)**: 変化が無い真因は**別フォルダ** — ショートカットは
+      `Client\MapleStory_v186`(RunEmu.ini)を起動しており、exe 27か所と fly=1 の Map.wz は
+      `Client\MapleStory_v186_edit` にだけ当たっていた(atime で確認)。DevTools の既定値を起動側の
+      フォルダに変更し、ドキュメントの「_edit が遊ぶ側」を訂正。よって「Flying は fly=1 でも効かない」
+      という結論も未検証に戻る → `/gmfly [on|off]` を `/gmmove` から独立した切替として実装(Flying bit 80
+      のみ、OFF で Flying だけ Reset)。起動側の exe / Map.wz への適用はクライアント終了後。
       詳細は [CLIENT_PATCHES.md](CLIENT_PATCHES.md)。
 - [x] **存在しないマップに保存されたキャラの救済**(2026-09-07) — `/warp` の打ち間違いで
       データの無いマップIDに飛ぶと、SetField でクライアントが落ち、再ログインでも同じ地点で落ちて

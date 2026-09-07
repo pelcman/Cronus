@@ -163,6 +163,41 @@ public sealed partial class ChannelHandler
                 break;
             }
 
+            case "gmfly":
+            {
+                // GM flight, on its own switch: the Flying temporary stat (CTS bit 80, what the
+                // 天の翼 / 플라잉 skill 1026 sets in JMSv186's OpsSecondaryStat). The client only
+                // treats it as flight on maps whose data says info/fly = 1 (72 stock maps;
+                // every map after DevTools/wz_enable_fly.bat). Independent of /gmmove.
+                //   /gmfly            toggle
+                //   /gmfly on|off
+                string? a1 = parts.Length >= 2 ? parts[1] : null;
+                bool? requested = a1 is null ? null
+                    : a1.Equals("on", StringComparison.OrdinalIgnoreCase) ? true
+                    : a1.Equals("off", StringComparison.OrdinalIgnoreCase) ? false
+                    : null;
+                if (a1 is not null && requested is null)
+                {
+                    await ReplyAsync(session, "使い方: /gmfly [on|off]").ConfigureAwait(false);
+                    break;
+                }
+
+                bool on = requested ?? !_player!.GmFly;
+                _player!.GmFly = on;
+                if (on)
+                {
+                    await session.SendAsync(_packets.TemporaryStatSet(GmFlyBuffs)).ConfigureAwait(false);
+                    await ReplyAsync(session, "gmfly: ON — 飛行(info/fly=1 のマップで有効。wz_enable_fly.bat 適用後は全マップ)").ConfigureAwait(false);
+                }
+                else
+                {
+                    await session.SendAsync(_packets.TemporaryStatReset(GmFlyMask)).ConfigureAwait(false);
+                    await ReplyAsync(session, "gmfly: OFF").ConfigureAwait(false);
+                }
+
+                break;
+            }
+
             case "conti" when parts.Length >= 3:
             {
                 // Live bisect for the airship packets the oracle never verified: sends one
@@ -1180,6 +1215,11 @@ public sealed partial class ChannelHandler
     /// <summary>Every temporary stat /gmmove may set — what OFF resets.</summary>
     private static readonly UInt128 GmMoveMask =
         (UInt128.One << BuffEffect.Speed) | (UInt128.One << BuffEffect.Jump) | (UInt128.One << BuffEffect.Booster);
+
+    /// <summary>/gmfly's one stat: Flying (CTS bit 80) = 1, reason skill 1026, a day long.</summary>
+    internal static readonly BuffStat[] GmFlyBuffs = [new(BuffEffect.Flying, 1, 1026, 86_400_000)];
+
+    private static readonly UInt128 GmFlyMask = UInt128.One << BuffEffect.Flying;
 
     /// <summary>The /gmmove temporary stats for multipliers of the 100% base: Speed +(N×100−100),
     /// Jump likewise, and the Booster offset from <see cref="GmMoveBooster"/> when it is not 0. A

@@ -3,7 +3,7 @@ rem Grafts the Balrog-ship image (Map.wz/Obj/vehicle.img/ship/ossyria/97) from a
 rem Map.wz into the client's Map.wz. The JMS v186 data ships a 1x1 placeholder there, so the
 rem airship raid draws no enemy ship until this is done. See docs/WZ_TOOLING.md.
 rem
-rem   wz_graft_airship.bat <source Map.wz> [<client folder>]
+rem   wz_graft_airship.bat <source Map.wz> [<client folder>]      (default: Client\MapleStory_v186, the one the shortcut launches)
 setlocal
 set "SRC=%~1"
 set "CLIENT=%~2"
@@ -11,7 +11,7 @@ if "%SRC%"=="" (
   echo usage: %~nx0 ^<source Map.wz^> [^<client folder^>]
   exit /b 1
 )
-if "%CLIENT%"=="" set "CLIENT=%~dp0..\..\Client\MapleStory_v186_edit"
+if "%CLIENT%"=="" set "CLIENT=%~dp0..\..\Client\MapleStory_v186"
 set "DST=%CLIENT%\Map.wz"
 set "NODE=Obj/vehicle.img/ship/ossyria/97"
 if not exist "%SRC%" ( echo source not found: %SRC% & exit /b 1 )

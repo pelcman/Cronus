@@ -1,8 +1,12 @@
 # クライアント側パッチ(`DevTools/`)
 
 サーバーからは変えられないクライアント側の制限を、バイナリ/データの最小変更で外すスクリプト群です。
-どれもバックアップを残し、`revert` で元に戻せます。対象は遊ぶ側のクライアント
-`Client\MapleStory_v186_edit`(`Client\MapleStory_v186` は無改変の原本として残します)。
+どれもバックアップを残し、`revert` で元に戻せます。対象は**ショートカットが起動しているクライアント
+`Client\MapleStory_v186`**(`RunEmu.ini` の `TargetEXE`)で、各スクリプトの既定値もそこです。
+`Client\MapleStory_v186_edit` は公開IP向け `LocalHost.ini` を持つ2つ目のコピーで、2026-09-07 までの
+パッチはこちらにだけ当たっていました(exe 27か所と fly=1 の Map.wz)。起動していないクライアントに
+当てても何も変わらないので、`RunEmu.ini` の `TargetEXE` を見て対象を確かめてください。原本は各ファイルの
+`.orig` / `.bak` です。
 EmuClient のローダー(`EmuMain.dll` の MSCRC バイパス)が改変済み exe を通すので、Riremito さんの
 `_L` 版 exe 自体と同じ扱いで動きます。
 
@@ -10,7 +14,7 @@ EmuClient のローダー(`EmuMain.dll` の MSCRC バイパス)が改変済み e
 |---|---|---|---|
 | `wzpatch_namespace.py apply` | `NameSpace.dll`(2バイト×2) | 遅延WZアーカイブ open の `push 1`→`push 2`(iGPUplz と同じ) | ゲーム入場で落ちる環境(必須) |
 | `clientpatch_speedcap.py apply` | `JMS_v186.1_L.exe`(27か所) | 速度140% / ジャンプ123% / 攻撃速度段階2 の clamp 無効化(表示用・物理用の両方)、歩行アニメ上限140%→1000% | `/gmmove` の倍率を効かせたい時 |
-| `wz_enable_fly.bat` | `Map.wz`(全マップの `info/fly`=1) | 飛行(CTS_Flying)を全マップで許可 | `/gmmove` で飛びたい時 |
+| `wz_enable_fly.bat` | `Map.wz`(全マップの `info/fly`=1) | 飛行(CTS_Flying)を全マップで許可 | `/gmfly` で飛びたい時 |
 | `wz_graft_airship.bat <元Map.wz>` | `Map.wz`(`ship/ossyria/97`) | バルログ船の画像を別バージョンから移植 | 飛行船襲撃の演出を出したい時 |
 
 ## 速度・ジャンプ・攻撃速度の上限(`clientpatch_speedcap.py`)
@@ -72,7 +76,7 @@ python DevTools\clientpatch_speedcap.py revert
 `Flying` を持たないプレイヤーの歩行は変わりません(飛行船の甲板マップも fly=1 で普通に歩けています)。
 
 ```
-DevTools\wz_enable_fly.bat            ← Client\MapleStory_v186_edit\Map.wz を差し替え(.bak を作成)
+DevTools\wz_enable_fly.bat            ← Client\MapleStory_v186\Map.wz を差し替え(.bak を作成、別フォルダは引数で)
 ```
 
 元に戻すには `Map.wz.bak` を `Map.wz` に戻します。サーバーの gamedata.db には影響しません。

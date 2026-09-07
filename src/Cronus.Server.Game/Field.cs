@@ -246,6 +246,9 @@ public sealed class FieldPlayer
     /// Speed/Jump/Flying temporary stats the command sends.</summary>
     public bool GmMove { get; set; }
 
+    /// <summary>/gmfly: the Flying temporary stat is on (server-side memory only — the client does the flying).</summary>
+    public bool GmFly { get; set; }
+
     /// <summary>
     /// <see cref="Environment.TickCount64"/> of the player's last move/attack. Natural HP/MP
     /// regen only kicks in after they've been idle for a bit (see <c>PlayerRegenService</c>).
