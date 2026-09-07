@@ -251,7 +251,12 @@ AGENTS.md の「Deferred」を再評価して潰す:
       有効と判明。`wz set-int` で全 5983 マップに fly=1 を立てる `DevTools/wz_enable_fly.bat` を用意
       (実 Map.wz で生成・verify 済み、差し替えはユーザー実行)。③MP/HP が減る → クライアント側の先行減算。
       スキル使用/スキル攻撃後にサーバー値の `StatChanged(Hp|Mp)` を返して打ち消す。
-      **速度解除・飛行の実機確認待ち**。詳細は [CLIENT_PATCHES.md](CLIENT_PATCHES.md)。
+      **追補2(同日)**: 速度解除は実機で有効。`/gmmove <速度倍率> [<ジャンプ倍率>]` に拡張。
+      Flying は fly=1 マップでも効かず(要件不明)、ユーザー要望も「空中で再ジャンプ」なので撤去。
+      空中ジャンプはクライアント物理(CVecCtrlUser)の接地判定の解除が必要: 物理定数テーブル
+      (`[[0xD706D8]+8]`, jumpSpeed=+0x70)と、ジャンプ力×jumpSpeed を適用する更新関数(exe 0x70DDC6)
+      までは特定済み。キー入力→ジャンプ許可の分岐は未特定(**継続課題**)。
+      詳細は [CLIENT_PATCHES.md](CLIENT_PATCHES.md)。
 - [x] **存在しないマップに保存されたキャラの救済**(2026-09-07) — `/warp` の打ち間違いで
       データの無いマップIDに飛ぶと、SetField でクライアントが落ち、再ログインでも同じ地点で落ちて
       復帰不能だった。対策2段: ① `/warp <id>` は Map.wz に無いIDを拒否(`IMapProvider.KnowsAllMaps`

@@ -1,4 +1,5 @@
 // ChannelHandler partial: GM commands, NPC selection, scripts, map movement.
+using System.Globalization;
 using System.Security.Cryptography;
 using Cronus.Common;
 using Cronus.Data;
@@ -110,29 +111,49 @@ public sealed partial class ChannelHandler
             case "gmmove":
             {
                 // GM movement mode. Server half: a flag (no damage taken, no skill MP cost, no
-                // cooldown). Client half: Speed/Jump/Flying temporary stats — the pre-BB client caps
-                // speed at 140 and jump at 123 (CUser::GetSpeed/GetJump), so the +200 speed lands
-                // on that cap; Flying (CTS bit 80) is what lets the character leave the ground.
-                bool? requested = parts.Length < 2 ? null
-                    : parts[1].Equals("on", StringComparison.OrdinalIgnoreCase) ? true
-                    : parts[1].Equals("off", StringComparison.OrdinalIgnoreCase) ? false
+                // cooldown). Client half: Speed/Jump temporary stats. The stock client clamps them
+                // to 140% / 123% (DevTools/clientpatch_speedcap.py lifts that); the multiplier
+                // argument is the speed in units of the 100% base: /gmmove 3 = 300%.
+                //   /gmmove            toggle (default 3x speed, 1.8x jump)
+                //   /gmmove <speed>    on, speed ×N        /gmmove <speed> <jump>   both
+                //   /gmmove on|off
+                string? a1 = parts.Length >= 2 ? parts[1] : null;
+                bool? requested = a1 is null ? null
+                    : a1.Equals("on", StringComparison.OrdinalIgnoreCase) ? true
+                    : a1.Equals("off", StringComparison.OrdinalIgnoreCase) ? false
+                    : double.TryParse(a1, NumberStyles.Float, CultureInfo.InvariantCulture, out _) ? true
                     : null;
-                if (parts.Length >= 2 && requested is null)
+                if (a1 is not null && requested is null)
                 {
-                    await ReplyAsync(session, "使い方: /gmmove [on|off]").ConfigureAwait(false);
+                    await ReplyAsync(session, "使い方: /gmmove [on|off|<速度倍率> [<ジャンプ倍率>]]  例: /gmmove 3 2").ConfigureAwait(false);
+                    break;
+                }
+
+                double speedTimes = a1 is not null && double.TryParse(a1, NumberStyles.Float, CultureInfo.InvariantCulture, out double st) ? st : GmMoveDefaultSpeedTimes;
+                double jumpTimes = parts.Length >= 3 && double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double jt) ? jt : GmMoveDefaultJumpTimes;
+                if (speedTimes is < 1 or > 30 || jumpTimes is < 1 or > 10)
+                {
+                    await ReplyAsync(session, "倍率は 速度 1〜30、ジャンプ 1〜10 の範囲で指定してください").ConfigureAwait(false);
                     break;
                 }
 
                 bool on = requested ?? !_player!.GmMove;
-                _player!.GmMove = on;
+                if (_player!.GmMove)
+                {
+                    // Re-issuing while on (new multiplier): clear the old stats first so the client
+                    // replaces rather than stacks them.
+                    await session.SendAsync(_packets.TemporaryStatReset(BuffEffect.Mask128(GmMoveBuffs(1, 1)))).ConfigureAwait(false);
+                }
+
+                _player.GmMove = on;
                 if (on)
                 {
-                    await session.SendAsync(_packets.TemporaryStatSet(GmMoveBuffs)).ConfigureAwait(false);
-                    await ReplyAsync(session, "gmmove: ON — 速度/ジャンプ最大+飛行、被ダメージ無効、スキルのMP消費・クールタイム無し").ConfigureAwait(false);
+                    BuffStat[] buffs = GmMoveBuffs(speedTimes, jumpTimes);
+                    await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
+                    await ReplyAsync(session, $"gmmove: ON — 速度{speedTimes:0.#}倍/ジャンプ{jumpTimes:0.#}倍、被ダメージ無効、スキルのMP消費・クールタイム無し").ConfigureAwait(false);
                 }
                 else
                 {
-                    await session.SendAsync(_packets.TemporaryStatReset(BuffEffect.Mask128(GmMoveBuffs))).ConfigureAwait(false);
                     await ReplyAsync(session, "gmmove: OFF").ConfigureAwait(false);
                 }
 
@@ -1149,17 +1170,18 @@ public sealed partial class ChannelHandler
     /// while the raid is on), and the raid itself — enemy ship, Balrogs, departure — is driven by
     /// <see cref="AirshipService"/>, never from this entry handshake.
     /// </summary>
-    /// <summary>The /gmmove temporary stats: Speed +200 (300%) and Jump +80 (180%) — the stock
-    /// client clamps them to 140% / 123%; DevTools/clientpatch_speedcap.py removes those clamps —
-    /// plus Flying (CTS bit 80), which the client honours on maps flagged info/fly (all of them
-    /// after DevTools/wz_enable_fly.bat). The reason is skill 1026 (플라잉 / 天の翼, the beginner
-    /// flying skill this client has an icon for); the day-long duration is a formality — the
-    /// command clears them.</summary>
-    private static readonly BuffStat[] GmMoveBuffs =
+    private const double GmMoveDefaultSpeedTimes = 3.0;
+    private const double GmMoveDefaultJumpTimes = 1.8;
+
+    /// <summary>The /gmmove temporary stats for a speed/jump multiplier of the 100% base: Speed
+    /// +(N×100−100) and Jump likewise — a stock client clamps them to 140% / 123%,
+    /// DevTools/clientpatch_speedcap.py removes the clamps. The reason is skill 1026 (플라잉 /
+    /// 天の翼, a beginner skill this client has an icon for); the day-long duration is a
+    /// formality — the command clears them.</summary>
+    private static BuffStat[] GmMoveBuffs(double speedTimes, double jumpTimes) => new BuffStat[]
     {
-        new(BuffEffect.Speed, 200, 1026, 86_400_000),
-        new(BuffEffect.Jump, 80, 1026, 86_400_000),
-        new(BuffEffect.Flying, 1, 1026, 86_400_000),
+        new(BuffEffect.Speed, (short)Math.Clamp(Math.Round(speedTimes * 100 - 100), 0, short.MaxValue), 1026, 86_400_000),
+        new(BuffEffect.Jump, (short)Math.Clamp(Math.Round(jumpTimes * 100 - 100), 0, short.MaxValue), 1026, 86_400_000),
     };
 
     /// <summary>

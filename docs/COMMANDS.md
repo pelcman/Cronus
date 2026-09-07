@@ -32,7 +32,7 @@ which is what keeps `/help`, the usage replies, and this document describing the
 | `/dbgwarp` | Windowed warp console — pick a region, an area, then a map (no ids to type) |
 | `/pos` | Show your position and map id |
 | `/conti state|move <a> [b]` | Send one airship effect packet to yourself (live bisect of the unverified values) |
-| `/gmmove [on|off]` | GM movement: speed/jump at the client caps plus flying, no damage taken, no skill MP cost or cooldown |
+| `/gmmove [on|off|<speed×> [<jump×>]]` | GM movement: speed/jump multipliers, no damage taken, no skill MP cost or cooldown |
 
 ### Character
 
@@ -235,10 +235,12 @@ Persists your character immediately (it also autosaves periodically and on disco
 Replies with your `(x, y)` position and map id — handy when authoring NPC/portal scripts (see
 [SCRIPTING.md](SCRIPTING.md)).
 
-### `/gmmove [on|off]`
-Toggles GM movement mode (no argument flips it). While on: speed and jump sit at the client's caps
-(140% / 123%) and the Flying temporary stat lets you leave the ground; hits show their number but
-take no HP; skills cost no MP and have no cooldown. A stock client caps speed at 140% and jump at
+### `/gmmove [on|off|<speed×> [<jump×>]]`
+Toggles GM movement mode (no argument flips it; defaults 3× speed, 1.8× jump). `/gmmove 5` is 5×
+speed, `/gmmove 3 2.5` is 3× speed and 2.5× jump (speed 1–30, jump 1–10); repeating while on
+re-applies with the new values. While on: speed and jump take the multipliers (Speed/Jump temporary
+stats); hits show their number but take no HP; skills cost no MP/HP and have no cooldown (the
+client's own bar prediction is snapped back). A stock client caps speed at 140% and jump at
 123% and only flies on maps flagged `info/fly` (72 of them); `DevTools\clientpatch_speedcap.py apply`
 (300% / 180%) and `DevTools\wz_enable_fly.bat` (fly anywhere) lift both — see
 [CLIENT_PATCHES.md](CLIENT_PATCHES.md). Re-logging turns it off.

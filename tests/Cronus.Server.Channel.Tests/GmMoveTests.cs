@@ -10,9 +10,8 @@ using Xunit;
 namespace Cronus.Server.Channel.Tests;
 
 /// <summary>
-/// /gmmove over the wire: turning it on sends the Speed/Jump/Flying temporary stats (Flying is CTS
-/// bit 80, so the 128-bit mask's word[2] carries it), hits then cost no HP, and turning it off
-/// resets the same mask and makes hits hurt again.
+/// /gmmove over the wire: turning it on with multipliers sends the Speed/Jump temporary stats,
+/// hits then cost no HP, and turning it off resets the same mask and makes hits hurt again.
 /// </summary>
 public class GmMoveTests
 {
@@ -122,14 +121,14 @@ public class GmMoveTests
         _ = clientSession.RunAsync(cts.Token);
 
         await client.Entered.Task.WaitAsync(cts.Token);
-        await client.ChatAsync("/gmmove on");
+        await client.ChatAsync("/gmmove 3 1.8");
 
         StatSet set = await client.Set.Task.WaitAsync(cts.Token);
         Assert.Equal(0u, set.Words[0]);                                                 // word[3]
-        Assert.Equal(1u << (BuffEffect.Flying - 64), set.Words[1]);                     // word[2]: Flying = bit 80
+        Assert.Equal(0u, set.Words[1]);                                                 // word[2]
         Assert.Equal(0u, set.Words[2]);                                                 // word[1]
         Assert.Equal((1u << BuffEffect.Speed) | (1u << BuffEffect.Jump), set.Words[3]); // word[0]
-        Assert.Equal(new[] { (200, 1026), (80, 1026), (1, 1026) }, set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray());
+        Assert.Equal(new[] { (200, 1026), (80, 1026) }, set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray()); // 3x / 1.8x
         Assert.All(set.Entries, e => Assert.Equal(86_400_000, e.Duration));
 
         // A hit lands on the wire, but HP stays put and no StatChanged follows (the entry sends one).
