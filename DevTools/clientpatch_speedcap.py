@@ -18,6 +18,9 @@ All sites were found by disassembling JMS_v186.1_L.exe (not packed) — the same
                      riding paths) -- the on-foot copy is what actually moves the GM character.
   SecondaryStat C    a third min(x,140) pair (speed and jump) feeding the stat window's values.
   CUser -> vec ctrl  min(speed,140) before the remote-user vector controller (other players).
+  stat window        CUIStatDetail recomputes speed/jump itself: on foot min(GetSpeed(),140) /
+                     GetJump() > 123 ? 123; vehicle and mount paths with caps 140 / 190 and 123.
+                     Six sites; the two 6-byte jcc become nop+jmp / six nops.
 
 Each patch flips a 2-byte conditional jump (`jge +2` -> `nop nop`, `jl +2/+3` -> `jmp`, `jg +3` -> `jmp +3`)
 or widens one immediate (140 -> 1000 for animation pace, 140/190 -> 10000 for the physics caps). Instruction lengths never change. The signature bytes around
@@ -61,6 +64,13 @@ SITES = [
     (0x687E9E, bytes.fromhex("6a465803d8b8be0000003bd8895d"), 6, bytes.fromhex("10270000"), "CUserLocal physics (riding+): speed cap 190 -> 10000"),
     (0x687EC4, bytes.fromhex("593bc18945ec7c03894decdb"), 6, bytes.fromhex("eb03"), "CUserLocal physics (riding+): jump = min(x, 123)"),
     (0x688003, bytes.fromhex("593bc18945ec7c03894decdb"), 6, bytes.fromhex("eb03"), "CUserLocal physics (on foot): jump = min(x, 123)"),
+    # -- third pass (2026-09-07): the stat window computes and clamps its own speed/jump figures
+    (0x5DAA2D, bytes.fromhex("ff5959eb05b88c0000008b1d8c62"), 6, bytes.fromhex("10270000"), "stat window: default speed cap 140 -> 10000"),
+    (0x5DAABF, bytes.fromhex("6a645883f87b0f8ced0200006a7b5fe9"), 6, bytes.fromhex("90e9ed020000"), "stat window (vehicle): jump = min(x, 123)"),
+    (0x5DACA4, bytes.fromhex("6a465803d8b8be0000003bd8895d"), 6, bytes.fromhex("10270000"), "stat window (mount): speed cap 190 -> 10000"),
+    (0x5DACC2, bytes.fromhex("5803c683f87b7d0d8bf88b1d"), 6, bytes.fromhex("9090"), "stat window (mount): jump = min(x, 123)"),
+    (0x5DAD9D, bytes.fromhex("e83bc8894de47c038945e48b"), 6, bytes.fromhex("9090"), "stat window (on foot): speed = min(cap, x) -> x"),
+    (0x5DADAC, bytes.fromhex("03000083f87b0f8f13fdffff8bf8be3f"), 6, bytes.fromhex("909090909090"), "stat window (on foot): jump = min(x, 123)"),
 ]
 
 
