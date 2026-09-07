@@ -31,8 +31,7 @@ DevTools\wz set-int <file.wz> <image glob> <node path> <値> --out <new.wz>   �
 ```
 
 `set-int` はグロブ(`Map/Map*/*.img` など)に合う全 img を解析し、ノードパスの int を書き換え(無ければ
-追加)て再構築します。例: 全マップに飛行フラグ `info/fly=1`(`DevTools\wz_enable_fly.bat` の中身)。
-実 Map.wz で 5536 img を書き換え(72 枚は元から fly=1)、verify で「変更した img だけが変わっている」ことを確認しています(10秒)。
+追加)て再構築します。実 Map.wz で 5536 img 規模の一括書き換えでも、verify で「変更した img だけが変わっている」ことを確認できます(約10秒)。
 
 `path` は `<ディレクトリ>/<名前>.img[/ノード/ノード…]` です。例: `Obj/vehicle.img/ship/ossyria/97`。
 
@@ -63,14 +62,6 @@ DevTools\wz graft other\Map.wz Obj/vehicle.img/ship/ossyria/97 ^
                   Client\MapleStory_v186\Map.wz Obj/vehicle.img/ship/ossyria/97 ^
                   --out Client\MapleStory_v186\Map.wz.new
 ```
-
-## 例1b: 全マップで飛行を許可する(`/gmmove` 用)
-
-```
-DevTools\wz_enable_fly.bat [<クライアントのフォルダ>]
-```
-
-詳細は [CLIENT_PATCHES.md](CLIENT_PATCHES.md)。
 
 ## 例2: 別バージョンのアバター(装備)を移植する
 

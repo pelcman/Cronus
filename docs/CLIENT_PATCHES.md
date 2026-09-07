@@ -14,7 +14,6 @@ EmuClient のローダー(`EmuMain.dll` の MSCRC バイパス)が改変済み e
 |---|---|---|---|
 | `wzpatch_namespace.py apply` | `NameSpace.dll`(2バイト×2) | 遅延WZアーカイブ open の `push 1`→`push 2`(iGPUplz と同じ) | ゲーム入場で落ちる環境(必須) |
 | `clientpatch_speedcap.py apply` | `JMS_v186.1_L.exe`(27か所) | 速度140% / ジャンプ123% / 攻撃速度段階2 の clamp 無効化(表示用・物理用の両方)、歩行アニメ上限140%→1000% | `/gmmove` の倍率を効かせたい時 |
-| `wz_enable_fly.bat` | `Map.wz`(全マップの `info/fly`=1) | 飛行(CTS_Flying)を全マップで許可 | `/gmfly` で飛びたい時 |
 | `wz_graft_airship.bat <元Map.wz>` | `Map.wz`(`ship/ossyria/97`) | バルログ船の画像を別バージョンから移植 | 飛行船襲撃の演出を出したい時 |
 
 ## 速度・ジャンプ・攻撃速度の上限(`clientpatch_speedcap.py`)
@@ -67,16 +66,10 @@ python DevTools\clientpatch_speedcap.py revert
 これは物理上限の新しい即値と一致させています)。
 未適用のクライアントでは従来どおり 140% / 123% / 段階2 で頭打ちです。
 
-## 全マップ飛行可(`wz_enable_fly.bat`)
+## 飛行について(`wz_enable_fly.bat` は撤去)
 
-クライアントは `Flying` 一時ステータスを、マップデータの `info/fly` が 1 のマップ(v186 では72枚:
-リプレ天空地域、母船キューブ、時間の神殿への飛行船など)でだけ飛行として扱います。
-`DevTools\wz set-int Map.wz "Map/Map*/*.img" info/fly 1` で全マップ(5536 img、72 枚は元から 1)にフラグを立て、
-検証(全 img の解析比較: 変更した img 以外は同一)を通してから差し替えます。
-`Flying` を持たないプレイヤーの歩行は変わりません(飛行船の甲板マップも fly=1 で普通に歩けています)。
-
-```
-DevTools\wz_enable_fly.bat            ← Client\MapleStory_v186\Map.wz を差し替え(.bak を作成、別フォルダは引数で)
-```
-
-元に戻すには `Map.wz.bak` を `Map.wz` に戻します。サーバーの gamedata.db には影響しません。
+以前は全マップの `info/fly` を 1 にして飛行を全マップで許可していましたが、`info/fly` は
+**マップ自体を飛行マップにする**フラグで、Flying 一時ステータスの有無に関係なくそのマップの全員が
+飛んでしまうと判明しました(クライアントの移動モード設定ルーチンがマップの fly フラグだけを見て
+飛行モードにするため)。プレイヤー単位の GM 飛行はこのクライアントでは実現できないため、
+`/gmfly` と `wz_enable_fly.bat` は撤去しました。飛行は元から飛べる 72 マップの属性のままです。

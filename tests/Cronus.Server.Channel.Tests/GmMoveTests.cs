@@ -130,7 +130,7 @@ public class GmMoveTests
         Assert.Equal((1u << BuffEffect.Speed) | (1u << BuffEffect.Jump) | (1u << BuffEffect.Booster), set.Words[3]); // word[0]
         // 3x / 1.8x / 2x: frame time (d+10)/16 = 1/2 -> degree -2; no weapon -> speed 6 -> Booster -8.
         // Reasons: Haste for Speed/Jump, a booster skill for Booster — never the soaring skill 1026,
-        // which would make the client fly (/gmfly's job).
+        // which would make the client fly.
         Assert.Equal(new[] { (200, ChannelHandler.GmMoveReasonSkill), (80, ChannelHandler.GmMoveReasonSkill), (-8, ChannelHandler.GmMoveBoosterReasonSkill) },
             set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray());
         Assert.All(set.Entries, e => Assert.NotEqual(1026, e.Reason));
@@ -155,36 +155,6 @@ public class GmMoveTests
         }
 
         Assert.Equal(380, hero.Hp);
-    }
-
-    [Fact]
-    public async Task GmFly_SetsAndResetsTheFlyingBitOnItsOwn()
-    {
-        var repo = new InMemoryCharacterRepository();
-        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Gm", MapId = 100000000, Hp = 500, MaxHp = 500, Mp = 100, MaxMp = 100 });
-        var client = new GmClient(hero.Id);
-        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186);
-
-        var c2s = new Pipe();
-        var s2c = new Pipe();
-        await using var server = new MapleSession(c2s.Reader, s2c.Writer, ServerConfig.Jms186, SessionRole.Server, handler);
-        await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
-        using var cts = new CancellationTokenSource(Timeout);
-        _ = server.RunAsync(cts.Token);
-        _ = clientSession.RunAsync(cts.Token);
-
-        await client.Entered.Task.WaitAsync(cts.Token);
-        await client.ChatAsync("/gmfly");
-
-        // Flying is bit 80: word[2] (bits 64..95) bit 16; nothing in the low words, so /gmmove's
-        // Speed/Jump/Booster are untouched.
-        StatSet set = await client.Set.Task.WaitAsync(cts.Token);
-        Assert.Equal(new[] { 0u, 1u << (BuffEffect.Flying - 64), 0u, 0u }, set.Words);
-        Assert.Equal(new[] { (1, 1026, 86_400_000) }, set.Entries.Select(e => ((int)e.Value, e.Reason, e.Duration)).ToArray());
-
-        await client.ChatAsync("/gmfly off");
-        uint[] reset = await client.Reset.Task.WaitAsync(cts.Token);
-        Assert.Equal(set.Words, reset);
     }
 
     [Theory]

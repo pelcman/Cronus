@@ -33,7 +33,6 @@ which is what keeps `/help`, the usage replies, and this document describing the
 | `/pos` | Show your position and map id |
 | `/conti state|move <a> [b]` | Send one airship effect packet to yourself (live bisect of the unverified values) |
 | `/gmmove [on|off|<speed×> [<jump×> [<attack×>]]]` | GM movement: speed/jump/attack-speed multipliers, no damage taken, no skill MP cost or cooldown |
-| `/gmfly [on|off]` | GM flight: the Flying temporary stat (works on info/fly=1 maps; every map after wz_enable_fly.bat) |
 
 ### Character
 
@@ -245,16 +244,7 @@ stat, solved from the client's frame-time law (base × (degree + 10) / 16) with 
 weapon's attackSpeed; hits show their number but take no HP; skills cost no MP/HP and have no
 cooldown (the client's own bar prediction is snapped back). A stock client caps speed at 140%,
 jump at 123% and attack speed at degree 2; `DevTools\clientpatch_speedcap.py apply` lifts all
-three — see [CLIENT_PATCHES.md](CLIENT_PATCHES.md). Re-logging turns it off. Flight is its own
-command, `/gmfly`.
-
-### `/gmfly [on|off]`
-Toggles GM flight (no argument flips it). It only sets the Flying temporary stat (CTS bit 80, what
-the 天の翼 / 플라잉 skill 1026 grants) on you, independently of `/gmmove`. The client treats the
-stat as flight only on maps whose data has `info/fly = 1` (72 stock maps: the Ereve sky, the
-mothership, the Temple of Time flight); `DevTools\wz_enable_fly.bat` flags every map in the
-client you launch — see [CLIENT_PATCHES.md](CLIENT_PATCHES.md). OFF removes just Flying.
-Re-logging turns it off.
+three — see [CLIENT_PATCHES.md](CLIENT_PATCHES.md). Re-logging turns it off.
 
 ### `/conti state|move <a> [b]`
 Sends one airship effect packet to **you only**: `/conti state 4 1` is `LP_CONTISTATE [4][1]`,

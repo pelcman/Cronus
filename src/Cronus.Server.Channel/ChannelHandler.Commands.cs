@@ -163,41 +163,6 @@ public sealed partial class ChannelHandler
                 break;
             }
 
-            case "gmfly":
-            {
-                // GM flight, on its own switch: the Flying temporary stat (CTS bit 80, what the
-                // 天の翼 / 플라잉 skill 1026 sets in JMSv186's OpsSecondaryStat). The client only
-                // treats it as flight on maps whose data says info/fly = 1 (72 stock maps;
-                // every map after DevTools/wz_enable_fly.bat). Independent of /gmmove.
-                //   /gmfly            toggle
-                //   /gmfly on|off
-                string? a1 = parts.Length >= 2 ? parts[1] : null;
-                bool? requested = a1 is null ? null
-                    : a1.Equals("on", StringComparison.OrdinalIgnoreCase) ? true
-                    : a1.Equals("off", StringComparison.OrdinalIgnoreCase) ? false
-                    : null;
-                if (a1 is not null && requested is null)
-                {
-                    await ReplyAsync(session, "使い方: /gmfly [on|off]").ConfigureAwait(false);
-                    break;
-                }
-
-                bool on = requested ?? !_player!.GmFly;
-                _player!.GmFly = on;
-                if (on)
-                {
-                    await session.SendAsync(_packets.TemporaryStatSet(GmFlyBuffs)).ConfigureAwait(false);
-                    await ReplyAsync(session, "gmfly: ON — 飛行(info/fly=1 のマップで有効。wz_enable_fly.bat 適用後は全マップ)").ConfigureAwait(false);
-                }
-                else
-                {
-                    await session.SendAsync(_packets.TemporaryStatReset(GmFlyMask)).ConfigureAwait(false);
-                    await ReplyAsync(session, "gmfly: OFF").ConfigureAwait(false);
-                }
-
-                break;
-            }
-
             case "conti" when parts.Length >= 3:
             {
                 // Live bisect for the airship packets the oracle never verified: sends one
@@ -1216,16 +1181,10 @@ public sealed partial class ChannelHandler
     private static readonly UInt128 GmMoveMask =
         (UInt128.One << BuffEffect.Speed) | (UInt128.One << BuffEffect.Jump) | (UInt128.One << BuffEffect.Booster);
 
-    /// <summary>/gmfly's one stat: Flying (CTS bit 80) = 1 with the soaring skill 1026 as its
-    /// reason — the one place that reason belongs (see <see cref="GmMoveReasonSkill"/>).</summary>
-    internal static readonly BuffStat[] GmFlyBuffs = [new(BuffEffect.Flying, 1, 1026, 86_400_000)];
-
-    private static readonly UInt128 GmFlyMask = UInt128.One << BuffEffect.Flying;
-
     /// <summary>The reason (skill id) on /gmmove's Speed and Jump stats: Haste (4101004), a skill
     /// that grants exactly those two, so the buff icon reads right. It must NOT be the soaring
     /// skill 1026 (天の翼 / 플라잉): the client treats stats carrying a soaring reason as flight, which
-    /// is /gmfly's job, not /gmmove's.</summary>
+    /// must never happen from /gmmove.</summary>
     public const int GmMoveReasonSkill = 4101004;
 
     /// <summary>The reason on /gmmove's Booster stat: Sword Booster (1101004); any booster skill's
