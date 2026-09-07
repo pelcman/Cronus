@@ -169,6 +169,11 @@ public sealed partial class ChannelHandler
             _characters.Save(c);
             await session.SendAsync(_packets.StatChanged(c, StatFlag.Mp)).ConfigureAwait(false);
         }
+        else if (_player.GmMove && attack.SkillId != 0)
+        {
+            // /gmmove: undo the client's own HP/MP-cost prediction for a skill attack.
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Hp | StatFlag.Mp)).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -769,6 +774,13 @@ public sealed partial class ChannelHandler
             c.Mp = (short)(c.Mp - effect.MpCon);
             _characters.Save(c);
             await session.SendAsync(_packets.StatChanged(c, StatFlag.Mp)).ConfigureAwait(false);
+        }
+
+        if (_player.GmMove)
+        {
+            // The client predicts the skill's HP/MP cost on its own bars; hand it the untouched
+            // server values so the "cost" reads as zero.
+            await session.SendAsync(_packets.StatChanged(c, StatFlag.Hp | StatFlag.Mp)).ConfigureAwait(false);
         }
 
         // A cooldown skill starts the client's cooldown timer (the client blocks recasts) —

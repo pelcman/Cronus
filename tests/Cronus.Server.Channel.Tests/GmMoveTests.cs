@@ -129,7 +129,7 @@ public class GmMoveTests
         Assert.Equal(1u << (BuffEffect.Flying - 64), set.Words[1]);                     // word[2]: Flying = bit 80
         Assert.Equal(0u, set.Words[2]);                                                 // word[1]
         Assert.Equal((1u << BuffEffect.Speed) | (1u << BuffEffect.Jump), set.Words[3]); // word[0]
-        Assert.Equal(new[] { (200, 1026), (23, 1026), (1, 1026) }, set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray());
+        Assert.Equal(new[] { (200, 1026), (80, 1026), (1, 1026) }, set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray());
         Assert.All(set.Entries, e => Assert.Equal(86_400_000, e.Duration));
 
         // A hit lands on the wire, but HP stays put and no StatChanged follows (the entry sends one).

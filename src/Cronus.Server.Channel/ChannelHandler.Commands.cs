@@ -1149,13 +1149,16 @@ public sealed partial class ChannelHandler
     /// while the raid is on), and the raid itself — enemy ship, Balrogs, departure — is driven by
     /// <see cref="AirshipService"/>, never from this entry handshake.
     /// </summary>
-    /// <summary>The /gmmove temporary stats: speed and jump at the client's caps plus Flying (CTS
-    /// bit 80). The reason is skill 1026 (플라잉 / 天の翼, the beginner flying skill this client has
-    /// an icon for); the day-long duration is a formality — the command clears them.</summary>
+    /// <summary>The /gmmove temporary stats: Speed +200 (300%) and Jump +80 (180%) — the stock
+    /// client clamps them to 140% / 123%; DevTools/clientpatch_speedcap.py removes those clamps —
+    /// plus Flying (CTS bit 80), which the client honours on maps flagged info/fly (all of them
+    /// after DevTools/wz_enable_fly.bat). The reason is skill 1026 (플라잉 / 天の翼, the beginner
+    /// flying skill this client has an icon for); the day-long duration is a formality — the
+    /// command clears them.</summary>
     private static readonly BuffStat[] GmMoveBuffs =
     {
         new(BuffEffect.Speed, 200, 1026, 86_400_000),
-        new(BuffEffect.Jump, 23, 1026, 86_400_000),
+        new(BuffEffect.Jump, 80, 1026, 86_400_000),
         new(BuffEffect.Flying, 1, 1026, 86_400_000),
     };
 
