@@ -274,7 +274,8 @@ AGENTS.md の「Deferred」を再評価して潰す:
       `Client\MapleStory_v186_edit` にだけ当たっていた(atime で確認)。DevTools の既定値を起動側の
       フォルダに変更し、ドキュメントの「_edit が遊ぶ側」を訂正。よって「Flying は fly=1 でも効かない」
       という結論も未検証に戻る → `/gmfly [on|off]` を `/gmmove` から独立した切替として実装(Flying bit 80
-      のみ、OFF で Flying だけ Reset)。起動側の exe / Map.wz への適用はクライアント終了後。
+      のみ、OFF で Flying だけ Reset)。クライアント終了後に起動側フォルダへ exe 27か所と fly=1 Map.wz を
+      適用済み(20:29-20:30、`.orig` / `Map.wz.bak` あり)。実機で `/gmmove 3 5 5` の表示と `/gmfly` の飛行を確認待ち。
       詳細は [CLIENT_PATCHES.md](CLIENT_PATCHES.md)。
 - [x] **存在しないマップに保存されたキャラの救済**(2026-09-07) — `/warp` の打ち間違いで
       データの無いマップIDに飛ぶと、SetField でクライアントが落ち、再ログインでも同じ地点で落ちて
