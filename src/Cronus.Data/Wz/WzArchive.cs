@@ -7,6 +7,28 @@ public sealed record WzImageEntry(string Directory, string Name, uint Offset, in
 {
     /// <summary>The dump-style relative path: directory + name + ".xml".</summary>
     public string RelativePath => Directory.Length == 0 ? Name + ".xml" : Directory + "/" + Name + ".xml";
+
+    /// <summary>The archive-relative path without the ".xml": "Obj/vehicle.img".</summary>
+    public string ArchivePath => Directory.Length == 0 ? Name : Directory + "/" + Name;
+}
+
+/// <summary>A directory of the archive, with its entries in the order the file lists them.</summary>
+public sealed class WzDirectory
+{
+    public WzDirectory(string name) => Name = name;
+
+    public string Name { get; }
+
+    /// <summary>Sub-directories and images, in file order (the rewrite keeps it).</summary>
+    public List<WzDirEntry> Entries { get; } = new();
+}
+
+/// <summary>One directory entry: either a sub-directory or an image.</summary>
+public sealed record WzDirEntry(WzDirectory? Directory, WzImageEntry? Image)
+{
+    public bool IsDirectory => Directory is not null;
+
+    public string Name => Directory?.Name ?? Image!.Name;
 }
 
 /// <summary>
@@ -31,13 +53,26 @@ public sealed class WzArchive : IDisposable
         _reader = new BinaryReader(_file);
         _length = _file.Length;
         BaseName = Path.GetFileNameWithoutExtension(path);
+        FilePath = path;
     }
 
     /// <summary>The archive's base name ("Map" for Map.wz) — the first path segment in dumps.</summary>
     public string BaseName { get; }
 
+    /// <summary>The file this archive was opened from.</summary>
+    public string FilePath { get; }
+
+    /// <summary>The file length in bytes.</summary>
+    public long Length => _length;
+
     /// <summary>Where the data region starts (header size); offsets are relative to this.</summary>
     public uint FileStart { get; private set; }
+
+    /// <summary>The 64-bit size field of the header (the data region's length in Nexon's files).</summary>
+    public ulong HeaderFileSize { get; private set; }
+
+    /// <summary>The 16-bit encoded version that follows the header.</summary>
+    public ushort EncVersion { get; private set; }
 
     /// <summary>The detected game version (e.g. 186) — informational once parsing succeeds.</summary>
     public int Version { get; private set; }
@@ -47,6 +82,15 @@ public sealed class WzArchive : IDisposable
 
     /// <summary>Every image in the archive, in directory order.</summary>
     public IReadOnlyList<WzImageEntry> Images { get; private set; } = Array.Empty<WzImageEntry>();
+
+    /// <summary>The directory tree as the file lists it (what a rewrite reproduces).</summary>
+    public WzDirectory Root { get; private set; } = new("");
+
+    /// <summary>The version hash that keys the offsets (what a rewrite must reuse).</summary>
+    internal uint VersionHash => _versionHash;
+
+    /// <summary>The archive's string crypto (directory names and non-List.wz images).</summary>
+    internal WzCrypto Crypto => _crypto;
 
     public static WzArchive Open(string path)
     {
@@ -65,6 +109,27 @@ public sealed class WzArchive : IDisposable
 
     public void Dispose() => _reader.Dispose();
 
+    /// <summary>The raw header bytes [0, FileStart): magic, size, header size, copyright.</summary>
+    public byte[] ReadHeaderBytes()
+    {
+        _file.Position = 0;
+        return _reader.ReadBytes((int)FileStart);
+    }
+
+    /// <summary>The raw bytes of one image, exactly as stored (strings and pixels still encoded).</summary>
+    public byte[] ReadImageBytes(WzImageEntry image)
+    {
+        _file.Position = image.Offset;
+        return _reader.ReadBytes(image.Size);
+    }
+
+    /// <summary>Finds an image by its archive path ("Obj/vehicle.img"), or null.</summary>
+    public WzImageEntry? FindImage(string archivePath)
+    {
+        string wanted = archivePath.Replace('\\', '/').Trim('/');
+        return Images.FirstOrDefault(i => string.Equals(i.ArchivePath, wanted, StringComparison.OrdinalIgnoreCase));
+    }
+
     // ---- header + (iv, version) detection ------------------------------------------------
 
     private void Parse()
@@ -75,11 +140,12 @@ public sealed class WzArchive : IDisposable
             throw new InvalidDataException("not a WZ archive (missing PKG1 magic)");
         }
 
-        _reader.ReadUInt64();                   // file size
+        HeaderFileSize = _reader.ReadUInt64();
         FileStart = _reader.ReadUInt32();
 
         _file.Position = FileStart;
         int encVer = _reader.ReadUInt16();
+        EncVersion = (ushort)encVer;
 
         foreach ((string ivName, byte[] iv) in WzCrypto.KnownIvs)
         {
@@ -98,7 +164,8 @@ public sealed class WzArchive : IDisposable
                 try
                 {
                     var images = new List<WzImageEntry>(1024);
-                    ParseDirectory(FileStart + 2, "", images, depth: 0);
+                    var root = new WzDirectory("");
+                    ParseDirectory(FileStart + 2, "", root, images, depth: 0);
                     if (images.Count == 0 || !LooksLikeImage(images[0]))
                     {
                         continue;
@@ -107,6 +174,7 @@ public sealed class WzArchive : IDisposable
                     Version = version;
                     IvName = ivName;
                     Images = images;
+                    Root = root;
                     return;
                 }
                 catch (InvalidDataException)
@@ -125,7 +193,9 @@ public sealed class WzArchive : IDisposable
         throw new InvalidDataException("no (iv, version) candidate produced a valid directory");
     }
 
-    private static (byte EncVer, uint Hash) HashVersion(int version)
+    /// <summary>The header's version byte and the offset hash for a game version (ports
+    /// <c>WzTool.GetVersionHash</c>): hash = Σ (hash * 32 + digit + 1), byte = 0xFF ^ its four bytes.</summary>
+    internal static (byte EncVer, uint Hash) HashVersion(int version)
     {
         uint hash = 0;
         foreach (char c in version.ToString())
@@ -156,7 +226,7 @@ public sealed class WzArchive : IDisposable
 
     // ---- directory tree ------------------------------------------------------------------
 
-    private void ParseDirectory(long position, string dirPath, List<WzImageEntry> images, int depth)
+    private void ParseDirectory(long position, string dirPath, WzDirectory dir, List<WzImageEntry> images, int depth)
     {
         if (depth > 8)
         {
@@ -170,7 +240,7 @@ public sealed class WzArchive : IDisposable
             throw new InvalidDataException($"implausible directory entry count {count}");
         }
 
-        var subdirs = new List<(string Name, uint Offset)>();
+        var subdirs = new List<(WzDirectory Dir, uint Offset)>();
         for (int i = 0; i < count; i++)
         {
             byte type = _reader.ReadByte();
@@ -218,18 +288,22 @@ public sealed class WzArchive : IDisposable
 
             if (type == 3)
             {
-                subdirs.Add((name, offset));
+                var sub = new WzDirectory(name);
+                dir.Entries.Add(new WzDirEntry(sub, null));
+                subdirs.Add((sub, offset));
             }
             else
             {
-                images.Add(new WzImageEntry(dirPath, name, offset, size));
+                var image = new WzImageEntry(dirPath, name, offset, size);
+                dir.Entries.Add(new WzDirEntry(null, image));
+                images.Add(image);
             }
         }
 
-        foreach ((string name, uint offset) in subdirs)
+        foreach ((WzDirectory sub, uint offset) in subdirs)
         {
-            string child = dirPath.Length == 0 ? name : dirPath + "/" + name;
-            ParseDirectory(offset, child, images, depth + 1);
+            string child = dirPath.Length == 0 ? sub.Name : dirPath + "/" + sub.Name;
+            ParseDirectory(offset, child, sub, images, depth + 1);
         }
     }
 
@@ -271,6 +345,9 @@ public sealed class WzArchive : IDisposable
         return offset;
     }
 
+    /// <summary>Whether the last <see cref="ReadWzString"/> was stored as UTF-16 (else 8-bit MS932).</summary>
+    internal bool LastStringWasUnicode { get; private set; }
+
     /// <summary>
     /// Reads an inline WZ string: negative length = 8-bit chars (mask 0xAA+i), positive =
     /// UTF-16 (mask 0xAAAA+i), both XOR'd with the keystream. 8-bit bytes decode as MS932 so
@@ -281,11 +358,13 @@ public sealed class WzArchive : IDisposable
         sbyte small = _reader.ReadSByte();
         if (small == 0)
         {
+            LastStringWasUnicode = false;
             return string.Empty;
         }
 
         if (small < 0)
         {
+            LastStringWasUnicode = false;
             int length = small == -128 ? _reader.ReadInt32() : -small;
             if (length is < 0 or > 0x10000)
             {
@@ -304,6 +383,7 @@ public sealed class WzArchive : IDisposable
         }
         else
         {
+            LastStringWasUnicode = true;
             int length = small == 127 ? _reader.ReadInt32() : small;
             if (length is < 0 or > 0x10000)
             {
@@ -359,12 +439,15 @@ public sealed class WzArchive : IDisposable
     /// </summary>
     internal void UseImageCrypto(WzCrypto? crypto) => _imageCrypto = crypto ?? _crypto;
 
+    /// <summary>The crypto the current image parse is using.</summary>
+    internal WzCrypto CurrentImageCrypto => _imageCrypto;
+
     /// <summary>Candidate cryptos for encrypted images, lazily built once per archive.</summary>
     internal IReadOnlyList<WzCrypto> ImageCryptoCandidates => _cryptoCandidates ??=
         WzCrypto.KnownIvs.Select(k => new WzCrypto(k.Iv)).ToList();
 
     private List<WzCrypto>? _cryptoCandidates;
 
-    private static readonly Encoding Ms932 = CodePagesEncodingProvider.Instance.GetEncoding(932)
+    internal static readonly Encoding Ms932 = CodePagesEncodingProvider.Instance.GetEncoding(932)
         ?? Encoding.ASCII;
 }

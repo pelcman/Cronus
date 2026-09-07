@@ -13,6 +13,9 @@
     <Project Path="src/Cronus.Server.Host/Cronus.Server.Host.csproj" />
     <Project Path="src/Cronus.Server.Login/Cronus.Server.Login.csproj" />
   </Folder>
+  <Folder Name="/DevTools/">
+    <Project Path="DevTools/WzTool/Cronus.WzTool.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Cronus.Data.Tests/Cronus.Data.Tests.csproj" />
     <Project Path="tests/Cronus.Database.Tests/Cronus.Database.Tests.csproj" />

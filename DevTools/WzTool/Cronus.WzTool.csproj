@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Cronus.WzTool</RootNamespace>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- The .wz reader/writer lives in Cronus.Data (Wz/); this is the command-line front end. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Cronus.Data\Cronus.Data.csproj" />
+  </ItemGroup>
+
+</Project>
