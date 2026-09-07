@@ -32,7 +32,7 @@ which is what keeps `/help`, the usage replies, and this document describing the
 | `/dbgwarp` | Windowed warp console — pick a region, an area, then a map (no ids to type) |
 | `/pos` | Show your position and map id |
 | `/conti state|move <a> [b]` | Send one airship effect packet to yourself (live bisect of the unverified values) |
-| `/gmmove [on|off|<speed×> [<jump×>]]` | GM movement: speed/jump multipliers, no damage taken, no skill MP cost or cooldown |
+| `/gmmove [on|off|<speed×> [<jump×> [<attack×>]]]` | GM movement: speed/jump/attack-speed multipliers, no damage taken, no skill MP cost or cooldown |
 
 ### Character
 
@@ -235,15 +235,16 @@ Persists your character immediately (it also autosaves periodically and on disco
 Replies with your `(x, y)` position and map id — handy when authoring NPC/portal scripts (see
 [SCRIPTING.md](SCRIPTING.md)).
 
-### `/gmmove [on|off|<speed×> [<jump×>]]`
-Toggles GM movement mode (no argument flips it; defaults 3× speed, 1.8× jump). `/gmmove 5` is 5×
-speed, `/gmmove 3 2.5` is 3× speed and 2.5× jump (speed 1–30, jump 1–10); repeating while on
-re-applies with the new values. While on: speed and jump take the multipliers (Speed/Jump temporary
-stats); hits show their number but take no HP; skills cost no MP/HP and have no cooldown (the
-client's own bar prediction is snapped back). A stock client caps speed at 140% and jump at
-123% and only flies on maps flagged `info/fly` (72 of them); `DevTools\clientpatch_speedcap.py apply`
-(300% / 180%) and `DevTools\wz_enable_fly.bat` (fly anywhere) lift both — see
-[CLIENT_PATCHES.md](CLIENT_PATCHES.md). Re-logging turns it off.
+### `/gmmove [on|off|<speed×> [<jump×> [<attack×>]]]`
+Toggles GM movement mode (no argument flips it; defaults 3× speed, 1.8× jump, 1× attack).
+`/gmmove 5` is 5× speed, `/gmmove 3 2.5 4` is 3× speed, 2.5× jump and 4× attack speed (speed
+1–100, jump 1–30, attack 1–8); repeating while on re-applies with the new values. While on: speed
+and jump take the multipliers (Speed/Jump temporary stats); attack speed comes from the Booster
+stat, solved from the client's frame-time law (base × (degree + 10) / 16) with the equipped
+weapon's attackSpeed; hits show their number but take no HP; skills cost no MP/HP and have no
+cooldown (the client's own bar prediction is snapped back). A stock client caps speed at 140%,
+jump at 123% and attack speed at degree 2; `DevTools\clientpatch_speedcap.py apply` lifts all
+three — see [CLIENT_PATCHES.md](CLIENT_PATCHES.md). Re-logging turns it off.
 
 ### `/conti state|move <a> [b]`
 Sends one airship effect packet to **you only**: `/conti state 4 1` is `LP_CONTISTATE [4][1]`,

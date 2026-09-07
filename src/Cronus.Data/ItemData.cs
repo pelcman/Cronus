@@ -117,6 +117,11 @@ public sealed record EquipStats
 
     /// <summary>wz <c>incJUMP</c>.</summary>
     public short Jump { get; init; }
+
+    /// <summary>wz <c>attackSpeed</c> — the weapon's attack speed degree (2 fastest … 9 slowest;
+    /// the client adds the Booster stat and scales frame time by (degree + 10) / 16). 6 when
+    /// absent (armour, or a weapon without the key).</summary>
+    public byte AttackSpeed { get; init; } = 6;
 }
 
 /// <summary>
@@ -309,6 +314,7 @@ public sealed class WzItemProvider : IItemProvider
         Hands = (short)info.GetInt("incHANDS"),
         Speed = (short)info.GetInt("incSPEED"),
         Jump = (short)info.GetInt("incJUMP"),
+        AttackSpeed = (byte)Math.Clamp(info.GetInt("attackSpeed", 6), 0, 20),
     };
 
     private EquipStats? LoadEquip(int itemId)

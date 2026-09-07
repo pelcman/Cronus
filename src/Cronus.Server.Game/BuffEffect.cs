@@ -27,6 +27,10 @@ public static class BuffEffect
     public const int Speed = 7;
     public const int Jump = 8;
 
+    /// <summary>CTS_Booster (bit 11): the attack-speed buff, a negative degree offset (the
+    /// weapon's attackSpeed + this is the degree the client scales frame time by).</summary>
+    public const int Booster = 11;
+
     /// <summary>CTS_Flying (OpsSecondaryStat.init, JMS v186: bit 80 — mask word[2]): the client
     /// switches to flying movement while it is set (the beginner flying skills, /gmmove).</summary>
     public const int Flying = 80;

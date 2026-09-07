@@ -111,11 +111,12 @@ public sealed partial class ChannelHandler
             case "gmmove":
             {
                 // GM movement mode. Server half: a flag (no damage taken, no skill MP cost, no
-                // cooldown). Client half: Speed/Jump temporary stats. The stock client clamps them
-                // to 140% / 123% (DevTools/clientpatch_speedcap.py lifts that); the multiplier
-                // argument is the speed in units of the 100% base: /gmmove 3 = 300%.
-                //   /gmmove            toggle (default 3x speed, 1.8x jump)
-                //   /gmmove <speed>    on, speed ×N        /gmmove <speed> <jump>   both
+                // cooldown). Client half: Speed / Jump / Booster temporary stats. The stock client
+                // clamps speed to 140%, jump to 123% and attack speed to degree 2 —
+                // DevTools/clientpatch_speedcap.py lifts all three. Multipliers are of the 100%
+                // base: /gmmove 3 = 300% speed.
+                //   /gmmove                          toggle (defaults: speed 3x, jump 1.8x, attack 1x)
+                //   /gmmove <speed> [<jump> [<attack>]]   on, with those multipliers
                 //   /gmmove on|off
                 string? a1 = parts.Length >= 2 ? parts[1] : null;
                 bool? requested = a1 is null ? null
@@ -125,32 +126,34 @@ public sealed partial class ChannelHandler
                     : null;
                 if (a1 is not null && requested is null)
                 {
-                    await ReplyAsync(session, "使い方: /gmmove [on|off|<速度倍率> [<ジャンプ倍率>]]  例: /gmmove 3 2").ConfigureAwait(false);
+                    await ReplyAsync(session, "使い方: /gmmove [on|off|<速度倍率> [<ジャンプ倍率> [<攻撃速度倍率>]]]  例: /gmmove 3 2 4").ConfigureAwait(false);
                     break;
                 }
 
                 double speedTimes = a1 is not null && double.TryParse(a1, NumberStyles.Float, CultureInfo.InvariantCulture, out double st) ? st : GmMoveDefaultSpeedTimes;
                 double jumpTimes = parts.Length >= 3 && double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double jt) ? jt : GmMoveDefaultJumpTimes;
-                if (speedTimes is < 1 or > 30 || jumpTimes is < 1 or > 10)
+                double attackTimes = parts.Length >= 4 && double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double at) ? at : GmMoveDefaultAttackTimes;
+                if (speedTimes is < 1 or > 100 || jumpTimes is < 1 or > 30 || attackTimes is < 1 or > 8)
                 {
-                    await ReplyAsync(session, "倍率は 速度 1〜30、ジャンプ 1〜10 の範囲で指定してください").ConfigureAwait(false);
+                    await ReplyAsync(session, "倍率の範囲: 速度 1〜100、ジャンプ 1〜30、攻撃速度 1〜8").ConfigureAwait(false);
                     break;
                 }
 
                 bool on = requested ?? !_player!.GmMove;
                 if (_player!.GmMove)
                 {
-                    // Re-issuing while on (new multiplier): clear the old stats first so the client
+                    // Re-issuing while on (new multipliers): clear the old stats first so the client
                     // replaces rather than stacks them.
-                    await session.SendAsync(_packets.TemporaryStatReset(BuffEffect.Mask128(GmMoveBuffs(1, 1)))).ConfigureAwait(false);
+                    await session.SendAsync(_packets.TemporaryStatReset(GmMoveMask)).ConfigureAwait(false);
                 }
 
                 _player.GmMove = on;
                 if (on)
                 {
-                    BuffStat[] buffs = GmMoveBuffs(speedTimes, jumpTimes);
+                    int weaponSpeed = EquippedWeaponAttackSpeed(_player.Character);
+                    BuffStat[] buffs = GmMoveBuffs(speedTimes, jumpTimes, GmMoveBooster(attackTimes, weaponSpeed));
                     await session.SendAsync(_packets.TemporaryStatSet(buffs)).ConfigureAwait(false);
-                    await ReplyAsync(session, $"gmmove: ON — 速度{speedTimes:0.#}倍/ジャンプ{jumpTimes:0.#}倍、被ダメージ無効、スキルのMP消費・クールタイム無し").ConfigureAwait(false);
+                    await ReplyAsync(session, $"gmmove: ON — 速度{speedTimes:0.#}倍/ジャンプ{jumpTimes:0.#}倍/攻撃速度{attackTimes:0.#}倍(武器速度{weaponSpeed})、被ダメージ無効、スキルのMP消費・クールタイム無し").ConfigureAwait(false);
                 }
                 else
                 {
@@ -1172,17 +1175,56 @@ public sealed partial class ChannelHandler
     /// </summary>
     private const double GmMoveDefaultSpeedTimes = 3.0;
     private const double GmMoveDefaultJumpTimes = 1.8;
+    private const double GmMoveDefaultAttackTimes = 1.0;
 
-    /// <summary>The /gmmove temporary stats for a speed/jump multiplier of the 100% base: Speed
-    /// +(N×100−100) and Jump likewise — a stock client clamps them to 140% / 123%,
-    /// DevTools/clientpatch_speedcap.py removes the clamps. The reason is skill 1026 (플라잉 /
-    /// 天の翼, a beginner skill this client has an icon for); the day-long duration is a
-    /// formality — the command clears them.</summary>
-    private static BuffStat[] GmMoveBuffs(double speedTimes, double jumpTimes) => new BuffStat[]
+    /// <summary>Every temporary stat /gmmove may set — what OFF resets.</summary>
+    private static readonly UInt128 GmMoveMask =
+        (UInt128.One << BuffEffect.Speed) | (UInt128.One << BuffEffect.Jump) | (UInt128.One << BuffEffect.Booster);
+
+    /// <summary>The /gmmove temporary stats for multipliers of the 100% base: Speed +(N×100−100),
+    /// Jump likewise, and the Booster offset from <see cref="GmMoveBooster"/> when it is not 0. A
+    /// stock client clamps them (140% / 123% / degree 2); DevTools/clientpatch_speedcap.py removes
+    /// the clamps. The reason is skill 1026 (플라잉 / 天の翼, a beginner skill this client has an
+    /// icon for); the day-long duration is a formality — the command clears them.</summary>
+    internal static BuffStat[] GmMoveBuffs(double speedTimes, double jumpTimes, int booster)
     {
-        new(BuffEffect.Speed, (short)Math.Clamp(Math.Round(speedTimes * 100 - 100), 0, short.MaxValue), 1026, 86_400_000),
-        new(BuffEffect.Jump, (short)Math.Clamp(Math.Round(jumpTimes * 100 - 100), 0, short.MaxValue), 1026, 86_400_000),
-    };
+        var stats = new List<BuffStat>
+        {
+            new(BuffEffect.Speed, (short)Math.Clamp(Math.Round(speedTimes * 100 - 100), 0, short.MaxValue), 1026, 86_400_000),
+            new(BuffEffect.Jump, (short)Math.Clamp(Math.Round(jumpTimes * 100 - 100), 0, short.MaxValue), 1026, 86_400_000),
+        };
+        if (booster != 0)
+        {
+            stats.Add(new BuffStat(BuffEffect.Booster, (short)booster, 1026, 86_400_000));
+        }
+
+        return stats.ToArray();
+    }
+
+    /// <summary>
+    /// The Booster value that makes attacks <paramref name="attackTimes"/> times faster. The client
+    /// scales attack frame time by (degree + 10) / 16 where degree = the weapon's attackSpeed + the
+    /// Booster stat (stock client: degree clamped to ≥ 2), so a factor 1/N needs degree
+    /// 16/N − 10; the result is kept at degree ≥ −8 (an 8× ceiling — degree −10 would be a zero
+    /// frame time) and never slower than the weapon itself.
+    /// </summary>
+    public static int GmMoveBooster(double attackTimes, int weaponSpeed)
+    {
+        if (attackTimes <= 1)
+        {
+            return 0;
+        }
+
+        int degree = Math.Max(-8, (int)Math.Round(16.0 / attackTimes - 10));
+        return Math.Min(0, degree - weaponSpeed);
+    }
+
+    /// <summary>The equipped weapon's attackSpeed degree from the item data (6 when none / unknown).</summary>
+    private int EquippedWeaponAttackSpeed(Character c)
+    {
+        InventoryItem? weapon = c.EquippedItems.FirstOrDefault(i => i.Position == -11);
+        return weapon is null ? 6 : _items.GetEquipStats(weapon.ItemId)?.AttackSpeed ?? 6;
+    }
 
     /// <summary>
     /// The station departure board: a map with a wz <c>clock</c> node shows the server machine's

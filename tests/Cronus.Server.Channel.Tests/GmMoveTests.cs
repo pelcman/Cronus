@@ -121,14 +121,15 @@ public class GmMoveTests
         _ = clientSession.RunAsync(cts.Token);
 
         await client.Entered.Task.WaitAsync(cts.Token);
-        await client.ChatAsync("/gmmove 3 1.8");
+        await client.ChatAsync("/gmmove 3 1.8 2");
 
         StatSet set = await client.Set.Task.WaitAsync(cts.Token);
         Assert.Equal(0u, set.Words[0]);                                                 // word[3]
         Assert.Equal(0u, set.Words[1]);                                                 // word[2]
         Assert.Equal(0u, set.Words[2]);                                                 // word[1]
-        Assert.Equal((1u << BuffEffect.Speed) | (1u << BuffEffect.Jump), set.Words[3]); // word[0]
-        Assert.Equal(new[] { (200, 1026), (80, 1026) }, set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray()); // 3x / 1.8x
+        Assert.Equal((1u << BuffEffect.Speed) | (1u << BuffEffect.Jump) | (1u << BuffEffect.Booster), set.Words[3]); // word[0]
+        // 3x / 1.8x / 2x: frame time (d+10)/16 = 1/2 -> degree -2; no weapon -> speed 6 -> Booster -8.
+        Assert.Equal(new[] { (200, 1026), (80, 1026), (-8, 1026) }, set.Entries.Select(e => ((int)e.Value, e.Reason)).ToArray());
         Assert.All(set.Entries, e => Assert.Equal(86_400_000, e.Duration));
 
         // A hit lands on the wire, but HP stays put and no StatChanged follows (the entry sends one).
@@ -140,7 +141,7 @@ public class GmMoveTests
 
         await client.ChatAsync("/gmmove off");
         uint[] reset = await client.Reset.Task.WaitAsync(cts.Token);
-        Assert.Equal(set.Words, reset);
+        Assert.Equal(set.Words, reset);                                                  // Speed|Jump|Booster
 
         // Mortal again.
         await client.HitAsync(120);
@@ -151,4 +152,15 @@ public class GmMoveTests
 
         Assert.Equal(380, hero.Hp);
     }
+
+    [Theory]
+    [InlineData(1.0, 6, 0)]      // unchanged
+    [InlineData(2.0, 6, -8)]     // degree -2 for a speed-6 weapon
+    [InlineData(2.0, 4, -6)]     // a fast weapon needs less
+    [InlineData(4.0, 6, -12)]    // 16/4 - 10 = -6
+    [InlineData(8.0, 6, -14)]    // 16/8 - 10 = -8, the floor
+    [InlineData(100.0, 6, -14)]  // never below the floor
+    [InlineData(1.2, 2, 0)]      // 16/1.2 - 10 = 3.3 -> 3, a speed-2 weapon is already faster: no slowdown
+    public void GmMoveBooster_FollowsTheClientsFrameTimeLaw(double times, int weaponSpeed, int expected)
+        => Assert.Equal(expected, ChannelHandler.GmMoveBooster(times, weaponSpeed));
 }

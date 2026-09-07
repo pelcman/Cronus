@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """
-Remove the JMS v186 client's movement caps (speed 140%, jump 123%) so /gmmove's Speed/Jump
-temporary stats take full effect (speed +200 -> 300%, jump +80 -> 180%).
+Remove the JMS v186 client's movement and attack-speed caps so /gmmove's multipliers take full
+effect: speed 140% -> unlimited, jump 123% -> unlimited, attack speed degree "2 = fastest" ->
+unlimited (down to 1/8 of the normal frame time), walking-animation pace 140% -> 1000%.
 
-The client clamps in six places, all the same two idioms (found by disassembling
-JMS_v186.1_L.exe, which is not packed):
+All sites were found by disassembling JMS_v186.1_L.exe (not packed) — the same two idioms:
 
-  SecondaryStat speed:  mov ecx,140 ; cmp eax,ecx ; jge +2 ; mov ecx,eax   -> store nSpeed
-  SecondaryStat jump:   cmp eax,123 ; ... ; jl +3 ; push 123 ; pop eax     -> store nJump
-  movement controller:  the same two shapes once more (speed cap is a parameter there).
+  speed clamp        mov ecx,140 ; cmp eax,ecx ; jge +2 ; mov ecx,eax          -> nSpeed
+  jump clamp         cmp eax,123 ; ... ; jl +3 ; push 123 ; pop eax            -> nJump
+  move controller    the same two shapes once more (speed cap is a parameter)
+  attack speed       cmp eax,2 ; jg +3 ; push 2 ; pop eax ; (min 10) ;
+                     frame delay = delay * (degree + 10) / 16                  (4 action builders)
+  walk animation     cmp ecx,70 ; jg +3 ; push 70 ; pop ecx ; mov eax,140     (pace = 100/speed%)
 
-Each patch flips one 2-byte conditional jump: `jge +2` -> `nop nop` (always take the
-computed value) and `jl +3` -> `jmp +3` (always skip the 123 fallback). Nothing else moves.
-The signature bytes around every site are checked before writing, so a different build is
-refused rather than corrupted. A backup (`.orig`) is kept next to the exe.
+Each patch flips a 2-byte conditional jump (`jge +2` -> `nop nop`, `jl/jg +3` -> `jmp +3`) or
+widens one immediate (140 -> 1000). Instruction lengths never change. The signature bytes around
+every site are checked before writing, so a different build is refused rather than corrupted. A
+backup (`.orig`) is kept next to the exe.
 
 Usage:
     python clientpatch_speedcap.py status  [exe]
@@ -27,28 +30,36 @@ import os, sys
 
 DEFAULT_EXE = r"C:\Users\chro\Desktop\MS1PrivSvr\Client\MapleStory_v186_edit\JMS_v186.1_L.exe"
 
-# (file offset of the signature, signature bytes, offset of the 2 bytes to patch within the
-#  signature, original 2 bytes, patched 2 bytes, description)
+# (file offset of the signature, signature bytes as in the original build, offset of the patch
+#  within the signature, patched bytes, description)
 SITES = [
-    (0x33C2D3, bytes.fromhex("b98c00000083c4103bc17d028bc8"), 10, b"\x7d\x02", b"\x90\x90", "SecondaryStat A: speed = min(x, 140)"),
-    (0x358817, bytes.fromhex("b98c00000083c4103bc17d028bc8"), 10, b"\x7d\x02", b"\x90\x90", "SecondaryStat B: speed = min(x, 140)"),
-    (0x33C336, bytes.fromhex("83f87b59597c036a7b58"),          5, b"\x7c\x03", b"\xeb\x03", "SecondaryStat A: jump = min(x, 123)"),
-    (0x48AD2C, bytes.fromhex("83f87b59597c036a7b58"),          5, b"\x7c\x03", b"\xeb\x03", "SecondaryStat B: jump = min(x, 123)"),
-    (0x44B0C0, bytes.fromhex("8bc38b4d083bc17d028bc8"),        7, b"\x7d\x02", b"\x90\x90", "move controller: speed = min(x, cap)"),
-    (0x44B0F2, bytes.fromhex("83f87b7c036a7b58"),              3, b"\x7c\x03", b"\xeb\x03", "move controller: jump = min(x, 123)"),
+    (0x33C2D3, bytes.fromhex("b98c00000083c4103bc17d028bc8"), 10, bytes.fromhex("9090"), "SecondaryStat A: speed = min(x, 140)"),
+    (0x358817, bytes.fromhex("b98c00000083c4103bc17d028bc8"), 10, bytes.fromhex("9090"), "SecondaryStat B: speed = min(x, 140)"),
+    (0x33C336, bytes.fromhex("83f87b59597c036a7b58"),          5, bytes.fromhex("eb03"), "SecondaryStat A: jump = min(x, 123)"),
+    (0x48AD2C, bytes.fromhex("83f87b59597c036a7b58"),          5, bytes.fromhex("eb03"), "SecondaryStat B: jump = min(x, 123)"),
+    (0x44B0C0, bytes.fromhex("8bc38b4d083bc17d028bc8"),        7, bytes.fromhex("9090"), "move controller: speed = min(x, cap)"),
+    (0x44B0F2, bytes.fromhex("83f87b7c036a7b58"),              3, bytes.fromhex("eb03"), "move controller: jump = min(x, 123)"),
+    (0x061FAE, bytes.fromhex("83f8027f036a02586a0a59"),        3, bytes.fromhex("eb03"), "action frames A: attack speed = max(d, 2)"),
+    (0x06264E, bytes.fromhex("83f8027f036a025883f80a"),        3, bytes.fromhex("eb03"), "action frames B: attack speed = max(d, 2)"),
+    (0x06534E, bytes.fromhex("83f8027f036a025883f80a"),        3, bytes.fromhex("eb03"), "action frames C: attack speed = max(d, 2)"),
+    (0x065BBD, bytes.fromhex("83f8027f036a025883f80a"),        3, bytes.fromhex("eb03"), "action frames D: attack speed = max(d, 2)"),
+    (0x0625CA, bytes.fromhex("83f9467f036a4659b88c000000"),    9, bytes.fromhex("e8030000"), "walk animation A: pace cap 140% -> 1000%"),
+    (0x065B6D, bytes.fromhex("83f9467f036a4659b88c000000"),    9, bytes.fromhex("e8030000"), "walk animation B: pace cap 140% -> 1000%"),
 ]
+
+
+def patched_signature(sig, at, patched):
+    return sig[:at] + patched + sig[at + len(patched):]
 
 
 def inspect(data):
     """Returns (state, details): state is 'original', 'patched', 'mixed', or 'unknown'."""
     states = []
-    for off, sig, at, orig, patched, name in SITES:
+    for off, sig, at, patched, name in SITES:
         cur = bytes(data[off:off + len(sig)])
-        expected_orig = sig
-        expected_patched = sig[:at] + patched + sig[at + 2:]
-        if cur == expected_orig:
+        if cur == sig:
             states.append((name, "original"))
-        elif cur == expected_patched:
+        elif cur == patched_signature(sig, at, patched):
             states.append((name, "patched"))
         else:
             states.append((name, f"UNKNOWN {cur.hex()}"))
@@ -93,26 +104,26 @@ def main():
             return 0
         if not os.path.exists(backup):
             orig = bytearray(data)
-            for off, sig, at, o, _, _ in SITES:
-                orig[off + at:off + at + 2] = o
+            for off, sig, at, patched, _ in SITES:
+                orig[off:off + len(sig)] = sig
             open(backup, "wb").write(orig)
             print(f"  wrote backup {os.path.basename(backup)}")
-        for off, sig, at, o, p, name in SITES:
-            data[off + at:off + at + 2] = p
+        for off, sig, at, patched, name in SITES:
+            data[off + at:off + at + len(patched)] = patched
         try:
             open(exe, "wb").write(data)
         except PermissionError:
             print("the exe is locked -- close the game client and run again")
             return 3
-        print("DONE: caps removed. Start the client; /gmmove on now gives 300% speed and 180% jump.")
+        print("DONE: caps removed (speed, jump, attack speed, walk animation). Start the client.")
         return 0
 
     # revert
     if state == "original":
         print("already original")
         return 0
-    for off, sig, at, o, p, name in SITES:
-        data[off + at:off + at + 2] = o
+    for off, sig, at, patched, name in SITES:
+        data[off:off + len(sig)] = sig
     try:
         open(exe, "wb").write(data)
     except PermissionError:
