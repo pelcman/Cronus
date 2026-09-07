@@ -31,6 +31,7 @@ which is what keeps `/help`, the usage replies, and this document describing the
 | `/warp <mapId\|playerName>` | Warp yourself: a number is a map id, a name is that player's map |
 | `/dbgwarp` | Windowed warp console — pick a region, an area, then a map (no ids to type) |
 | `/pos` | Show your position and map id |
+| `/conti state|move <a> [b]` | Send one airship effect packet to yourself (live bisect of the unverified values) |
 
 ### Character
 
@@ -231,6 +232,12 @@ Persists your character immediately (it also autosaves periodically and on disco
 ### `/pos`
 Replies with your `(x, y)` position and map id — handy when authoring NPC/portal scripts (see
 [SCRIPTING.md](SCRIPTING.md)).
+
+### `/conti state|move <a> [b]`
+Sends one airship effect packet to **you only**: `/conti state 4 1` is `LP_CONTISTATE [4][1]`,
+`/conti move 10 4` is `LP_CONTIMOVE [10][4]` (states: 1 docked, 2 departing, 3 sailing, 4 enemy
+ship appears, 5 enemy ship leaves, 6 end). Use it on a flight map (`/warp 200090010`) to find the
+combination that makes the Balrog ship appear; the working values become the server's default.
 
 ### `/help [command]`
 `/help` lists every command, grouped by category, one per line with its usage.

@@ -99,6 +99,37 @@ public sealed partial class ChannelHandler
                     .ConfigureAwait(false);
                 break;
 
+            case "conti" when parts.Length >= 3:
+            {
+                // Live bisect for the airship packets the oracle never verified: sends one
+                // LP_CONTISTATE / LP_CONTIMOVE with the given bytes to this client only.
+                //   /conti state <state> [appearShip]   /conti move <first> <second>
+                if (!byte.TryParse(parts[2], out byte a)
+                    || (parts.Length >= 4 && !byte.TryParse(parts[3], out _)))
+                {
+                    await ReplyAsync(session, "使い方: /conti state <状態 0-12> [appear 0/1] | /conti move <値1> <値2>").ConfigureAwait(false);
+                    break;
+                }
+
+                byte b = parts.Length >= 4 ? byte.Parse(parts[3]) : (byte)0;
+                switch (parts[1].ToLowerInvariant())
+                {
+                    case "state":
+                        await session.SendAsync(_packets.ContiState(a, b)).ConfigureAwait(false);
+                        await ReplyAsync(session, $"conti: LP_CONTISTATE [{a}][{b}] を送信しました").ConfigureAwait(false);
+                        break;
+                    case "move":
+                        await session.SendAsync(_packets.ContiMove(a, b)).ConfigureAwait(false);
+                        await ReplyAsync(session, $"conti: LP_CONTIMOVE [{a}][{b}] を送信しました").ConfigureAwait(false);
+                        break;
+                    default:
+                        await ReplyAsync(session, "使い方: /conti state <状態 0-12> [appear 0/1] | /conti move <値1> <値2>").ConfigureAwait(false);
+                        break;
+                }
+
+                break;
+            }
+
             case "notice" when parts.Length >= 2:
             {
                 // /notice <msg> is this map; /notice all <msg> is every map on every channel.
@@ -1078,6 +1109,22 @@ public sealed partial class ChannelHandler
     /// while the raid is on), and the raid itself — enemy ship, Balrogs, departure — is driven by
     /// <see cref="AirshipService"/>, never from this entry handshake.
     /// </summary>
+    /// <summary>
+    /// The station departure board: a map with a wz <c>clock</c> node shows the server machine's
+    /// local time, sent once on entry (ports TacosMap.addPlayer's hasClock branch — LP_Clock type 1
+    /// hh:mm:ss; the client keeps it ticking). Without it the board sits at 00:00.
+    /// </summary>
+    private async ValueTask SendFieldClockAsync(MapleSession session, int mapId)
+    {
+        if (_maps.GetMap(mapId)?.HasClock != true)
+        {
+            return;
+        }
+
+        DateTime now = DateTime.Now;
+        await session.SendAsync(_packets.Clock(now.Hour, now.Minute, now.Second)).ConfigureAwait(false);
+    }
+
     private async ValueTask HandleContiStateAsync(MapleSession session, PacketReader packet)
     {
         if (_player is null || packet.Remaining < 4)
@@ -1100,10 +1147,15 @@ public sealed partial class ChannelHandler
             case 200090010:                                // riding to Orbis
             case 200090000:                                // riding to Ellinia
             {
-                bool raidOn = AirshipSchedule.EnemyShipAt(AirshipSchedule.Clock()) == EnemyShipState.Present;
-                await session.SendAsync(_packets.ContiMove(
-                    ChannelPackets.ContiTargetMoveField,
-                    raidOn ? ChannelPackets.ContiMobGen : ChannelPackets.ContiMoving)).ConfigureAwait(false);
+                // Calm skies: no reply (the oracle answers only its station list and the flight
+                // maps; a CONTIMOVE(10, 3) "moving" reply was tried live and drew nothing, so it is
+                // gone). Mid-raid joiner: the same enemy-ship announcement the raid broadcasts.
+                if (AirshipSchedule.EnemyShipAt(AirshipSchedule.Clock()) == EnemyShipState.Present)
+                {
+                    await session.SendAsync(_packets.ContiState(ChannelPackets.ContiMobGen, appearShip: 1)).ConfigureAwait(false);
+                    await session.SendAsync(_packets.ContiMove(ChannelPackets.ContiTargetMoveField, ChannelPackets.ContiMobGen)).ConfigureAwait(false);
+                }
+
                 break;
             }
         }
@@ -1399,6 +1451,7 @@ public sealed partial class ChannelHandler
         _characters.Save(player.Character); // DB-backed repos need an explicit flush
 
         await session.SendAsync(_packets.SetFieldChangeMap(player.Character, _channelId)).ConfigureAwait(false);
+        await SendFieldClockAsync(session, targetMapId).ConfigureAwait(false);
 
         Field newField = _fields.Get(targetMapId);
         foreach (FieldPlayer other in newField.Players)

@@ -55,6 +55,34 @@ public class WzMapDataTests
     private static WzData Parse(string xml)
         => WzData.Parse(new MemoryStream(Encoding.UTF8.GetBytes(xml)));
 
+    // The airship flight map's shape: a top-level clock board and the Balrog ship object.
+    private const string ShipMapXml = """
+        <imgdir name="200090010.img">
+          <imgdir name="info"><int name="returnMap" value="200000111"/></imgdir>
+          <imgdir name="clock">
+            <int name="x" value="635"/><int name="y" value="-226"/><int name="width" value="200"/><int name="height" value="200"/>
+          </imgdir>
+          <imgdir name="shipObj">
+            <int name="x" value="485"/><int name="y" value="-221"/>
+            <string name="shipObj" value="Map/Obj/vehicle/ship/ossyria/97"/>
+            <int name="shipKind" value="1"/><int name="f" value="0"/><int name="tMove" value="2"/>
+          </imgdir>
+          <imgdir name="portal"/>
+        </imgdir>
+        """;
+
+    [Fact]
+    public void ParsesClockNodeAndShipObject()
+    {
+        MapData ship = MapData.FromWz(200090010, Parse(ShipMapXml));
+        Assert.True(ship.HasClock);
+        Assert.Equal(new ShipObjectData(485, -221, 1), ship.ShipObject);
+
+        MapData plain = MapData.FromWz(100000000, Parse(MapXml));
+        Assert.False(plain.HasClock);
+        Assert.Null(plain.ShipObject);
+    }
+
     [Fact]
     public void ParsesPortals()
     {

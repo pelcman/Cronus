@@ -101,6 +101,9 @@ public class AirshipTests
         public TaskCompletionSource<(string Kind, byte A, byte B)> Reply { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        /// <summary>Set once the CP_CONTISTATE ask has been sent.</summary>
+        public TaskCompletionSource<bool> Asked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public override async ValueTask OnConnectedAsync(MapleSession session)
         {
             var w = new PacketWriter(ClientOps.Get(ClientOpcode.MigrateIn), session.Config.PacketHeaderSize, session.Config.CodePage);
@@ -121,6 +124,7 @@ public class AirshipTests
                 w.WriteInt(0);   // the map id the client believes (unused by the oracle too)
                 w.WriteByte(0);
                 await session.SendAsync(w.ToArray());
+                Asked.TrySetResult(true);
             }
             else if (opcode == _opContiState)
             {
@@ -134,6 +138,10 @@ public class AirshipTests
     }
 
     private static async Task<(string Kind, byte A, byte B)> AskAsync(int mapId)
+        => (await AskOrSilenceAsync(mapId))!.Value;
+
+    /// <summary>Asks CP_CONTISTATE on <paramref name="mapId"/>; null when the server stays silent.</summary>
+    private static async Task<(string Kind, byte A, byte B)?> AskOrSilenceAsync(int mapId)
     {
         var repo = new InMemoryCharacterRepository();
         Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Rider", MapId = mapId });
@@ -149,7 +157,9 @@ public class AirshipTests
         await using var clientSession = new MapleSession(s2c.Reader, c2s.Writer, ServerConfig.Jms186, SessionRole.Client, client);
         _ = server.RunAsync(cts.Token);
         _ = clientSession.RunAsync(cts.Token);
-        return await client.Reply.Task.WaitAsync(cts.Token);
+        await client.Asked.Task.WaitAsync(cts.Token);
+        Task done = await Task.WhenAny(client.Reply.Task, Task.Delay(400, cts.Token));
+        return done == client.Reply.Task ? await client.Reply.Task : null;
     }
 
     [Fact]
@@ -172,23 +182,23 @@ public class AirshipTests
     }
 
     [Fact]
-    public async Task ContiState_OnTheFlightMap_BeforeTheRaid_AnswersMoving()
+    public async Task ContiState_OnTheFlightMap_BeforeTheRaid_StaysSilent()
     {
-        // 00:10:30 — thirty seconds into the flight, the Balrog ship hasn't come yet.
-        (string kind, byte first, byte second) = await WithClockAsync(CycleStart.AddMinutes(10).AddSeconds(30), () => AskAsync(200090010));
-        Assert.Equal("move", kind);
-        Assert.Equal(ChannelPackets.ContiTargetMoveField, first);
-        Assert.Equal(ChannelPackets.ContiMoving, second);
+        // 00:10:30 — thirty seconds into the flight, calm skies: like the oracle for any map it
+        // has no state for, nothing is sent (a CONTIMOVE "moving" reply drew nothing live).
+        (string, byte, byte)? reply = await WithClockAsync(CycleStart.AddMinutes(10).AddSeconds(30), () => AskOrSilenceAsync(200090010));
+        Assert.Null(reply);
     }
 
     [Fact]
-    public async Task ContiState_OnTheFlightMap_DuringTheRaid_AnswersMobGen()
+    public async Task ContiState_OnTheFlightMap_DuringTheRaid_AnnouncesTheEnemyShip()
     {
-        // 00:12:00 — two minutes in, the enemy ship is alongside (a late joiner sees it too).
-        (string kind, byte first, byte second) = await WithClockAsync(CycleStart.AddMinutes(12), () => AskAsync(200090010));
-        Assert.Equal("move", kind);
-        Assert.Equal(ChannelPackets.ContiTargetMoveField, first);
-        Assert.Equal(ChannelPackets.ContiMobGen, second);
+        // 00:12:00 — two minutes in, the enemy ship is alongside: a late joiner gets the same
+        // announcement the raid broadcast, LP_CONTISTATE(MOBGEN, appear=1) first.
+        (string kind, byte state, byte appear) = await WithClockAsync(CycleStart.AddMinutes(12), () => AskAsync(200090010));
+        Assert.Equal("state", kind);
+        Assert.Equal(ChannelPackets.ContiMobGen, state);
+        Assert.Equal(1, appear);
     }
 
     // ---- the raid timeline and the service that runs it ---------------------------------
@@ -205,12 +215,17 @@ public class AirshipTests
     }
 
     [Fact]
-    public async Task Raid_SpawnsBalrogsWhenTheShipArrives_AndRemovesThemWhenItLeaves()
+    public async Task Raid_SpawnsBalrogsAtTheEnemyShip_AndRemovesThemWhenItLeaves()
     {
-        var mobs = new InMemoryMobProvider(new[] { new MobData { TemplateId = AirshipService.CrimsonBalrogMobId, MaxHp = 60000 } });
-        var fields = new FieldRegistry(mobs: mobs);
-        var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
+        var mobs = new InMemoryMobProvider(new[] { new MobData { TemplateId = AirshipService.RaiderMobId, MaxHp = 60000 } });
         AirshipRoute route = AirshipRoute.ElliniaToOrbis;
+        var maps = new InMemoryMapProvider(new[]
+        {
+            // The real 200090010 ship object: the Balrog ship sits at (485, -221).
+            new MapData { MapId = route.FlightMapId, Portals = Array.Empty<PortalData>(), ShipObject = new ShipObjectData(485, -221, 1) },
+        });
+        var fields = new FieldRegistry(maps, mobs);
+        var packets = new ChannelPackets(ServerOps, ServerConfig.Jms186);
 
         var passenger = new FieldPlayer(new Character { Id = 1, Name = "Rider", MapId = route.FlightMapId }, null!) { X = 100, Y = -50 };
         fields.Get(route.FlightMapId).Enter(passenger);
@@ -220,12 +235,21 @@ public class AirshipTests
         await svc.TickAsync(t0);                                             // learn the state
 
         await svc.TickAsync(CycleStart.AddMinutes(11).AddSeconds(1));       // the enemy ship arrives
-        var raiders = fields.Get(route.FlightMapId).Mobs.Where(m => m.TemplateId == AirshipService.CrimsonBalrogMobId).ToList();
+        var raiders = fields.Get(route.FlightMapId).Mobs.Where(m => m.TemplateId == AirshipService.RaiderMobId).ToList();
         Assert.Equal(GameConstants.AirshipBalrogCount, raiders.Count);
-        Assert.All(raiders, m => Assert.Equal(100, m.X));                   // boarded at the passenger's feet
+        Assert.All(raiders, m => Assert.InRange((int)m.X, 485 - 2 * AirshipService.RaiderSpawnSpacing, 485 + 2 * AirshipService.RaiderSpawnSpacing));
+        Assert.All(raiders, m => Assert.Equal(-221 - AirshipService.RaiderSpawnHeight, (int)m.Y)); // above the enemy ship, not at the passenger
         Assert.All(raiders, m => Assert.Equal(60000, m.MaxHp));
+        Assert.Equal(raiders.Count, raiders.Select(m => (int)m.X).Distinct().Count());               // spread out, not stacked
 
         await svc.TickAsync(CycleStart.AddMinutes(14).AddSeconds(31));      // it peels away
-        Assert.DoesNotContain(fields.Get(route.FlightMapId).Mobs, m => m.TemplateId == AirshipService.CrimsonBalrogMobId);
+        Assert.DoesNotContain(fields.Get(route.FlightMapId).Mobs, m => m.TemplateId == AirshipService.RaiderMobId);
+    }
+
+    [Fact]
+    public void RaiderSpawnPoint_FallsBackToThePassenger_WithoutAShipObject()
+    {
+        var svc = new AirshipService(new FieldRegistry());
+        Assert.Equal((100, -50), svc.RaiderSpawnPoint(200090010, 0, 2, fallbackX: 100, fallbackY: -50));
     }
 }

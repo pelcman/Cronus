@@ -130,6 +130,8 @@ public static class ServerOpcode
     public const string ContiMove = "LP_CONTIMOVE";
 
     public const string ContiState = "LP_CONTISTATE";
+
+    public const string Clock = "LP_Clock";
     public const string UserChat = "LP_UserChat";
     public const string UserEmotion = "LP_UserEmotion";
     public const string UserSitResult = "LP_UserSitResult";

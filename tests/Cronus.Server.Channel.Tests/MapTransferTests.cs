@@ -29,6 +29,7 @@ public class MapTransferTests
         private readonly int _characterId;
         private readonly int _opSetField = ServerOps.Get(ServerOpcode.SetField);
         private readonly int _opIgnored = ServerOps.Get(ServerOpcode.TransferFieldReqIgnored);
+        private readonly int _opClock = ServerOps.Get(ServerOpcode.Clock);
 
         private int _setFieldCount;
 
@@ -39,6 +40,7 @@ public class MapTransferTests
         public TaskCompletionSource<bool> EnteredGame { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<(int MapId, short Hp)> MapChanged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<byte> TransferRefused { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<(byte Type, byte Hour, byte Minute, byte Second)> Clock { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override async ValueTask OnConnectedAsync(MapleSession session)
         {
@@ -82,6 +84,10 @@ public class MapTransferTests
             else if (opcode == _opIgnored)
             {
                 TransferRefused.TrySetResult(p.ReadByte());
+            }
+            else if (opcode == _opClock)
+            {
+                Clock.TrySetResult((p.ReadByte(), p.ReadByte(), p.ReadByte(), p.ReadByte()));
             }
 
             return ValueTask.CompletedTask;
@@ -164,6 +170,55 @@ public class MapTransferTests
         _ = serverSession.RunAsync(ct);
         _ = clientSession.RunAsync(ct);
         return (serverSession, clientSession);
+    }
+
+    [Fact]
+    public async Task EnteringAClockMap_SendsTheStationTime()
+    {
+        // The airship stations carry a wz `clock` node (the departure board): on entry the server
+        // sends LP_Clock type 1 with the machine's local hh:mm:ss (ports TacosMap.addPlayer).
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Waiter", MapId = 101000300 });
+        var maps = new InMemoryMapProvider(new[]
+        {
+            new MapData { MapId = 101000300, Portals = Array.Empty<PortalData>(), HasClock = true },
+        });
+        var fields = new FieldRegistry(maps);
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, fields, maps);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        DateTime before = DateTime.Now;
+        (byte type, byte hour, byte minute, byte second) = await client.Clock.Task.WaitAsync(cts.Token);
+        DateTime after = DateTime.Now;
+
+        Assert.Equal(1, type);                                       // the wall clock, not a countdown
+        var sent = new TimeSpan(hour, minute, second);
+        TimeSpan lo = before.TimeOfDay - TimeSpan.FromSeconds(1), hi = after.TimeOfDay + TimeSpan.FromSeconds(1);
+        Assert.True(lo <= sent && sent <= hi || lo.TotalSeconds < 0 || hi.TotalHours >= 24, $"clock {sent} outside {lo}..{hi}");
+    }
+
+    [Fact]
+    public async Task EnteringAMapWithoutAClock_SendsNoClock()
+    {
+        var repo = new InMemoryCharacterRepository();
+        Character hero = repo.Create(new Character { AccountId = 1, WorldId = 0, Name = "Nobody", MapId = 100000000 });
+        var maps = new InMemoryMapProvider(new[] { new MapData { MapId = 100000000, Portals = Array.Empty<PortalData>() } });
+        var client = new TransferClient(hero.Id);
+        var handler = new ChannelHandler(ClientOps, ServerOps, repo, ServerConfig.Jms186, new FieldRegistry(maps), maps);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        (MapleSession server, MapleSession clientSession) = Wire(client, handler, cts.Token);
+        await using MapleSession s1 = server;
+        await using MapleSession s2 = clientSession;
+
+        await client.EnteredGame.Task.WaitAsync(cts.Token);
+        Task done = await Task.WhenAny(client.Clock.Task, Task.Delay(300, cts.Token));
+        Assert.NotSame(client.Clock.Task, done);
     }
 
     [Fact]

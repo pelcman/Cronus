@@ -88,7 +88,7 @@ public static class GameConstants
     /// gamble; 1.0 makes every flight a raid (easy to verify — lower it for the real feel).</summary>
     public static double AirshipBalrogChance { get; set; } = 1.0;
 
-    /// <summary>Crimson Balrogs that board when the enemy ship arrives.</summary>
+    /// <summary>レッサーバルログ (8150000) that board when the enemy ship arrives.</summary>
     public static int AirshipBalrogCount { get; set; } = 2;
 
     // ---- Restrictions -------------------------------------------------------------------

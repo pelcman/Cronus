@@ -144,8 +144,19 @@ public static class AirshipSchedule
 /// </summary>
 public sealed class AirshipService
 {
-    /// <summary>クリムゾンバルログ — the raiders that board from the enemy ship.</summary>
-    public const int CrimsonBalrogMobId = 9300210;
+    /// <summary>
+    /// レッサーバルログ (8150000, Lv100, flySpeed 10 — GMS "Crimson Balrog"): the flying raider that
+    /// boards from the enemy ship. Not 9300210 — that is the 武陵道場 クリムゾンバルログ, a walking
+    /// copy with a <c>revive</c> hook (the invisible 9300216 check mob) that the reference's
+    /// Event_DojoAgent uses; it looked wrong on the deck and left dojo machinery behind.
+    /// </summary>
+    public const int RaiderMobId = 8150000;
+
+    /// <summary>How far above the enemy ship's anchor the raiders appear (they fly down from it).</summary>
+    public const int RaiderSpawnHeight = 50;
+
+    /// <summary>Horizontal spacing between raiders along the enemy ship.</summary>
+    public const int RaiderSpawnSpacing = 60;
 
     private readonly FieldRegistry _fields;
     private readonly ChannelPackets? _packets;
@@ -224,8 +235,11 @@ public sealed class AirshipService
         return moved;
     }
 
-    /// <summary>The Balrog ship pulls alongside: everyone aboard sees it (CONTI_MOBGEN) and the
-    /// raiders board at the first passenger's feet. Nobody aboard → nothing to raid.</summary>
+    /// <summary>
+    /// The Balrog ship pulls alongside: everyone aboard is told (see <see cref="AnnounceEnemyShipAsync"/>)
+    /// and the raiders appear at the enemy ship (the map's <c>shipObj</c>, shipKind 1), flying down
+    /// onto the deck. Nobody aboard → nothing to raid.
+    /// </summary>
     private async ValueTask RaidAsync(int flightMapId)
     {
         Field field = _fields.Get(flightMapId);
@@ -235,18 +249,55 @@ public sealed class AirshipService
             return;
         }
 
-        await field.BroadcastAsync(_packets.ContiMove(ChannelPackets.ContiTargetMoveField, ChannelPackets.ContiMobGen)).ConfigureAwait(false);
+        await AnnounceEnemyShipAsync(field, arriving: true).ConfigureAwait(false);
 
-        MobData? stats = _fields.MobProvider?.GetMob(CrimsonBalrogMobId);
+        MobData? stats = _fields.MobProvider?.GetMob(RaiderMobId);
+        int count = Math.Clamp(Cronus.Common.GameConstants.AirshipBalrogCount, 1, 10);
         var ids = new List<int>();
-        for (int i = 0; i < Math.Clamp(Cronus.Common.GameConstants.AirshipBalrogCount, 1, 10); i++)
+        for (int i = 0; i < count; i++)
         {
-            FieldMob mob = field.SpawnMob(CrimsonBalrogMobId, stats, anchor.X, anchor.Y, foothold: 0);
+            (int x, int y) = RaiderSpawnPoint(flightMapId, i, count, fallbackX: anchor.X, fallbackY: anchor.Y);
+            FieldMob mob = field.SpawnMob(RaiderMobId, stats, (short)x, (short)y, foothold: 0);
             ids.Add(mob.ObjectId);
             await field.BroadcastAsync(_packets.MobEnterField(mob)).ConfigureAwait(false);
         }
 
         _raiders[flightMapId] = ids;
+    }
+
+    /// <summary>Where raider <paramref name="index"/> of <paramref name="count"/> appears: spread
+    /// along the enemy ship above its anchor, or at the fallback when the map has no ship object.</summary>
+    public (int X, int Y) RaiderSpawnPoint(int flightMapId, int index, int count, int fallbackX, int fallbackY)
+    {
+        ShipObjectData? ship = _fields.MapProvider?.GetMap(flightMapId)?.ShipObject;
+        if (ship is null)
+        {
+            return (fallbackX, fallbackY);
+        }
+
+        int x = ship.X + (int)Math.Round((index - (count - 1) / 2.0) * RaiderSpawnSpacing);
+        return (x, ship.Y - RaiderSpawnHeight);
+    }
+
+    /// <summary>
+    /// Tells everyone on the flight map that the Balrog ship arrives / leaves. The oracle has no
+    /// verified packet for this (its OnContiState replies CONTIMOVE(TARGET_MOVEFIELD, MOBGEN) on
+    /// entry and nothing else); a live ride showed that CONTIMOVE(10, 4) alone draws no ship. So
+    /// the client gets both candidates: LP_CONTISTATE(state, appearShip=1) — the packet the
+    /// stations use for their docked ship, with the "CShip::AppearShip" flag set — and the
+    /// oracle's CONTIMOVE. `/conti` sends either by hand for the live bisect; whichever the client
+    /// honours becomes the only one sent.
+    /// </summary>
+    public async ValueTask AnnounceEnemyShipAsync(Field field, bool arriving)
+    {
+        if (_packets is null)
+        {
+            return;
+        }
+
+        byte state = arriving ? ChannelPackets.ContiMobGen : ChannelPackets.ContiMobDestroy;
+        await field.BroadcastAsync(_packets.ContiState(state, appearShip: arriving ? (byte)1 : (byte)0)).ConfigureAwait(false);
+        await field.BroadcastAsync(_packets.ContiMove(ChannelPackets.ContiTargetMoveField, state)).ConfigureAwait(false);
     }
 
     /// <summary>The Balrog ship peels away before landing: the client hides it (CONTI_MOBDESTROY)
@@ -256,7 +307,7 @@ public sealed class AirshipService
         Field field = _fields.Get(flightMapId);
         if (_packets is not null && field.Players.Count > 0)
         {
-            await field.BroadcastAsync(_packets.ContiMove(ChannelPackets.ContiTargetMoveField, ChannelPackets.ContiMobDestroy)).ConfigureAwait(false);
+            await AnnounceEnemyShipAsync(field, arriving: false).ConfigureAwait(false);
         }
 
         if (_raiders.Remove(flightMapId, out List<int>? ids))

@@ -1667,13 +1667,28 @@ public sealed class ChannelPackets
     public const byte ContiMobDestroy = 5;
     public const byte ContiTargetMoveField = 10;
 
-    /// <summary>Builds <c>LP_CONTISTATE</c> — the ship's state for a station map the client just
-    /// entered (ports <c>ResCField_ContiMove.ContiState</c>: state, then a 0 "AppearShip" flag).</summary>
-    public byte[] ContiState(byte state)
+    /// <summary>Builds <c>LP_CONTISTATE</c> — the ship's state for a conti map (ports
+    /// <c>ResCField_ContiMove.ContiState</c>: state, then the "CShip::AppearShip" flag the oracle
+    /// always leaves 0). Stations answer (WAIT, 0); the flight map uses (MOBGEN, 1) for the
+    /// enemy ship — a live-bisect candidate, see AirshipService.</summary>
+    public byte[] ContiState(byte state, byte appearShip = 0)
     {
         PacketWriter w = NewPacket(ServerOpcode.ContiState);
         w.WriteByte(state);
-        w.WriteByte(0);
+        w.WriteByte(appearShip);
+        return w.ToArray();
+    }
+
+    /// <summary>Builds <c>LP_Clock</c> type 1 — the station departure board's wall clock (ports
+    /// <c>ResCField.Clock(hour, min, sec)</c>: [1][hour][min][sec]; the client keeps it ticking).
+    /// Type 2 is the countdown timer, not built here.</summary>
+    public byte[] Clock(int hour, int minute, int second)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Clock);
+        w.WriteByte(1);
+        w.WriteByte((byte)hour);
+        w.WriteByte((byte)minute);
+        w.WriteByte((byte)second);
         return w.ToArray();
     }
 

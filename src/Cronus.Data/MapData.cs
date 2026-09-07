@@ -80,6 +80,10 @@ public sealed class MobSpawn
     public bool Hidden { get; init; }
 }
 
+/// <summary>A map's <c>shipObj</c>: where the ship graphic sits and which kind it is (0 = the
+/// passenger ship at a station, 1 = the Balrog ship on a flight map).</summary>
+public sealed record ShipObjectData(int X, int Y, int Kind);
+
 /// <summary>Static data for one map: its portals (ports the server-relevant subset of a Map .img).</summary>
 public sealed class MapData
 {
@@ -104,6 +108,16 @@ public sealed class MapData
 
     /// <summary>True for town maps (wz <c>info/town</c>) — no mobs, mild death penalty.</summary>
     public bool IsTown { get; init; }
+
+    /// <summary>
+    /// The map has a departure-board clock (a top-level wz <c>clock</c> node — the airship stations):
+    /// the server sends the wall-clock time (LP_Clock type 1) to everyone who enters.
+    /// </summary>
+    public bool HasClock { get; init; }
+
+    /// <summary>The map's ship object (<c>shipObj</c>): the docked passenger ship at a station
+    /// (<c>shipKind</c> 0) or the Balrog ship on a flight map (<c>shipKind</c> 1), or null.</summary>
+    public ShipObjectData? ShipObject { get; init; }
 
     /// <summary>Where a player revives from this map: the return town, or this map if none.</summary>
     public int ReviveMap => ReturnMap is > 0 and not NoLink ? ReturnMap : MapId;
@@ -204,8 +218,13 @@ public sealed class MapData
             ReturnMap = mapImg.GetInt("info/returnMap"),
             Recovery = mapImg.GetDouble("info/recovery", 1.0),
             IsTown = mapImg.GetInt("info/town") == 1,
+            HasClock = mapImg.Child("clock") is not null,
+            ShipObject = ParseShipObject(mapImg.Child("shipObj")),
         };
     }
+
+    private static ShipObjectData? ParseShipObject(WzData? ship)
+        => ship is null ? null : new ShipObjectData(ship.GetInt("x"), ship.GetInt("y"), ship.GetInt("shipKind"));
 
     private static IReadOnlyList<ReactorSpawn> ParseReactors(WzData mapImg)
     {

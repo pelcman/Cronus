@@ -735,6 +735,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.FamilyPrivilegeList()).ConfigureAwait(false); // before info (reference order)
         await session.SendAsync(_packets.FamilyInfoResult()).ConfigureAwait(false);
         await session.SendAsync(_packets.BroadcastSlideClear()).ConfigureAwait(false);
+        await SendFieldClockAsync(session, character.MapId).ConfigureAwait(false);
 
         // Join the field: tell the newcomer about everyone already there, and vice versa.
         Field field = _fields.Get(character.MapId);

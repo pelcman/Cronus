@@ -897,6 +897,9 @@ public sealed class FieldRegistry
     /// <summary>The mob-template source shared by all fields (for summons), or null.</summary>
     public IMobProvider? MobProvider => _mobs;
 
+    /// <summary>The map-data source the fields are built from, or null.</summary>
+    public IMapProvider? MapProvider => _maps;
+
     public Field Get(int mapId)
     {
         lock (_gate)
