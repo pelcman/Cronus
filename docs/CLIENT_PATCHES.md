@@ -9,7 +9,7 @@ EmuClient のローダー(`EmuMain.dll` の MSCRC バイパス)が改変済み e
 | スクリプト | 対象 | 何を変えるか | いつ必要か |
 |---|---|---|---|
 | `wzpatch_namespace.py apply` | `NameSpace.dll`(2バイト×2) | 遅延WZアーカイブ open の `push 1`→`push 2`(iGPUplz と同じ) | ゲーム入場で落ちる環境(必須) |
-| `clientpatch_speedcap.py apply` | `JMS_v186.1_L.exe`(12か所) | 速度140% / ジャンプ123% / 攻撃速度段階2 の clamp 無効化、歩行アニメ上限140%→1000% | `/gmmove` の倍率を効かせたい時 |
+| `clientpatch_speedcap.py apply` | `JMS_v186.1_L.exe`(21か所) | 速度140% / ジャンプ123% / 攻撃速度段階2 の clamp 無効化(表示用・物理用の両方)、歩行アニメ上限140%→1000% | `/gmmove` の倍率を効かせたい時 |
 | `wz_enable_fly.bat` | `Map.wz`(全マップの `info/fly`=1) | 飛行(CTS_Flying)を全マップで許可 | `/gmmove` で飛びたい時 |
 | `wz_graft_airship.bat <元Map.wz>` | `Map.wz`(`ship/ossyria/97`) | バルログ船の画像を別バージョンから移植 | 飛行船襲撃の演出を出したい時 |
 
@@ -26,10 +26,21 @@ EmuClient のローダー(`EmuMain.dll` の MSCRC バイパス)が改変済み e
                                                                      (0x61FAE, 0x6264E, 0x6534E, 0x65BBD)
 歩行アニメ: cmp ecx,70 ; jg +3 ; push 70 ; pop ecx ; mov eax,140  (歩行アニメの再生速度 70〜140%)
                                                                      (0x625CA, 0x65B6D)
+--- 2次(2026-09-07): ステータス窓と、ローカルプレイヤーが実際に動く物理値の clamp ---
+SecondaryStat C: mov esi,140 ; cmp eax,esi ; mov ecx,eax ; jl +2 ; mov ecx,esi
+                 (速度・ジャンプの2組、ステータス窓の 140% / 123% 表示の元)    (0x32F97D, 0x32F9FA)
+CUser→移動制御: mov ecx,140 ; cmp eax,ecx ; jl +3 ; mov [ebp-10h],ecx (他プレイヤー表示用) (0x34C4AF)
+CUserLocal 物理: 速度 = min(合計, 上限)  上限 = 140(既定即値 0x687AA4)/ 乗車時 190(0x687EA3)
+                 ジャンプ = min(max(合計,80),123)  → ×0.01 で移動制御(+0x84 速度, +0x48 ジャンプ)へ
+                 徒歩・乗車2経路の3コピー                (0x687B91, 0x687BA9, 0x687ECA, 0x688009)
 ```
 
+1次の12か所だけでは、ステータス窓が 140% / 123% のままで、実際の移動速度も変わりませんでした
+(1次のサイトはリモートプレイヤーの SecondaryStat と別の移動制御経路)。2次で `CUserLocal` の
+物理値関数を読み切り、既定上限の即値 140/190 を 10000 に、ジャンプの `jl +3` を `jmp` に変えています。
+
 条件ジャンプ2バイトを `jge→nop nop` / `jl,jg→jmp` に変える(命令長は不変)か、即値 140→1000 を
-書き換えます。書き換え前に12か所の周辺バイト列を照合し、別ビルドなら拒否します。`status` で
+書き換えます(物理上限の即値は 140/190→10000)。書き換え前に21か所の周辺バイト列を照合し、別ビルドなら拒否します。`status` で
 現在の状態を確認できます。攻撃速度は「段階」が 2 未満(負数)になれるようになり、サーバー側の
 `/gmmove` は段階 −8(フレーム時間 1/8)を下限に Booster 値を計算します。
 
@@ -39,7 +50,8 @@ python DevTools\clientpatch_speedcap.py apply     ← クライアントを閉�
 python DevTools\clientpatch_speedcap.py revert
 ```
 
-適用後は `/gmmove <速度> [<ジャンプ> [<攻撃速度>]]` の倍率がそのまま効きます。
+適用後は `/gmmove <速度> [<ジャンプ> [<攻撃速度>]]` の倍率がそのまま効きます(速度は上限 100倍 = 10000% まで、
+これは物理上限の新しい即値と一致させています)。
 未適用のクライアントでは従来どおり 140% / 123% / 段階2 で頭打ちです。
 
 ## 全マップ飛行可(`wz_enable_fly.bat`)

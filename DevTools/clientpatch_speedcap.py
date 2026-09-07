@@ -12,9 +12,15 @@ All sites were found by disassembling JMS_v186.1_L.exe (not packed) — the same
   attack speed       cmp eax,2 ; jg +3 ; push 2 ; pop eax ; (min 10) ;
                      frame delay = delay * (degree + 10) / 16                  (4 action builders)
   walk animation     cmp ecx,70 ; jg +3 ; push 70 ; pop ecx ; mov eax,140     (pace = 100/speed%)
+  local physics      CUserLocal: speed = min(total, cap) with cap = 140 (default immediate) or
+                     190 when riding; jump = min(max(total, 80), 123); then *0.01 into the
+                     vector controller (+0x84 speed, +0x48 jump). Three copies (on foot / two
+                     riding paths) -- the on-foot copy is what actually moves the GM character.
+  SecondaryStat C    a third min(x,140) pair (speed and jump) feeding the stat window's values.
+  CUser -> vec ctrl  min(speed,140) before the remote-user vector controller (other players).
 
-Each patch flips a 2-byte conditional jump (`jge +2` -> `nop nop`, `jl/jg +3` -> `jmp +3`) or
-widens one immediate (140 -> 1000). Instruction lengths never change. The signature bytes around
+Each patch flips a 2-byte conditional jump (`jge +2` -> `nop nop`, `jl +2/+3` -> `jmp`, `jg +3` -> `jmp +3`)
+or widens one immediate (140 -> 1000 for animation pace, 140/190 -> 10000 for the physics caps). Instruction lengths never change. The signature bytes around
 every site are checked before writing, so a different build is refused rather than corrupted. A
 backup (`.orig`) is kept next to the exe.
 
@@ -45,6 +51,16 @@ SITES = [
     (0x065BBD, bytes.fromhex("83f8027f036a025883f80a"),        3, bytes.fromhex("eb03"), "action frames D: attack speed = max(d, 2)"),
     (0x0625CA, bytes.fromhex("83f9467f036a4659b88c000000"),    9, bytes.fromhex("e8030000"), "walk animation A: pace cap 140% -> 1000%"),
     (0x065B6D, bytes.fromhex("83f9467f036a4659b88c000000"),    9, bytes.fromhex("e8030000"), "walk animation B: pace cap 140% -> 1000%"),
+    # -- second pass (2026-09-07): the clamps the stat window and the local player's physics really use
+    (0x32F977, bytes.fromhex("c4103bc68bc87c028bce8b45"), 6, bytes.fromhex("eb02"), "SecondaryStat C (local): speed = min(x, 140)"),
+    (0x32F9F4, bytes.fromhex("c4103bc68bc87c028bce8b45"), 6, bytes.fromhex("eb02"), "SecondaryStat C (local): jump = min(x, 140)"),
+    (0x34C4A9, bytes.fromhex("003bc18945f07c03894df0db"), 6, bytes.fromhex("eb03"), "CUser -> vector controller: speed = min(x, 140)"),
+    (0x687A9F, bytes.fromhex("ff5959eb05b88c0000008945e08d"), 6, bytes.fromhex("10270000"), "CUserLocal physics: default speed cap 140 -> 10000"),
+    (0x687B8B, bytes.fromhex("e03bca894df07c038955f08b"), 6, bytes.fromhex("eb03"), "CUserLocal physics (riding): speed = min(x, cap)"),
+    (0x687BA3, bytes.fromhex("593bc18945ec7c03894decdb"), 6, bytes.fromhex("eb03"), "CUserLocal physics (riding): jump = min(x, 123)"),
+    (0x687E9E, bytes.fromhex("6a465803d8b8be0000003bd8895d"), 6, bytes.fromhex("10270000"), "CUserLocal physics (riding+): speed cap 190 -> 10000"),
+    (0x687EC4, bytes.fromhex("593bc18945ec7c03894decdb"), 6, bytes.fromhex("eb03"), "CUserLocal physics (riding+): jump = min(x, 123)"),
+    (0x688003, bytes.fromhex("593bc18945ec7c03894decdb"), 6, bytes.fromhex("eb03"), "CUserLocal physics (on foot): jump = min(x, 123)"),
 ]
 
 
