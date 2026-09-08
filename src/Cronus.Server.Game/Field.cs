@@ -534,6 +534,15 @@ public sealed class Field
                 continue;
             }
 
+            // A one-shot spawn point (wz mobTime -1: the training-ground bosses, PQ bosses, event
+            // mobs) never spawns on its own — the oracle's SpawnPoint.shouldSpawn returns false for
+            // mobTime < 0; a script or event summons it. Spawning them at load put mobs on maps the
+            // real server leaves empty (and crashed the client on 913020000, sweep crash #3).
+            if (spawn.MobTime < 0)
+            {
+                continue;
+            }
+
             // Prefer wz mob stats; fall back to the spawn's placeholder HP.
             MobData? stats = mobProvider?.GetMob(spawn.TemplateId);
             int maxHp = stats?.MaxHp ?? spawn.MaxHp;
