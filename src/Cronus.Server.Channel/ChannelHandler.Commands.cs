@@ -181,9 +181,35 @@ public sealed partial class ChannelHandler
                     break;
                 }
 
+                if (sub == "npcs")
+                {
+                    // /sweep npcs [開始NPC] [秒/ページ]: every scripted NPC's dialog, rendered by this client.
+                    if (_npcScripts is null)
+                    {
+                        await ReplyAsync(session, NpcConversation.DevPrefix + "NPC スクリプトが読み込まれていません").ConfigureAwait(false);
+                        break;
+                    }
+
+                    int fromNpc = parts.Length >= 3 && int.TryParse(parts[2], out int fn) ? fn : 0;
+                    double perPage = parts.Length >= 4 && double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double pp) ? pp : 1.5;
+                    List<int> npcIds = _npcScripts.ScriptedNpcIds.Where(id => id >= fromNpc).OrderBy(id => id).ToList();
+                    if (npcIds.Count == 0)
+                    {
+                        await ReplyAsync(session, "sweep: 対象の NPC がありません").ConfigureAwait(false);
+                        break;
+                    }
+
+                    _sweep?.Cancel();
+                    var npcCts = new CancellationTokenSource();
+                    _sweep = npcCts;
+                    await ReplyAsync(session, $"sweep: {npcIds.Count} 体の NPC 会話を {perPage:0.##} 秒/ページで流します。落ちたら {Path.GetFileName(SweepProgressFile)} の最終 npc 行が原因、/sweep npcs <次のID> で続き、/sweep stop で停止").ConfigureAwait(false);
+                    _ = RunNpcSweepAsync(session, npcIds, TimeSpan.FromSeconds(Math.Clamp(perPage, 0.2, 30)), npcCts.Token);
+                    break;
+                }
+
                 if (sub is not ("maps" or "resume"))
                 {
-                    await ReplyAsync(session, "使い方: /sweep maps [開始ID] [終了ID] [秒]  /sweep resume [秒]  /sweep stop").ConfigureAwait(false);
+                    await ReplyAsync(session, "使い方: /sweep maps [開始ID] [終了ID] [秒]  /sweep resume [秒]  /sweep npcs [開始NPC] [秒/ページ]  /sweep stop").ConfigureAwait(false);
                     break;
                 }
 

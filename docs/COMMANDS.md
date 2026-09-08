@@ -33,6 +33,7 @@ which is what keeps `/help`, the usage replies, and this document describing the
 | `/pos` | Show your position and map id |
 | `/conti state|move <a> [b]` | Send one airship effect packet to yourself (live bisect of the unverified values) |
 | `/sweep maps [from] [to] [seconds]` · `/sweep resume [seconds]` · `/sweep stop` | Automated crash inventory: warp through every map; on a crash the last line of `sweep-progress.txt` names the map |
+| `/sweep npcs [from npc] [seconds per page]` | Stream every scripted NPC's dialog to this client (render-crash inventory); on a crash the last `npc` line names it |
 | `/gmmove [on|off|<speed×> [<jump×> [<attack×>]]]` | GM movement: speed/jump/attack-speed multipliers, no damage taken, no skill MP cost or cooldown |
 
 ### Character
@@ -255,6 +256,13 @@ to the host **before** each warp. When the client crashes, the last line is the 
 `/sweep maps 100000000 200000000 2` limits the range (about 5,900 maps × 3 s ≈ 5 h, so run it by
 region). `python DevTools/wirelog.py` then gives the packet context of the disconnect; each crash
 becomes one item in [TASK.md](TASK.md) phase 0.
+
+`/sweep npcs` is the dialog version: the server starts every scripted NPC's conversation (248),
+lets this client draw each page, then picks the first option itself (against a read-only stand-in
+for the character: no warps, items or exp). 1.5 s per page by default; `/sweep npcs 2000000 1`
+sets the first NPC and the pace. Script logic is already covered headless by
+`AllScriptsExerciseTests` (every branch, three profiles); this sweep only asks whether the client
+can render the pages.
 
 ### `/conti state|move <a> [b]`
 Sends one airship effect packet to **you only**: `/conti state 4 1` is `LP_CONTISTATE [4][1]`,
