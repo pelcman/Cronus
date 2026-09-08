@@ -174,6 +174,12 @@ public sealed partial class ChannelHandler
                     break;
                 }
 
+                if (_npcNames is not null && !_npcNames.HasImage(talkNpcId))
+                {
+                    await ReplyAsync(session, $"{NpcConversation.DevPrefix}NPC {talkNpcId} の画像がこのクライアントにありません（会話を開くと落ちます）").ConfigureAwait(false);
+                    break;
+                }
+
                 if (_conversation is { IsEnded: false })
                 {
                     _conversation.End();

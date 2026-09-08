@@ -129,6 +129,12 @@
       `SpawnPoint.shouldSpawn()==false` で一切湧かせない(スクリプト/イベントが湧かせる)。Cronus は
       マップ生成時に湧かせていた → 湧かせないよう修正。9300291 自体の実体化クラッシュは、訓練場の
       チュートリアルを実装する時に再確認(スクリプト湧きで再現するなら client 側データの問題)。
+- [x] **クラッシュ #4: NPC 2151003 の会話(`/sweep npcs` 188 体目)**(2026-09-09) — error 0x80030002
+      (STG_E_FILENOTFOUND)。2151003〜2151007(ミハエル〜ホークアイ)は JMS の String.wz に名前だけあり
+      Npc.wz に画像が無い GMS 側の ID。JMS の転職官は 1101003〜1101007(画像・スクリプトあり)なので
+      重複スクリプト 5 本を削除。再発防止: `INpcNameProvider.HasImage`(`Npc/{id:D7}.img`)を追加し、
+      `/sweep npcs` はスキップ、`/talk` は `[DEV]` で拒否、`AllScriptsExerciseTests` は画像の無い NPC 用
+      スクリプトを失敗として検出。187 体分の会話描画は通過。
 - [x] **未対応パケットの安全化**(2026-09-08) — クライアントが送る 219 opcode のうち **132** をサーバーは
       黙って捨てていた(if/else 連鎖に default 無し)。`HandleUnhandledAsync` を追加: `*UseRequest` と
       修理/製作/ガシャポン等はインベントリのロック解除(空 InventoryOperation)、マップ転送系は

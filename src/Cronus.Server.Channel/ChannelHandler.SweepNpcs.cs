@@ -23,6 +23,9 @@ public sealed partial class ChannelHandler
 
     private sealed record SweepPrompt(int Type, string Text, IReadOnlyList<int> Options);
 
+    /// <summary>The NPC whose page is on the client right now (for the crash marker), 0 between NPCs.</summary>
+    private int _sweepCurrentNpc;
+
     /// <summary>Forwards every page to the real client dialog and records it for the sweep loop.</summary>
     private sealed class SweepNpcDialog : INpcDialog
     {
@@ -122,7 +125,16 @@ public sealed partial class ChannelHandler
             for (int i = 0; i < npcIds.Count && !ct.IsCancellationRequested && _player is not null; i++)
             {
                 int npcId = npcIds[i];
-                string name = string.Empty;
+                string name = _npcNames?.GetName(npcId) ?? string.Empty;
+                if (_npcNames is not null && !_npcNames.HasImage(npcId))
+                {
+                    // No portrait in this client's Npc.wz: the dialog would crash it (0x80030002).
+                    AppendSweepLine($"# skip {npcId} {name}: no client image (Npc.wz) — the script targets an id this client does not draw");
+                    Console.WriteLine($"[sweep] npc {i + 1}/{npcIds.Count} {npcId} skipped: no client image");
+                    continue;
+                }
+
+                _sweepCurrentNpc = npcId;
                 AppendSweepLine($"npc\t{npcId}\t{name}\t{DateTime.Now:HH:mm:ss}");
                 Console.WriteLine($"[sweep] npc {i + 1}/{npcIds.Count} {npcId} {name}");
                 await ReplyAsync(session, $"[sweep npc {i + 1}/{npcIds.Count}] {npcId} {name}").ConfigureAwait(false);
@@ -169,6 +181,7 @@ public sealed partial class ChannelHandler
                 }
             }
 
+            _sweepCurrentNpc = 0;
             if (!ct.IsCancellationRequested)
             {
                 AppendSweepLine("# npcs done");

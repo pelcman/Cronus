@@ -381,6 +381,11 @@ public class AllScriptsExerciseTests
             if (known is not null)
             {
                 CheckIds(known, $"npc {npcId}", texts, players, problems);
+                if (!known.Store.Exists($"Npc/{npcId:D7}.img.xml"))
+                {
+                    // The client crashes (0x80030002) when a dialog opens for an NPC it has no image for.
+                    problems.Add($"npc {npcId}: no client image in Npc.wz — a dialog for it crashes the client; the script targets an id this client does not have");
+                }
             }
         }
 

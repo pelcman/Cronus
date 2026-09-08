@@ -615,7 +615,9 @@ public sealed partial class ChannelHandler : PacketHandlerBase
                 // in the rescue town instead, or the next login would replay the crash; and mark the
                 // suspect in the progress file for the crash harness / the operator.
                 Console.WriteLine($"[sweep] client lost on map {_player.Character.MapId} — saving {_player.Character.Name} at the rescue map");
-                AppendSweepLine($"# crash? {_player.Character.MapId} {DateTime.Now:HH:mm:ss}");
+                AppendSweepLine(_sweepCurrentNpc != 0
+                    ? $"# crash? npc {_sweepCurrentNpc} {DateTime.Now:HH:mm:ss}"
+                    : $"# crash? {_player.Character.MapId} {DateTime.Now:HH:mm:ss}");
                 _player.Character.MapId = GameConstants.RescueMapId;
                 _player.Character.Portal = 0;
             }

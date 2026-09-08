@@ -7,6 +7,13 @@ public interface INpcNameProvider
 {
     /// <summary>The NPC's display name, or null when unknown.</summary>
     string? GetName(int npcId);
+
+    /// <summary>
+    /// True when the client has the NPC's image (<c>Npc.wz/{id:D7}.img</c>). A dialog for an NPC
+    /// without one crashes the client with STG_E_FILENOTFOUND (0x80030002) — found by /sweep npcs
+    /// on 2026-09-09 (2151003, a GMS-only instructor id that JMS names but does not draw).
+    /// </summary>
+    bool HasImage(int npcId);
 }
 
 /// <summary>
@@ -28,8 +35,14 @@ public sealed class WzNpcNameProvider : INpcNameProvider
 
     public WzNpcNameProvider(IWzStore store)
     {
+        _store = store;
         _names = new Lazy<IReadOnlyDictionary<int, string>>(() => Load(store));
     }
+
+    private readonly IWzStore _store;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _images = new();
+
+    public bool HasImage(int npcId) => _images.GetOrAdd(npcId, id => _store.Exists($"Npc/{id:D7}.img.xml"));
 
     public string? GetName(int npcId)
         => _names.Value.TryGetValue(npcId, out string? name) ? name : null;
