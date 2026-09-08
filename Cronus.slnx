@@ -9,9 +9,10 @@
     <Project Path="src/Cronus.Network/Cronus.Network.csproj" />
     <Project Path="src/Cronus.Scripting/Cronus.Scripting.csproj" />
     <Project Path="src/Cronus.Server.Channel/Cronus.Server.Channel.csproj" />
+    <Project Path="src/Cronus.Server.Core/Cronus.Server.Core.csproj" />
     <Project Path="src/Cronus.Server.Game/Cronus.Server.Game.csproj" />
-    <Project Path="src/Cronus.Server.Host/Cronus.Server.Host.csproj" />
     <Project Path="src/Cronus.Server.Login/Cronus.Server.Login.csproj" />
+    <Project Path="src/Cronus.Server.World/Cronus.Server.World.csproj" />
   </Folder>
   <Folder Name="/DevTools/">
     <Project Path="DevTools/WzTool/Cronus.WzTool.csproj" />
@@ -22,6 +23,7 @@
     <Project Path="tests/Cronus.Network.Tests/Cronus.Network.Tests.csproj" />
     <Project Path="tests/Cronus.Scripting.Tests/Cronus.Scripting.Tests.csproj" />
     <Project Path="tests/Cronus.Server.Channel.Tests/Cronus.Server.Channel.Tests.csproj" />
+    <Project Path="tests/Cronus.Server.Core.Tests/Cronus.Server.Core.Tests.csproj" />
     <Project Path="tests/Cronus.Server.Login.Tests/Cronus.Server.Login.Tests.csproj" />
   </Folder>
 </Solution>

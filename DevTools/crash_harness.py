@@ -40,7 +40,7 @@ pyautogui.PAUSE = 0.05
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLIENT_EXE = os.environ.get("CRONUS_CLIENT_PATH") or os.path.join(ROOT, "..", "Client", "MapleStory_v186", "JMS_v186.1_L.exe")
-HOST_BIN = os.path.join(ROOT, "src", "Cronus.Server.Host", "bin", "Debug", "net10.0")
+HOST_BIN = os.path.join(ROOT, "src", "Cronus.Server.Channel", "bin", "Debug", "net10.0")
 PROGRESS = os.path.join(HOST_BIN, "sweep-progress.txt")
 CRASHES = os.path.join(HOST_BIN, "sweep-crashes.txt")
 SHOTS = os.path.join(ROOT, "DevTools", "harness-shots")

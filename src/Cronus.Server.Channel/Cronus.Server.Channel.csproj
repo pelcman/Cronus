@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- The Channel process (Maple2.Server.Game): N game channels, the cash shop and every
+       per-field tick, registered with the World at start-up. -->
   <PropertyGroup>
-    <OutputType>Library</OutputType>
+    <OutputType>Exe</OutputType>
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,6 +15,13 @@
     <ProjectReference Include="..\Cronus.Scripting\Cronus.Scripting.csproj" />
     <ProjectReference Include="..\Cronus.Server.Login\Cronus.Server.Login.csproj" />
     <ProjectReference Include="..\Cronus.Server.Game\Cronus.Server.Game.csproj" />
+    <ProjectReference Include="..\Cronus.Server.Core\Cronus.Server.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\data\opcodes\*.properties" Link="opcodes\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!-- The channel handler orchestrates the game systems, which now live in Cronus.Server.Game. -->

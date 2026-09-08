@@ -3,6 +3,7 @@ using Cronus.Common;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
+using Cronus.Server.Core;
 
 namespace Cronus.Server.Login;
 
@@ -16,12 +17,10 @@ public sealed class LoginHandler : PacketHandlerBase
 
     private readonly LoginService _loginService;
     private readonly LoginPackets _packets;
-    private readonly WorldRegistry _worlds;
     private readonly ICharacterRepository _characters;
-    private readonly IPEndPoint _channelEndpoint;
 
-    /// <summary>Every channel's endpoint (index = channel id); character select routes by choice.</summary>
-    private readonly IReadOnlyList<IPEndPoint> _channelEndpoints;
+    /// <summary>The World: the channel list for world select, and the hand-off at character select.</summary>
+    private readonly IWorldClient _world;
     private readonly int _characterSlots;
     private readonly int _startMapId;
 
@@ -40,19 +39,23 @@ public sealed class LoginHandler : PacketHandlerBase
         OpcodeTable serverOpcodes,
         LoginService loginService,
         ServerConfig config,
-        WorldRegistry? worlds = null,
         ICharacterRepository? characters = null,
         IPEndPoint? channelEndpoint = null,
         int characterSlots = 3,
         int startMapId = 100000000,
-        IReadOnlyList<IPEndPoint>? channelEndpoints = null)
+        IReadOnlyList<IPEndPoint>? channelEndpoints = null,
+        IWorldClient? world = null)
     {
         _loginService = loginService;
         _packets = new LoginPackets(serverOpcodes, config);
-        _worlds = worlds ?? WorldRegistry.CreateDefault();
         _characters = characters ?? new InMemoryCharacterRepository();
-        _channelEndpoint = channelEndpoint ?? new IPEndPoint(IPAddress.Loopback, 7575);
-        _channelEndpoints = channelEndpoints is { Count: > 0 } ? channelEndpoints : new[] { _channelEndpoint };
+
+        // Without a World process (tests, single-process use) the world is the fixed endpoints given
+        // here — by default the two local channels a default configuration runs.
+        IReadOnlyList<IPEndPoint> endpoints = channelEndpoints is { Count: > 0 } ? channelEndpoints
+            : channelEndpoint is not null ? new[] { channelEndpoint }
+            : new[] { new IPEndPoint(IPAddress.Loopback, 7575), new IPEndPoint(IPAddress.Loopback, 7576) };
+        _world = world ?? new LocalWorld(endpoints);
         _characterSlots = characterSlots;
         _startMapId = startMapId;
 
@@ -137,10 +140,13 @@ public sealed class LoginHandler : PacketHandlerBase
 
     private async ValueTask HandleWorldInfoRequestAsync(MapleSession session)
     {
-        foreach (GameWorld world in _worlds.Worlds)
+        WorldView view = await _world.GetWorldAsync().ConfigureAwait(false);
+        if (view.Channels.Count == 0)
         {
-            await session.SendAsync(_packets.WorldInformation(world)).ConfigureAwait(false);
+            Console.WriteLine("[login] the World reports no channels — is the Channel process running?");
         }
+
+        await session.SendAsync(_packets.WorldInformation(ToGameWorld(view))).ConfigureAwait(false);
 
         await session.SendAsync(_packets.WorldListEnd()).ConfigureAwait(false);
         await session.SendAsync(_packets.RecommendWorldMessage()).ConfigureAwait(false);
@@ -153,8 +159,7 @@ public sealed class LoginHandler : PacketHandlerBase
         int worldId = packet.ReadByte();
         int channelId = packet.ReadByte();
 
-        GameWorld? world = _worlds.Find(worldId);
-        if (world is null || session.UserData is not LoginState state)
+        if (worldId != 0 || session.UserData is not LoginState state)
         {
             await session.SendAsync(_packets.SelectWorldFailure(LoginResult.NotConnectableWorld)).ConfigureAwait(false);
             return;
@@ -173,7 +178,7 @@ public sealed class LoginHandler : PacketHandlerBase
             ? _characters.ListByAccount(state.Account.Id, worldId: 0)
             : Array.Empty<Character>();
 
-        await session.SendAsync(_packets.ViewAllCharCount(_worlds.Worlds.Count, characters.Count)).ConfigureAwait(false);
+        await session.SendAsync(_packets.ViewAllCharCount(1, characters.Count)).ConfigureAwait(false);
         await session.SendAsync(_packets.ViewAllCharSuccess(worldId: 0, characters)).ConfigureAwait(false);
     }
 
@@ -258,14 +263,63 @@ public sealed class LoginHandler : PacketHandlerBase
     private async ValueTask HandleSelectCharacterAsync(MapleSession session, PacketReader packet)
     {
         int characterId = packet.ReadInt();
+        if (session.UserData is not LoginState state)
+        {
+            await CloseAsync(session).ConfigureAwait(false); // never logged in
+            return;
+        }
 
-        // Route to the channel picked at world select (clamped; defaults to channel 0).
-        int channel = session.UserData is LoginState state
-            ? Math.Clamp(state.SelectedChannel, 0, _channelEndpoints.Count - 1)
-            : 0;
-        IPEndPoint endpoint = _channelEndpoints[channel];
-        byte[] migrate = _packets.SelectCharacterResult(endpoint.Address, endpoint.Port, characterId);
-        await session.SendAsync(migrate).ConfigureAwait(false);
+        // Only a character of the logged-in account.
+        Character? character = _characters.Find(characterId);
+        if (character is null || character.AccountId != state.Account.Id)
+        {
+            Console.WriteLine($"[login] account {state.Account.LoginId} asked for character {characterId}, which is not theirs — closing");
+            await CloseAsync(session).ConfigureAwait(false);
+            return;
+        }
+
+        // The World records the hand-off and says where the chosen channel is; when that channel is
+        // gone, the first channel it still has.
+        IPEndPoint? endpoint = await _world.MigrateOutAsync(state.Account.Id, characterId, state.SelectedChannel, MigrationSource.Login).ConfigureAwait(false);
+        if (endpoint is null)
+        {
+            WorldView view = await _world.GetWorldAsync().ConfigureAwait(false);
+            if (view.Channels.Count > 0 && view.Channels[0].Id != state.SelectedChannel)
+            {
+                endpoint = await _world.MigrateOutAsync(state.Account.Id, characterId, view.Channels[0].Id, MigrationSource.Login).ConfigureAwait(false);
+            }
+        }
+
+        if (endpoint is null)
+        {
+            Console.WriteLine($"[login] no channel to send {character.Name} to — closing the connection");
+            await CloseAsync(session).ConfigureAwait(false);
+            return;
+        }
+
+        await session.SendAsync(_packets.SelectCharacterResult(endpoint.Address, endpoint.Port, characterId)).ConfigureAwait(false);
+    }
+
+    /// <summary>The one world ("Cronus", id 0) as the client's world list shows it.</summary>
+    private static GameWorld ToGameWorld(WorldView view)
+        => new()
+        {
+            Id = 0,
+            Name = view.Name,
+            EventDescription = string.Empty,
+            Channels = view.Channels.Select(c => new GameChannel { Id = c.Id, Name = c.Name, OnlineCount = c.Online }).ToList(),
+        };
+
+    private static async ValueTask CloseAsync(MapleSession session)
+    {
+        try
+        {
+            await session.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // already gone
+        }
     }
 
     /// <summary>Places the starter equipment the client sent at the standard equip slots.</summary>

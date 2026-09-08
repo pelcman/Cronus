@@ -123,9 +123,12 @@ Cronus.slnx
 │  ├─ Cronus.Database        … EF Core + Pomelo (MySQL): CronusDbContext, DbAccountRepository
 │  ├─ Cronus.Data            … wz_xml loader (≒ Maple2.File.Ingest / odin.provider.WzXML) [later]
 │  ├─ Cronus.Scripting       … Jint. Reuse existing JS scripts (NPC/quest) [later]
-│  ├─ Cronus.Server.Login    … login server (LoginHandler/Service/Packets, World)
-│  ├─ Cronus.Server.Channel  … channel / game logic [later]
-│  └─ Cronus.Server.Host     … entry point (config, startup); MySQL via CRONUS_DB env var
+│  ├─ Cronus.Server.Core     … shared by the processes: gRPC contract (proto/world.proto),
+│  │                            WorldState / WorldGrpcService / GrpcWorldClient, ServerBootstrap
+│  ├─ Cronus.Server.World    … process 1: the hub (channel registry, presence, hand-offs, broadcasts)
+│  ├─ Cronus.Server.Login    … process 2: login server (LoginHandler/Service/Packets)
+│  ├─ Cronus.Server.Channel  … process 3: channels + cash shop (ChannelHandler.*, CashShopHandler)
+│  └─ Cronus.Server.Game     … the game systems the Channel orchestrates
 └─ tests/
    ├─ Cronus.Network.Tests       … crypto round-trip, header, opcode, session, listener
    ├─ Cronus.Server.Login.Tests  … login + world-select flow (end-to-end, encrypted)
@@ -217,14 +220,15 @@ dotnet build Cronus.sln -c Debug
 # Run tests (crypto round-trip, etc.)
 dotnet test tests/Cronus.Network.Tests
 
-# Run the host (login server; default port 8484, or pass a port)
-dotnet run --project src/Cronus.Server.Host          # persists to cronus.db (SQLite) by default
-dotnet run --project src/Cronus.Server.Host 9595     # custom port
+# Start all three processes (World, Login, Channel) in one go:
+run-server.bat                                       # Windows; stop-server.bat stops them
+# or by hand, in this order, each from the repo root:
+dotnet run --project src/Cronus.Server.World         # gRPC hub on 127.0.0.1:8585
+dotnet run --project src/Cronus.Server.Login         # login 8484
+dotnet run --project src/Cronus.Server.Channel       # channels 7575.. + cash shop
 
-# Storage backends: unset = SQLite file (CRONUS_DB_FILE overrides the path);
-# a MySQL connection string switches to MySQL; "memory" = in-process only.
-$env:CRONUS_DB = "server=localhost;database=cronus;user=root;password=..."
-dotnet run --project src/Cronus.Server.Host
+# Storage: MySQL (database Cronus186 on 127.0.0.1, root/root) by default, shared by the
+# processes; CRONUS_DB=sqlite|memory|<connection string> are the alternatives.
 ```
 
 ### Verification strategy (important)

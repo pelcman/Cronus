@@ -11,23 +11,26 @@ To host a server **friends can join over the internet**, see
 
 On Windows, the first time run **`setup.bat`** in the repo root (SDK check, `.env`,
 build, and the client-data ingest in one go), then double-click **`run-server.bat`** — it
-builds, starts the server, and keeps the window open with the error if anything fails.
-Or from a shell:
+builds once and starts the three server processes (World, Login, Channel) as tabs of one
+Windows Terminal window (or three console windows). **`stop-server.bat`** stops them.
+Or from a shell, in this order, each from the repo root:
 
 ```powershell
-# From the repo root
-dotnet run --project src/Cronus.Server.Host          # login 8484, channel 7575
-# or pick ports:  dotnet run --project src/Cronus.Server.Host 8484 7575
+dotnet run --project src/Cronus.Server.World         # the hub (gRPC on 127.0.0.1:8585)
+dotnet run --project src/Cronus.Server.Login         # login 8484 (or: ... Login 8484)
+dotnet run --project src/Cronus.Server.Channel       # channels 7575.. (or: ... Channel 7575)
 ```
 
-You should see:
+The Login and Channel windows wait up to 15 s for the World, then give up with exit code 3.
+You should see, in the Channel window:
 
 ```
-Cronus — JMS v186, region Jms
-  login   : listening on 0.0.0.0:8484
+[world] registered with http://127.0.0.1:8585 as PC-1234: channel(s) 1, 2, heartbeat every 5s
+Cronus Channel — JMS v186, region Jms
   channels: 2 — ports 7575..7576, advertised to clients as 127.0.0.1
-Accounts auto-register on first login. Press Ctrl+C to stop.
 ```
+
+and in the Login window `Cronus Login — … login : listening on 0.0.0.0:8484`.
 
 With nothing else configured the server persists accounts/characters to MySQL (database `Cronus186` on 127.0.0.1, user root/root, created on first start)
 (`cronus.db` next to the executable) and has no map/NPC data (you can still log in, create a
@@ -55,7 +58,7 @@ CRONUS_SCRIPTS=scripts
 ```
 
 ```powershell
-dotnet run --project src/Cronus.Server.Host
+run-server.bat        # World, Login, Channel
 ```
 
 New characters start in map `100000000`; with the sample wz that map has a talkable NPC

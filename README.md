@@ -86,9 +86,10 @@ A playable in-group server (all through the real encrypted protocol):
 | `Cronus.Database` | EF Core + Pomelo/MySQL persistence |
 | `Cronus.Data` | wz_xml parser + map/portal data |
 | `Cronus.Scripting` | Jint NPC conversation engine |
-| `Cronus.Server.Login` | login server |
-| `Cronus.Server.Channel` | channel / in-game server |
-| `Cronus.Server.Host` | runnable host (login + channel) |
+| `Cronus.Server.Core` | shared by the three processes: the gRPC contract (`proto/world.proto`), the World's state/service/client, start-up (.env, logs, opcodes, MySQL) |
+| `Cronus.Server.World` | **process 1** — the hub: channel registry, presence, hand-offs, world-wide broadcasts, airship timetable (Maple2's World) |
+| `Cronus.Server.Login` | **process 2** — authentication, world/channel list, character select |
+| `Cronus.Server.Channel` | **process 3** — the game: N channels, cash shop, field ticks (Maple2's Game) |
 | `Cronus.Debug.Bot` | content debugger: launches real client windows + headless verification bots |
 
 ## Build & run
@@ -97,9 +98,12 @@ A playable in-group server (all through the real encrypted protocol):
 dotnet build Cronus.slnx -c Debug
 dotnet test  Cronus.slnx -c Debug
 
-# Run the host (login on 8484, channel on 7575 by default)
-dotnet run --project src/Cronus.Server.Host
-dotnet run --project src/Cronus.Server.Host 8484 7575
+# Start all three processes (World, Login, Channel) in one go:
+run-server.bat                                       # Windows; stop-server.bat stops them
+# or by hand, in this order, each from the repo root:
+dotnet run --project src/Cronus.Server.World         # gRPC hub on 127.0.0.1:8585
+dotnet run --project src/Cronus.Server.Login         # login 8484
+dotnet run --project src/Cronus.Server.Channel       # channels 7575.. + cash shop
 ```
 
 Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
@@ -132,7 +136,7 @@ A minimal map (100000000) with one talkable NPC and a matching script ship in th
 ```powershell
 $env:CRONUS_WZ = "data/sample-wz"
 $env:CRONUS_SCRIPTS = "scripts"
-dotnet run --project src/Cronus.Server.Host
+run-server.bat        # World, Login, Channel
 ```
 
 New characters start in that map; the NPC (9010000) runs

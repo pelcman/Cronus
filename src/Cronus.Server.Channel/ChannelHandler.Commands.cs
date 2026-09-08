@@ -335,10 +335,7 @@ public sealed partial class ChannelHandler
                 byte[] notice = _packets.BroadcastNotice(string.Join(' ', parts.Skip(everywhere ? 2 : 1)));
                 if (everywhere)
                 {
-                    foreach (Field f in _fields.Fields)
-                    {
-                        await f.BroadcastAsync(notice).ConfigureAwait(false);
-                    }
+                    await _world.BroadcastAsync(notice).ConfigureAwait(false); // every channel of every Channel process
                 }
                 else
                 {
@@ -352,10 +349,7 @@ public sealed partial class ChannelHandler
             {
                 // Legacy spelling of "/notice all".
                 byte[] notice = _packets.BroadcastNotice(string.Join(' ', parts.Skip(1)));
-                foreach (Field f in _fields.Fields)
-                {
-                    await f.BroadcastAsync(notice).ConfigureAwait(false);
-                }
+                await _world.BroadcastAsync(notice).ConfigureAwait(false);
 
                 break;
             }
@@ -422,9 +416,11 @@ public sealed partial class ChannelHandler
                 await ReplyAsync(session, newGender == 0 ? "gender → 男 (male)" : "gender → 女 (female)").ConfigureAwait(false);
                 await ReplyAsync(session, "ポイントショップの性別反映には再ログインしてください").ConfigureAwait(false);
 
-                if (_channelEndpoints is { } eps && _channelId >= 0 && _channelId < eps.Count)
+                // A same-channel migration goes through the World like any other, so the
+                // re-entry is admitted (and the character stays "online here" in between).
+                System.Net.IPEndPoint? self = await _world.MigrateOutAsync(gc.AccountId, gc.Id, _channelId, Cronus.Server.Core.MigrationSource.Channel).ConfigureAwait(false);
+                if (self is not null)
                 {
-                    System.Net.IPEndPoint self = eps[_channelId];
                     await session.SendAsync(_packets.MigrateCommand(self.Address, self.Port)).ConfigureAwait(false);
                 }
                 else
