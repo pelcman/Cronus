@@ -115,6 +115,20 @@ public sealed class MapData
     /// </summary>
     public bool HasClock { get; init; }
 
+    /// <summary>The wz <c>info/fieldType</c>: 0 for an ordinary field; special client field classes
+    /// otherwise (23 = massacre stage, 24 = massacre result, …). A special type means the client
+    /// expects the matching packets on entry, or it crashes.</summary>
+    public int FieldType { get; init; }
+
+    /// <summary>The wz <c>info/onUserEnter</c> map-script name ("Massacre_first", …), or "".</summary>
+    public string OnUserEnter { get; init; } = string.Empty;
+
+    /// <summary>The wz <c>info/onFirstUserEnter</c> map-script name, or "".</summary>
+    public string OnFirstUserEnter { get; init; } = string.Empty;
+
+    /// <summary>The wz <c>info/forcedReturn</c> map (where the client is sent on relog), or 0.</summary>
+    public int ForcedReturn { get; init; }
+
     /// <summary>The map's ship object (<c>shipObj</c>): the docked passenger ship at a station
     /// (<c>shipKind</c> 0) or the Balrog ship on a flight map (<c>shipKind</c> 1), or null.</summary>
     public ShipObjectData? ShipObject { get; init; }
@@ -219,6 +233,10 @@ public sealed class MapData
             Recovery = mapImg.GetDouble("info/recovery", 1.0),
             IsTown = mapImg.GetInt("info/town") == 1,
             HasClock = mapImg.Child("clock") is not null,
+            FieldType = mapImg.GetInt("info/fieldType"),
+            OnUserEnter = mapImg.GetString("info/onUserEnter"),
+            OnFirstUserEnter = mapImg.GetString("info/onFirstUserEnter"),
+            ForcedReturn = mapImg.GetInt("info/forcedReturn"),
             ShipObject = ParseShipObject(mapImg.Child("shipObj")),
         };
     }

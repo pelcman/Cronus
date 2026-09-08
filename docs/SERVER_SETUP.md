@@ -36,9 +36,10 @@ only basic PC knowledge. For a quick *localhost-only* try-out first, see
   (check: `dotnet --version` prints `10.x`). Get it from
   https://dotnet.microsoft.com/download .
 - The Cronus source (this repo).
-- *(Optional)* **MySQL 8** for multi-process / production deployments. Without it the
-  server persists accounts/characters to a **SQLite file** (`cronus.db` next to the
-  executable) automatically — nothing to install, and restarts keep everything.
+- **MySQL 8** (required). The server keeps accounts, characters, items, storage, guilds,
+  merchants and parcels in one database, **`Cronus186`**, which it creates on first start
+  (defaults: `127.0.0.1:3306`, user `root`, password `root`; `setup.bat` asks). Without MySQL
+  the server refuses to start; `CRONUS_DB=sqlite` is the single-file fallback for a quick test.
 
 **On each player's PC (you and friends):**
 - A **JMS v186** client (the exact 1.86 version).
@@ -91,8 +92,9 @@ environment overrides the file. The one that matters most for remote play is
 | Variable | What it does | Example |
 |---|---|---|
 | `CRONUS_HOST` | **The IP the server tells clients to use for the channel.** Set this to your **public IP** (or LAN IP for a LAN party). If unset it's `127.0.0.1` = localhost only. | `203.0.113.9` |
-| `CRONUS_DB` | Storage backend. **Unset = SQLite file** (`cronus.db` next to the exe, or `CRONUS_DB_FILE` to relocate) — persistent with zero setup. A MySQL connection string switches to MySQL. `memory` keeps everything in process (wiped on restart). Schemas are created automatically, and upgrades add new tables/columns in place — each addition is logged as `[db] migrated: …` at startup. If a migration ever fails, dropping and recreating the database is the safe fallback. | `server=localhost;database=cronus;user=root;password=...` |
-| `CRONUS_DB_FILE` | Path of the SQLite database file when `CRONUS_DB` is unset. | `D:\cronus\save.db` |
+| `CRONUS_DB` | Storage mode. **Unset = MySQL** built from the `CRONUS_DB_*` settings below. A full MySQL connection string, `sqlite` (one file next to the exe, or `CRONUS_DB_FILE`) or `memory` (wiped on exit) override it. | `sqlite` |
+| `CRONUS_DB_HOST` / `CRONUS_DB_PORT` / `CRONUS_DB_NAME` / `CRONUS_DB_USER` / `CRONUS_DB_PASSWORD` | The MySQL connection (defaults `127.0.0.1` / `3306` / `Cronus186` / `root` / `root`). The database is created on first start. | `CRONUS_DB_PASSWORD=secret` |
+| `CRONUS_DB_FILE` | Path of the SQLite file for `CRONUS_DB=sqlite`, and of the old save that is imported once into an empty MySQL database (then renamed `.imported`). | `D:\cronus\save.db` |
 | `CRONUS_GAMEDATA` | **The game-data database** (`gamedata.db`) built from a client's `.wz` files by `Cronus.Ingest` — one file carrying every map/mob/NPC/item/quest/string definition, guaranteed identical to what the players' client renders. Build it once: `dotnet run --project src/Cronus.Ingest -- <client dir>`. | `gamedata.db` |
 | `CRONUS_CLIENT` | Alternative to the above: point at the **client folder** itself. On first boot the server builds `gamedata.db` from it automatically (~20s) and reuses it afterwards. | `C:\...\MapleStory_v186` |
 | `CRONUS_WZ` | Legacy fallback: a loose `wz_xml` dump tree, used only when neither of the above is set. Unset = empty maps (you can still walk around; the client draws the map from its own wz). | `data/sample-wz` |
@@ -231,19 +233,17 @@ In-game commands use the `/` prefix — `/warp <mapId|player>`, `/dbgwarp`, `/st
 
 ## Backing up the save data
 
-With the default SQLite storage, everything (accounts, characters, items, guilds,
-storage, keymaps) lives in **one file**: `cronus.db` next to the server executable
-(or wherever `CRONUS_DB_FILE` points).
+Everything (accounts, characters, items, storage, guilds, merchants, parcels) lives in the
+MySQL database `Cronus186`. Back it up with `mysqldump`, restore with `mysql`:
 
-- **Back up**: stop the server (Ctrl+C), copy `cronus.db` somewhere safe, restart.
-  Copying while stopped is the safe way — a copy taken mid-write can be torn.
-- **Restore**: stop the server, put the backup copy back as `cronus.db`, restart.
-- **Reset the world**: stop the server and delete `cronus.db` — a fresh one is
-  created on the next start.
-- Upgrading the server never requires touching the file: new tables/columns are
-  added in place at startup (`[db] migrated: …` lines).
+```
+mysqldump -uroot -p Cronus186 > cronus186-backup.sql
+mysql     -uroot -p Cronus186 < cronus186-backup.sql
+```
 
-With MySQL, use your normal `mysqldump` routine instead.
+A server upgrade never needs a fresh database: new tables and columns are added in place
+on start. If you still have a `cronus.db` from before 2026-09-08, the first MySQL start imports
+it (all keys kept) and renames it `cronus.db.imported`.
 
 ---
 
@@ -257,13 +257,13 @@ With MySQL, use your normal `mysqldump` routine instead.
 # Minimal local test (persists to cronus.db automatically, localhost)
 dotnet run --project src/Cronus.Server.Host
 
-# Friends over the internet, with map/NPC data (still on the SQLite default)
+# Friends over the internet, with map/NPC data (MySQL default: Cronus186 on 127.0.0.1)
 $env:CRONUS_HOST    = "203.0.113.9"     # your public IP or a DDNS hostname
 $env:CRONUS_WZ      = "data/sample-wz"
 $env:CRONUS_STARTMAP= "100000000"
 dotnet run --project src/Cronus.Server.Host 8484 7575
 
-# Optional: switch storage to MySQL (production) or pure memory (throwaway tests)
+# Optional: a SQLite file (no MySQL on this machine) or pure memory (throwaway tests)
 # $env:CRONUS_DB = "server=localhost;database=cronus;user=root;password=YOURPW"
 # $env:CRONUS_DB = "memory"
 ```

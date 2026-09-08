@@ -144,6 +144,10 @@ public static class ServerOpcode
     public const string UserHP = "LP_UserHP";
     public const string GivePopularityResult = "LP_GivePopularityResult";
     public const string FieldEffect = "LP_FieldEffect";
+    public const string SessionValue = "LP_SessionValue";
+    public const string DestroyClock = "LP_DestroyClock";
+    public const string MassacreIncGauge = "LP_MassacreIncGauge";
+    public const string MassacreResult = "LP_MassacreResult";
     public const string Message = "LP_Message";
     public const string CharacterInfo = "LP_CharacterInfo";
     public const string UserMove = "LP_UserMove";

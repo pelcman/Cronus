@@ -425,6 +425,52 @@ public sealed class Field
         }
     }
 
+    /// <summary>
+    /// The oracle's <c>resetFully</c> for an event instance about to be handed to a fresh party:
+    /// runtime summons go, every spawn-point mob is back alive at full HP, the drops are gone.
+    /// Meant for an empty map (nothing is announced).
+    /// </summary>
+    public void ResetForEvent()
+    {
+        lock (_gate)
+        {
+            _mobs.RemoveAll(m => m.MobTime < 0);
+            foreach (FieldMob mob in _mobs)
+            {
+                mob.Respawn();
+            }
+
+            _drops.Clear();
+        }
+    }
+
+    /// <summary><c>map.respawn(true)</c>: every dead mob that would respawn later becomes due now, for the respawn tick to bring back.</summary>
+    public void RespawnDeadNow(long nowTick)
+    {
+        foreach (FieldMob mob in Mobs)
+        {
+            if (mob.IsDead && mob.RespawnAtTick != 0)
+            {
+                mob.RespawnAtTick = nowTick;
+            }
+        }
+    }
+
+    /// <summary>Live mobs of one template on the field.</summary>
+    public int CountMobs(int templateId)
+    {
+        int n = 0;
+        foreach (FieldMob mob in Mobs)
+        {
+            if (mob.TemplateId == templateId && !mob.IsDead)
+            {
+                n++;
+            }
+        }
+
+        return n;
+    }
+
     /// <summary>Finds a spawned NPC by its runtime object id.</summary>
     public FieldNpc? FindNpc(int objectId)
     {
@@ -484,6 +530,15 @@ public sealed class Field
         foreach (MobSpawn spawn in mapData.Mobs)
         {
             if (spawn.Hidden)
+            {
+                continue;
+            }
+
+            // A one-shot spawn point (wz mobTime -1: the training-ground bosses, PQ bosses, event
+            // mobs) never spawns on its own — the oracle's SpawnPoint.shouldSpawn returns false for
+            // mobTime < 0; a script or event summons it. Spawning them at load put mobs on maps the
+            // real server leaves empty (and crashed the client on 913020000, sweep crash #3).
+            if (spawn.MobTime < 0)
             {
                 continue;
             }

@@ -24,6 +24,9 @@ public sealed class NpcScriptEngine
         _answerTimeoutMs = answerTimeoutMs;
     }
 
+    /// <summary>Every NPC id that has a script (for /sweep npcs and the exerciser).</summary>
+    public IEnumerable<int> ScriptedNpcIds => _scripts.Ids();
+
     /// <summary>
     /// Starts the script for <paramref name="npcId"/>, returning the live conversation (whose
     /// answers the caller routes via <see cref="NpcConversation.Advance"/>), or null if the NPC
@@ -90,13 +93,20 @@ public sealed class NpcScriptEngine
         {
             // Normal end (client escaped or dispose() called).
         }
-        catch (JavaScriptException)
+        catch (Exception ex) when (ex is ConversationEndedException || ex.InnerException is ConversationEndedException)
         {
-            // Script bug: end the dialog rather than crash the worker.
+            // The same normal end, wrapped by Jint.
         }
-        catch (Exception)
+        catch (JavaScriptException ex)
         {
-            // Any other failure (including a ConversationEndedException wrapped by Jint).
+            // Script bug: end the dialog rather than crash the worker — but never silently.
+            conversation.Error = ex;
+            Console.WriteLine($"[script] {binding} {conversation.NpcId} {entry}(): {ex.Message} (line {ex.Location.Start.Line})");
+        }
+        catch (Exception ex)
+        {
+            conversation.Error = ex;
+            Console.WriteLine($"[script] {binding} {conversation.NpcId} {entry}(): {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {

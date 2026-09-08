@@ -5,12 +5,16 @@ using Microsoft.EntityFrameworkCore.Metadata;
 namespace Cronus.Database;
 
 /// <summary>
-/// Builds a SQLite-file-backed <see cref="CronusDbContext"/> factory — the zero-setup persistence
-/// default: no external server, one file next to the host. MySQL (via <see cref="MySqlDatabase"/>)
-/// remains the choice for multi-process / production deployments.
+/// Builds a SQLite-file-backed <see cref="CronusDbContext"/> factory. Since 2026-09-08 MySQL
+/// (<see cref="MySqlDatabase"/>) is the standard store; SQLite stays as the explicit opt-in
+/// (`CRONUS_DB=sqlite`) for a server without MySQL, as the test store, and as the source of the
+/// one-time legacy import (<see cref="DatabaseCopy"/>).
 /// </summary>
 public static class SqliteDatabase
 {
+    /// <summary>Closes pooled connections so the file can be renamed or deleted (Windows keeps it locked otherwise).</summary>
+    public static void ReleaseFiles() => Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
     public static Func<CronusDbContext> CreateFactory(string filePath)
     {
         DbContextOptions<CronusDbContext> options =

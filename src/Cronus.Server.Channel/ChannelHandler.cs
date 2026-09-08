@@ -59,6 +59,12 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     /// <summary>Every named map grouped by region (for /dbgwarp); null without wz.</summary>
     private readonly IMapCatalog? _mapCatalog;
 
+    /// <summary>The client opcode table, kept for naming packets no handler claims.</summary>
+    private readonly OpcodeTable _clientOps;
+
+    /// <summary>The running /sweep, if any (cancelled on disconnect).</summary>
+    private CancellationTokenSource? _sweep;
+
     /// <summary>Which NPCs have quests (their clicks stay silent for the client's quest UI).</summary>
     private readonly IQuestNpcIndex? _questNpcs;
 
@@ -237,6 +243,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _messengers = messengers ?? new MessengerRegistry(_packets);
         _parties = parties ?? new PartyRegistry();
 
+        _clientOps = clientOpcodes;
         _opMigrateIn = clientOpcodes.Get(ClientOpcode.MigrateIn);
         _opAliveAck = clientOpcodes.Get(ClientOpcode.AliveAck);
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
@@ -585,15 +592,36 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         {
             // Keep-alive acknowledged; nothing to do.
         }
+        else
+        {
+            await HandleUnhandledAsync(session, opcode).ConfigureAwait(false);
+        }
     }
 
     public override async ValueTask OnDisconnectedAsync(MapleSession session, Exception? error)
     {
         _conversation?.End();
         _conversation = null;
+        bool sweeping = _sweep is not null;
+        _sweep?.Cancel();
+        _sweep = null;
+        EndMassacreOnDisconnect();
 
         if (_player is not null && _field is not null)
         {
+            if (sweeping)
+            {
+                // A client lost mid-sweep most likely crashed on the map it was just sent to. Save it
+                // in the rescue town instead, or the next login would replay the crash; and mark the
+                // suspect in the progress file for the crash harness / the operator.
+                Console.WriteLine($"[sweep] client lost on map {_player.Character.MapId} — saving {_player.Character.Name} at the rescue map");
+                AppendSweepLine(_sweepCurrentNpc != 0
+                    ? $"# crash? npc {_sweepCurrentNpc} {DateTime.Now:HH:mm:ss}"
+                    : $"# crash? {_player.Character.MapId} {DateTime.Now:HH:mm:ss}");
+                _player.Character.MapId = GameConstants.RescueMapId;
+                _player.Character.Portal = 0;
+            }
+
             _characters.Save(_player.Character); // persist last known map/stats on logout
 
             // Cancel any open trade so staged items/meso return to their owners.
@@ -747,6 +775,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.FamilyInfoResult()).ConfigureAwait(false);
         await session.SendAsync(_packets.BroadcastSlideClear()).ConfigureAwait(false);
         await SendFieldClockAsync(session, character.MapId).ConfigureAwait(false);
+        await OnFieldEnteredAsync(character.MapId).ConfigureAwait(false);
 
         // Join the field: tell the newcomer about everyone already there, and vice versa.
         Field field = _fields.Get(character.MapId);

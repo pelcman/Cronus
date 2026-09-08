@@ -27,7 +27,9 @@ reimplemented in **C# / .NET**.
   quests, events, area bosses, quest/reactor/NPC logic) that JMSv186 lacks. Never a source
   for bytes, opcodes or crypto (v83 differs from v186); every id and number is re-checked
   against v186 data.
-- **Architecture template**: [MS2Community/Maple2](https://github.com/MS2Community/Maple2) (C#).
+- **Architecture template**: [MS2Community/Maple2](https://github.com/MS2Community/Maple2) (C#),
+  cloned at `Reference/Maple2`. Its process split (World / Login / Game over gRPC, one `start.bat`)
+  is the model for Cronus' own split (docs/TASK.md フェーズ1b).
 
 ### Why rewrite Java into C#
 

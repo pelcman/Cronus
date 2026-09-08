@@ -83,6 +83,24 @@ public interface INpcPlayer
     /// <summary>Warps the player to a specific spawn portal of another map.</summary>
     void warp(int mapId, int portal);
 
+    /// <summary>Warps to the portal named <paramref name="portalName"/> (the wz <c>pn</c>), or portal 0 when the map has no such portal.</summary>
+    void warpPortal(int mapId, string portalName);
+
+    /// <summary>Airship stations: true while boarding is open for the next departure.</summary>
+    bool airshipBoarding();
+
+    /// <summary>Airship stations: minutes until the next departure.</summary>
+    int airshipMinutes();
+
+    /// <summary>Opens the parcel (宅配) send window.</summary>
+    void openParcel();
+
+    /// <summary>Parcels waiting for this character.</summary>
+    int parcelCount();
+
+    /// <summary>Hands over the waiting parcels; returns how many were delivered.</summary>
+    int receiveParcels();
+
     /// <summary>Adds (or removes) ability points, floored at zero, and notifies the client.</summary>
     void gainAp(int amount);
 
@@ -121,6 +139,20 @@ public interface INpcPlayer
 
     /// <summary>How many of the item the player carries across all stacks.</summary>
     int itemQuantity(int itemId);
+
+    /// <summary>True when the player leads their party, or has none.</summary>
+    bool isPartyLeader();
+
+    /// <summary>Kerning Subway massacre: puts the party into a free stage-1 instance. False when all five are busy.</summary>
+    bool startSubwayMassacre();
+
+    /// <summary>Kerning Subway bonus (the 999 carriage) for this player alone. False when all are busy.</summary>
+    bool bonusSubwayMassacre();
+
+    /// <summary>A quest record's custom data (the oracle's <c>getQuestNAdd(id).getCustomData()</c>), or null.</summary>
+    string? getQuestData(int questId);
+
+    void setQuestData(int questId, string data);
 
     /// <summary>Opens the NPC shop with the given shop id (no-op when unknown).</summary>
     void openShop(int shopId);

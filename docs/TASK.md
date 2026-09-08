@@ -15,7 +15,7 @@
 |---|---|---|
 | **Riremito/JMSv186**(Java, JMS v186) | パケットのバイト配置・送信タイミング・enum/効果ID(**唯一のオラクル**)、JMS 原文スクリプト | v131〜302 の多バージョン同居、MINA |
 | **P0nk/Cosmic**(Java, GMS v83, `Reference/Cosmic`) | コンテンツの網羅(PQ・イベント・エリアボス・クエスト・リアクター・NPC の流れ)、設定ファイル1枚+handbook の運用の簡単さ、feature_list の粒度 | パケット・opcode・暗号(v83≠v186)、GMS 固有の ID/マップ |
-| **MS2Community/Maple2**(C#) | レイヤ分離・DI・EF Core・サービス構成(保守しやすい骨格) | コードそのもの(MS2 用) |
+| **MS2Community/Maple2**(C#, `Reference/Maple2`) | レイヤ分離・DI・EF Core・サービス構成、**Login / World / Game のプロセス分割と gRPC 連携**、1 bat で全プロセス起動(`start.bat`) | コードそのもの(MS2 用)、Web サーバー(v186 クライアントには不要) |
 
 **転換の理由**: 公開IPで外部プレイヤーと遊べるところまでは 2026-09-08 に確認できたが、
 多くのコンテンツでクライアントがクラッシュした。「最小限の遊べる」は基準として低すぎた。
@@ -77,16 +77,81 @@
 外部プレイ(9/7 21:08〜、9/8 12:13〜)で落ちたコンテンツを全て潰す。落ちたら即
 `python DevTools/wirelog.py`(切断直前のパケット文脈)。
 
-- [ ] **クラッシュ棚卸し** — 外部プレイで落ちたコンテンツを列挙してもらい(いつ・どのマップ・
-      直前の操作)、1件=1項目としてここに追記。wirelog の文脈と突き合わせて原因を分類
-      (未実装の入口 / 送信契約のズレ / データ不整合 / サーバー例外)。
-- [ ] **DB 楽観的並行性例外で切断**(確認済み、9/7 21:25・21:26、ドロップ拾得の直後に
-      `The database operation was expected to affect 1 row(s), but actually affected 0 row(s)`)
-      — セッション切断ではなく回復する(該当エンティティの再読込・拾得処理の重複防止)。
+- [x] **クラッシュ棚卸し(自動): マップ入場は完了**(2026-09-09) — `/sweep maps` で **3,264 マップ全てに入場して
+      クライアントが落ちない**ことを確認(TunaYukke、4回の実行、途中のクラッシュ3件を下記のとおり修正)。
+      入場時のクラッシュはこれで棚卸し済み。残るクラッシュ源は「操作」(NPC 会話・アイテム使用・スキル・
+      クエスト・取引・PQ 進行)で、こちらは `[dev] unhandled` ログと下記の静的検査で追う。
+      `DevTools/script_lint.py`(2026-09-09): スクリプト中の `#t/#i/#m/#o/#p/#q` タグと gainItem/warp 等の ID を
+      クライアントデータ(String.wz / Map.wz)と照合 → 179 参照、未知 ID なし。あわせて fieldType の分布を出力
+      (0: 2390 / 6: 1818 / 14: 486 / 23: 345 / 21: 106 / 35: 79 / 25: 52 / 20: 41 / 11: 39 / 15・16・1014: 30 …)。
+      特殊フィールドへの**入場**は全種通過済みだが、その中での**操作**(カーニバル・雪玉・ココナツ・道場等)は未実装。
+      落ちた場所の手動列挙は不要(ユーザー談)。**無人化**: `DevTools/crash_harness.py`
+      (実クライアント起動→ログイン→`/sweep`→死活監視→記録→再起動→`resume`)。RunAsInvoker で UAC 回避・
+      強制終了可を確認、ログイン画面の座標は校正済み。**残: ワールド/キャラ選択の座標校正**(stage1/stage2)。
+      スイープ中に切断されたキャラは救済マップに保存し `# crash? <map>` を progress に記録(実装済み)。
+- [x] **操作の自動検証(bot / ヘッドレス)**(2026-09-09) — 「膨大すぎる」(ユーザー談)ため人手の操作は前提にしない。
+      3層: ①`AllScriptsExerciseTests` — 全 NPC スクリプト 248 本を実エンジンで実行し、選択肢・はい/いいえ・
+      承諾/拒否の全分岐(上限付き)を 3 プロファイル(初心者 Lv10 / 戦士 Lv45 / 全所持 Lv200)で辿り、
+      JS 例外・プロンプトのループ・未知 ID(アイテム/マップ/Mob/NPC/スキル、gamedata.db 照合)で失敗。
+      クエスト(start/end)・ポータル・リアクターも実行。初回で **INpcPlayer に無い 6 メソッド**
+      (warpPortal / airshipBoarding / airshipMinutes / openParcel / parcelCount / receiveParcels)を検出し
+      契約に追加。以後は緑(82 秒)。あわせてスクリプト例外を `NpcConversation.Error` と `[script]` ログに
+      出す(従来は握りつぶし)。②`AllQuestsExerciseTests` — bot がクライアントデータの全 2,956 クエストに
+      受注/完了/放棄を要求し、セッションが生き残ること(サーバー例外なし)を確認(0.7 秒)。
+      ③`/sweep npcs` — 実クライアントに全 NPC の会話の**1ページ目**を流して描画クラッシュを棚卸し(キャラへの
+      効果は無効)。初版は 2 体目の会話を 1 体目の開いたダイアログの上に送り、クライアントが自ら切断して
+      ログイン画面へ戻った(会話中の別会話は DC、この世代のクライアントの既知挙動)。サーバーからページは
+      進められないため、1 体ごとに同マップ SetField でダイアログを閉じる方式に変更。深いページは①が担当、
+      実機で全ページを辿るには crash_harness のキー入力が必要。
+      ④`AllNpcsWireExerciseTests`(2026-09-09、ユーザーの指摘「ワープ・クエスト受注・アイテム移動が起きる会話は
+      考慮されているか」への回答) — bot が `/talk <npc>` で全 248 NPC の会話を**本物のサーバー経路**で開き、
+      分岐(NPC ごと上限 6 経路)を辿る。マップ・アイテム・クエストは実データ(gamedata.db)、スクリプトの
+      プレイヤーは本物 → ワープ・付与・受注・ショップ開店が実キャラに実際に起き、その応答がワイヤに流れる。
+      セッション生存(最後の `/pos` 応答)と `[script]` エラー無しで判定(2 分 12 秒、緑)。
+      これで「操作」の自動検証は①ロジック ②クエスト ③描画 ④実効果 の 4 層。
+      **③完了(2026-09-09 02:31)**: スクリプトのある全 243 NPC の会話 1 ページ目を実クライアントで描画、
+      クラッシュは #4(画像の無い GMS ID、修正済み)のみ。フェーズ0の自動棚卸しは「マップ入場」「NPC 会話」
+      「全クエスト」「全スクリプト分岐」「未対応パケット」まで完了。残るクラッシュ源は実装が無い機能の
+      入口(フェーズ1で `[DEV]` 化)と、PQ/ボス/特殊フィールド内の操作(フェーズ4)。
+- [x] **クラッシュ #1: 910320100 ホコリだらけのプラットフォーム(地下鉄殲滅 1ステージ)**(2026-09-08) —
+      初回スイープ(TunaYukke、2171/3264 マップ通過)で唯一落ちた地点。入場3秒後に切断。原因はマップの
+      `info/fieldType 23`(Massacre 特殊フィールド): クライアントのゲージ UI が入場時に受け取るはずの
+      パケット(カウントダウン Clock、`killing/first/*` 画面エフェクト、`massacre_*` セッション値6つ、
+      ゲージ)を Cronus が一切送っていなかった。oracle `Event_PyramidSubway` を `MassacreEvent` として移植
+      (下記フェーズ4)。MapData に `FieldType` / `OnUserEnter` / `OnFirstUserEnter` / `ForcedReturn` を追加。
+      **他の fieldType≠0 のマップも同種の危険がある** → スイープ再開で洗う。
+- [x] **クラッシュ #2: 910330200(同・91033 系の殲滅ステージ)**(2026-09-08, 再開スイープ) — 結果マップ 910330001 を
+      通過した時点でイベントが終了(成功扱い)し、終了済みのまま握っていたため次の fieldType 23 マップで
+      新しいイベントを作らず、パケットが出ずに落ちた。oracle は終了時に null に戻して `Massacre_first` で
+      毎回作り直す → 同じ形に修正(終了済みなら作り直す)。91033 系は地下鉄扱い(`TypeOf`)。
+- [x] **クラッシュ #3: 913020000 隠れ道: 第4訓練場**(2026-09-09, 3回目のスイープ、42 マップ通過後) — 入場1秒後に
+      切断。マップの life は `mobTime -1` のボス 9300291 1体だけで、直前の第3訓練場(9300290、同じ mobTime -1)
+      は通過。送信内容は SetField / MobEnterField / MobChangeController のみで、テンプレート ID 以外は同一
+      → クライアント側でこの mob を実体化すると落ちる(9300291 は `attack3/info` に disease 127 Lv6、
+      `info/default` キャンバスを持つ)。**契約監査の結果**: oracle は `mobTime < 0` の life を
+      `SpawnPoint.shouldSpawn()==false` で一切湧かせない(スクリプト/イベントが湧かせる)。Cronus は
+      マップ生成時に湧かせていた → 湧かせないよう修正。9300291 自体の実体化クラッシュは、訓練場の
+      チュートリアルを実装する時に再確認(スクリプト湧きで再現するなら client 側データの問題)。
+- [x] **クラッシュ #4: NPC 2151003 の会話(`/sweep npcs` 188 体目)**(2026-09-09) — error 0x80030002
+      (STG_E_FILENOTFOUND)。2151003〜2151007(ミハエル〜ホークアイ)は JMS の String.wz に名前だけあり
+      Npc.wz に画像が無い GMS 側の ID。JMS の転職官は 1101003〜1101007(画像・スクリプトあり)なので
+      重複スクリプト 5 本を削除。再発防止: `INpcNameProvider.HasImage`(`Npc/{id:D7}.img`)を追加し、
+      `/sweep npcs` はスキップ、`/talk` は `[DEV]` で拒否、`AllScriptsExerciseTests` は画像の無い NPC 用
+      スクリプトを失敗として検出。187 体分の会話描画は通過。
+- [x] **未対応パケットの安全化**(2026-09-08) — クライアントが送る 219 opcode のうち **132** をサーバーは
+      黙って捨てていた(if/else 連鎖に default 無し)。`HandleUnhandledAsync` を追加: `*UseRequest` と
+      修理/製作/ガシャポン等はインベントリのロック解除(空 InventoryOperation)、マップ転送系は
+      TransferFieldReqIgnored、プレイヤー操作には `[DEV] この操作はまだ実装されていません（CP_…）` を
+      セッション内1回表示、全件を `[dev] unhandled` としてログ。未対応一覧はログから積み上がる。
+- [x] **DB 楽観的並行性例外で切断**(2026-09-09 修正) — 9/7 の外部プレイで拾得直後に
+      `expected to affect 1 row(s), but actually affected 0 row(s)` → セッション切断。原因は自動保存 tick と
+      セッション自身が同じ Character を別コンテキストで同時保存し、片方が削除したアイテム行をもう片方が
+      更新しようとしたこと。`DbCharacterRepository.Save` をキャラ単位で直列化し、それでも起きた
+      `DbUpdateConcurrencyException` はメモリ側を正として再挿入/切り離して再保存(テスト1件)。
 - [ ] **未実装の入口を全て安全化** — wz が指すのにスクリプトの無いポータル/リアクター/クエスト
       スクリプト/イベント NPC を機械的に列挙し、`[DEV]` 応答で止める(フェーズ1の適用と同時)。
-- [ ] **未対応パケットの棚卸し** — 受信して無視している CP_* を列挙し、クライアント状態を
-      ロックするもの(応答待ちになる要求)は拒否応答を返す。
+- [ ] **未対応パケット 132 件の実装** — `[dev] unhandled` ログに出た順に、契約監査(JMSv186 `ReqC*`)
+      を踏んで本実装する。当面の安全化(ロック解除+`[DEV]`)は上の項目で済み。
 - [ ] **クラッシュ報告テンプレ** — [CLIENT_TEST_CHECKLIST.ja.md](CLIENT_TEST_CHECKLIST.ja.md) に
       「落ちたら: 時刻・マップ・直前の操作」を追記。
 - [ ] 完了基準: **外部テスター2名×2時間でクライアントクラッシュ0**。
@@ -102,11 +167,74 @@
 - [ ] 未実装の機能に触れる応答(ギルドBBS・アライアンス・道場・遠征隊・PQ 入口)に `[DEV]`。
 - [ ] `npc_coverage.py` に「`[DEV]` 表示あり」の列を足し、`[DEV]` 残数を進捗指標にする。
 
+## フェーズ1b: プロセス分割(Maple2 型の基盤、フェーズ0の棚卸し後に着手)
+
+Maple2 は `start.bat` 1つで **World / Login / Web / Game** を別プロセスとして起動する
+(Windows Terminal の `wt ... ; nt ...` でタブ分割、無ければ `start` で別窓)。World が
+ワールド共通の状態(パーティ・ギルド・バディ・チャット経路・プレイヤー所在・ワールドボス湧き・
+グローバルポータル=イベント・ログイン→ゲームの移送トークン・ロック)を gRPC(`Maple2.Server.Core/proto`:
+`world.proto` / `channel.proto` / `login.proto` / `global.proto`)で持ち、Game は各チャンネルを World に
+登録し(`ChannelClientLookup`)、World からの呼び戻し(`channel.proto`)を受ける。Login は World に
+ハートビートを送り、チャンネル一覧と移送トークンを World から得る。
+
+Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + キャッシュショップ + 全 tick
+(Mob 湧き・回復・バフ期限・飛行船)を載せ、パーティ/ギルド/メッセンジャー等はプロセス内の
+レジストリを共有している。同じ形に寄せる:
+
+| プロセス | 役割 | Cronus での中身 |
+|---|---|---|
+| **Login** | 認証・キャラ選択・チャンネル案内 | `Cronus.Server.Login`(既存)を単独ホスト化。チャンネル一覧と移送トークンは World から |
+| **World** | ワールド共通イベントと共有状態 | 新規 `Cronus.Server.World`: 飛行船運航(`AirshipService` の時刻線)、エリア/ワールドボス湧きタイマー、パーティ・ギルド・バディ・メッセンジャー・`/find`・拡声器・お知らせの経路、プレイヤー所在、チャンネル登録・ポート割当、移送トークン |
+| **Game** | チャンネル(フィールド・戦闘・NPC・PQ インスタンス) | `Cronus.Server.Channel` + `Cronus.Server.Game`。段階 A は 1 プロセスで N チャンネル、段階 B で 1 プロセス 1 チャンネル。キャッシュショップは Game に同居 |
+| (Web) | MS2 のクライアント用 HTTP | **不要**(v186 クライアントは HTTP を使わない) |
+
+**Maple2 → Cronus のプロジェクト対応(倣う部分と、MS2 固有で捨てる部分)**:
+
+| Maple2 | 役割 | Cronus(既存 → 目標) |
+|---|---|---|
+| `Maple2.Server.Core` | Session(Pipelines)・`PacketRouter`(`PacketHandler<T>` を DI で集めて opcode 表に)・gRPC proto・DI モジュール | `Cronus.Network` + 新設 `Cronus.Server.Core`(proto・共通ハンドラ基底・DI モジュール)。`ChannelHandler.*` の巨大 partial を opcode ごとの `PacketHandler<ChannelSession>` に分割 |
+| `Maple2.Server.World` | 共有状態の Lookup/Manager(Party/Guild/Buddy/GroupChat/PlayerInfo/GlobalPortal/WorldBoss)+ `WorldService`(gRPC) | 新設 `Cronus.Server.World` |
+| `Maple2.Server.Login` | 認証・キャラ選択、World とハートビート | `Cronus.Server.Login` を単独ホスト化 |
+| `Maple2.Server.Game` | `GameServer`+`Manager/*`(Buff/Quest/Skill/Shop/Trade/Party…)+`Session`+`PacketHandlers` | `Cronus.Server.Channel`(セッション/ハンドラ)+ `Cronus.Server.Game`(Manager 群) |
+| `Maple2.Model` | Enum/Game/Metadata/Error/Validators | `Cronus.Domain` + `Cronus.Common` |
+| `Maple2.Database` | EF Core コンテキスト・Migrations・Storage | `Cronus.Database` |
+| `Maple2.File.Ingest` | クライアントデータ → DB 取り込み | `Cronus.Ingest`(gamedata.db、既に同型) |
+| `Maple2.Server.DebugGame` | デバッグ用クライアント | `Cronus.Debug.Bot` |
+| `Maple2.Server.Tests` | テスト | `tests/*` |
+| `appsettings.json` + Serilog + Autofac | 設定・ログ・DI | `.env` → `appsettings.json`(+ `.env` 上書き)、Serilog、Microsoft DI(Autofac は不要) |
+| `Maple2.Server.Web` / `Trigger` / `Navmeshes` / `LuaFunctions` | MS2 固有(HTTP 配信・トリガー・3D ナビ) | **採用しない**(v186 は 2D、HTTP 無し。スクリプトは Jint のまま) |
+
+- [ ] **段階 A: プロセス分割** — `Cronus.Server.World` 新設、gRPC(Grpc.AspNetCore / Grpc.Net.Client、
+      `src/Cronus.Server.Core/proto/*.proto` を Maple2 に倣って定義)で Login↔World↔Game を接続。
+      World へ移すもの: 飛行船運航、ボス湧きタイマー、チャンネル登録、移送トークン、お知らせ/拡声器の
+      全体放送。Game は起動時に World へ登録+ハートビート。`run-server.bat` は Maple2 の `start.bat`
+      と同じ「ビルド1回 → `wt` タブ3つ(World / Login / Game)、無ければ `start` 窓」に。`stop-server.bat` 追加。
+- [ ] **段階 B: 共有レジストリの World 移設** — パーティ・ギルド・バディ・メッセンジャー・`/find`・
+      ささやきをプロセス内共有から World の gRPC サービス+Game への呼び戻しへ。これで
+      1 Game プロセス=1 チャンネルにでき、チャンネル単位の再起動が可能になる。
+- [x] **DB は MySQL 既定**(2026-09-08 決定・実装) — 既定 DB 名 **`Cronus186`**(127.0.0.1:3306、root/root、
+      初回起動で作成、テーブルは追加型マイグレーション)。`CRONUS_DB_HOST/PORT/NAME/USER/PASSWORD` で変更、
+      `CRONUS_DB=sqlite|memory|<接続文字列>` は代替。MySQL 不達時は黙ってメモリに落ちず終了コード2で停止。
+      初回の MySQL 起動時に隣の `cronus.db` を1回だけ取り込み(`DatabaseCopy`、キー保持)`cronus.db.imported` に改名。
+      `setup.bat` が接続情報を尋ねて `.env` に記録し、mysql.exe があれば接続確認。
+- [ ] 完了基準: 1 bat で 3 プロセスが立ち上がり、bot スイート 99 ステップ(チャンネル移動・
+      キャッシュショップ往復を含む)がそのまま通る。
+
 ## フェーズ2: ワールド(マップ・NPC・ポータル・リアクター)を 100% に
 
 [NPC_COVERAGE.md](NPC_COVERAGE.md) 基準(2026-09-07 時点: 1,447体中 800対応 = 55%、none 647)。
 `python DevTools/npc_coverage.py` で再生成。
 
+- [~] **現行スクリプトと Cosmic のスクリプトの突き合わせ**(2026-09-09 一覧化完了) — `DevTools/cosmic_gap.py` が
+      Cosmic と Cronus を ID/名前で突き合わせ、**JMS v186 クライアントに実在するものだけ**(画像のある NPC・
+      Check.img にあるクエスト・マップが使うポータルスクリプト名・マップに置かれたリアクター)に絞った作業表
+      [COSMIC_GAP.md](COSMIC_GAP.md)(生成物)を出す。現在値: NPC 418(うち JMS マップに配置 304)、
+      クエストスクリプト 220、ポータル 324(+Cosmic にも無い JMS 固有 208)、リアクター 235、
+      JMS マップを参照するイベントスクリプト 85。配置マップ数の多い順に並ぶので上から潰す。
+      最上位: 武陵道場(NPC 2091005 素公パンダ 39 マップ + ポータル dojang_next/dojang_up 70 マップ)、
+      モンスターカーニバル(シュピゲルマン 2042000〜2042007 + 助手)、月うさぎ 9001102(ヘネシス PQ、19 町)、
+      帰還碑/名誉の石碑 9040004/9040005、忍耐の森 1061007、timeQuest(思い出の道 16)、rankRoom/tutorialNPC
+      (職業別施設)。実装のたびに再生成して残数を更新(ID・数値は v186 データで置換、`[DEV]` 規約)。
 - [ ] **NPC 100%** — none 647 → 0。順序: ビクトリア → オシリア → ジパング/自由市場 → イベント
       NPC(期限切れイベントは `[DEV]` 案内)。会話の流れは JMS 原文(Riremito/jms_scripts)→ Cosmic
       `scripts/npc`(708) の順で参照。
@@ -141,6 +269,14 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
 - [ ] **PQ**(存在は wz で確認して列挙): カニングシティ PQ(999番の客車 — 林次長 1052115 の
       `[DEV]` 案内が入口)、ルディブリアム PQ、オルビス PQ、LMPQ、ヘネシス PQ、アモリア PQ、
       ピラミッド PQ。
+- [x] **地下鉄殲滅 / ピラミッド殲滅(Massacre)**(2026-09-08) — oracle `Event_PyramidSubway` の逐語移植
+      `MassacreEvent`(`IMassacreHost` 越しにセッション・パーティ・フィールドへ): エネルギーバー(毎秒 −5/−10、
+      討伐 +5、ミス −5、0 で失敗)、ステージ計時(地下鉄 180 秒、ピラミッド 240/300 秒)と次ステージへの
+      空きインスタンス探索(5面)、結果マップでのランク(討伐数)と経験値表、記録クエスト 7662/7760、
+      パケット5種(ClockCountdown / FieldEffectScreen / SessionValue / MassacreIncGauge / MassacreResult)。
+      入口 NPC 林次長 1052115 は Cosmic の流れで実装(台詞は創作)。**残**: ピラミッドの入口 NPC、
+      スキル使用時の `onSkillUse`(ピラミッドのスキル回数)、イェティ湧きの実機確認、
+      勲章 1142141 / クエスト 29931 の v186 データ確認。テスト 11 件。
 - [ ] **モンスターカーニバル 1/2**。
 - [ ] **遠征隊** — ホーンテイル入口(道標/標識は現在 `[DEV]` 簡易入場)、人数・時間管理。
 - [ ] **ボス** — エリアボス群(Cosmic `AreaBoss*`)、ザクム(祭壇の完全フロー)、ホーンテイル、
@@ -199,13 +335,14 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
   (`DevTools/edited_exe`)を削除、空の `DevTools/cronus-wz` と 8/22〜9/7 の古いログを削除、
   役目を終えた文書(旧 TASK、入場クラッシュ診断、デプロイリハーサル記録、AGENTS.md の
   マイルストーン/バックログ 780 行)を削除
+- MySQL 既定化(2026-09-08): `Cronus186`、SQLite 保存の1回取り込み、setup.bat の接続手順
   (外部プレイの2本 9/7 21:08・9/8 12:13 は棚卸し用に保持)。
 
 ---
 
 ## 進行ルール
 
-1. 着手順は **0 → 1 → 2/3 並行 → 4 → 5/6 → 7**。8 は随時、9 は維持。
+1. 着手順は **0 → 1 → 1b(プロセス分割) → 2/3 並行 → 4 → 5/6 → 7**。8 は随時、9 は維持。
 2. 1コミット=1まとまり。チェック更新はそのコミットに含める。
 3. クライアントを落としうる変更は、コミット前にテスト+botスイート、コミット後に
    実機確認を依頼する(「◯◯を踏んでみて」と明示)。
@@ -213,6 +350,16 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
 5. リファレンスの優先順位: **JMSv186(バイト・タイミング)→ Cosmic(コンテンツの流れ)→ 創作**。
    Cosmic から写した流れは、ファイル先頭に出典(`Reference/Cosmic/scripts/...`)を書く。
 6. 週次目安で `npc_coverage.py` を再生成し、`[DEV]` 残数と none 数を更新する。
-7. **ブランチ運用(2026-09-08〜)**: `main` は安定版(方針転換の起点 = `INITIAL COMMIT 2`)。
-   日々の作業は `develop` で行い、大きめの作業は `develop` から作業ブランチ(`feature/<内容>`、
-   `fix/<内容>`)を切って `develop` へマージする。`main` へは動作確認の取れた `develop` をマージする。
+7. **ブランチ運用(2026-09-09 改訂)**: `main` = 安定版、`develop` = 統合、作業は **テスト項目ごとのブランチ**。
+   - 作業単位は「1 つのテスト項目」= 検証できるまとまり(例: `feat/mu-lung-dojo`、`feat/process-split`、
+     `fix/npc-image-guard`)。`develop` から `feat/<項目>` / `fix/<項目>` を切り、コミットは全部そこへ、
+     push も同名ブランチへ(バックアップ)。
+   - 完了条件 = その項目のテストが全部緑: `dotnet test`、bot スイート、クライアントを落としうる変更は
+     実機確認(ユーザーに「◯◯を踏んでみて」と依頼し、結果を待つ)。TASK.md のチェック更新も同じブランチで。
+   - 緑になったら `develop` へ `git merge --no-ff`(項目の境界を履歴に残す)→ push → 作業ブランチを削除
+     (ローカルと origin)。
+   - 体系的な作業(フェーズや大きな機能群)が終わり、`develop` が実機で安定して動くことを確認できたら
+     `main` へ `--no-ff` でマージし、注釈付きタグ `stable-N`(`stable-1` からの連番、メッセージに確認した内容)
+     を付けて `git push origin main --tags`。`main` へ直接コミットしない。
+   - 例外: ドキュメントや生成物(COSMIC_GAP.md など)だけの更新はテスト項目にならないので `develop` へ直接
+     コミットしてよい。

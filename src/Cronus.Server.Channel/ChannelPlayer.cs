@@ -36,6 +36,11 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<int, int, ValueTask>? _spawnMob;
     private readonly Func<int>? _mobCount;
     private readonly Func<int, string, int?>? _findPortal;
+    private readonly Func<bool>? _isPartyLeader;
+    private readonly Func<bool>? _startSubway;
+    private readonly Func<bool>? _bonusSubway;
+    private readonly Func<int, string?>? _questData;
+    private readonly Action<int, string>? _setQuestData;
 
     public ChannelPlayer(
         Character character,
@@ -59,7 +64,12 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<ValueTask<bool>>? retrieveMerchant = null,
         Func<int, int, ValueTask>? spawnMob = null,
         Func<int>? mobCount = null,
-        Func<int, string, int?>? findPortal = null)
+        Func<int, string, int?>? findPortal = null,
+        Func<bool>? isPartyLeader = null,
+        Func<bool>? startSubway = null,
+        Func<bool>? bonusSubway = null,
+        Func<int, string?>? questData = null,
+        Action<int, string>? setQuestData = null)
     {
         _character = character;
         _characters = characters;
@@ -83,6 +93,11 @@ public sealed class ChannelPlayer : INpcPlayer
         _spawnMob = spawnMob;
         _mobCount = mobCount;
         _findPortal = findPortal;
+        _isPartyLeader = isPartyLeader;
+        _startSubway = startSubway;
+        _bonusSubway = bonusSubway;
+        _questData = questData;
+        _setQuestData = setQuestData;
     }
 
     public string getName() => _character.Name;
@@ -334,6 +349,16 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public bool retrieveMerchant()
         => _retrieveMerchant is not null && _retrieveMerchant().AsTask().GetAwaiter().GetResult();
+
+    public bool isPartyLeader() => _isPartyLeader?.Invoke() ?? true;
+
+    public bool startSubwayMassacre() => _startSubway?.Invoke() ?? false;
+
+    public bool bonusSubwayMassacre() => _bonusSubway?.Invoke() ?? false;
+
+    public string? getQuestData(int questId) => _questData?.Invoke(questId);
+
+    public void setQuestData(int questId, string data) => _setQuestData?.Invoke(questId, data);
 
     public int getBuddyCapacity() => _character.BuddyCapacity;
 

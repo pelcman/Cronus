@@ -60,6 +60,11 @@ public sealed class NpcConversation : IDisposable
     /// <summary>True once the script has finished (returned, escaped, or errored).</summary>
     public bool IsEnded => _ended;
 
+    /// <summary>The script's failure, when it ended by throwing (a JavaScript error or a host
+    /// exception) rather than by returning or being dismissed. Null otherwise. The engine logs it too;
+    /// the all-scripts exerciser asserts on it.</summary>
+    public Exception? Error { get; internal set; }
+
     // --- Script-facing API (lowercase to match existing OdinMS-style scripts) ---
 
     public void sendNext(string text) => Prompt(ScriptMessageType.Say, () => _dialog.Say(NpcId, text, false, true));

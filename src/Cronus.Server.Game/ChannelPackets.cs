@@ -1692,6 +1692,55 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
+    /// <summary><c>LP_Clock</c> type 2: a countdown of <paramref name="seconds"/> (ports <c>ResCField.Clock(int)</c>).</summary>
+    public byte[] ClockCountdown(int seconds)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.Clock);
+        w.WriteByte(2);
+        w.WriteInt(seconds);
+        return w.ToArray();
+    }
+
+    /// <summary><c>LP_DestroyClock</c>: removes the on-screen clock.</summary>
+    public byte[] DestroyClock() => NewPacket(ServerOpcode.DestroyClock).ToArray();
+
+    /// <summary><c>LP_FieldEffect</c> type 3 (FieldEffect_Screen): a full-screen effect by wz path,
+    /// e.g. "killing/first/start" (ports <c>ResWrapper.showEffect</c>).</summary>
+    public byte[] FieldEffectScreen(string path)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FieldEffect);
+        w.WriteByte(3);
+        w.WriteString(path);
+        return w.ToArray();
+    }
+
+    /// <summary><c>LP_SessionValue</c>: a named string the client's UI reads (the massacre gauge's
+    /// <c>massacre_hit</c> etc.; ports <c>ResCWvsContext.sendString(1, …)</c>).</summary>
+    public byte[] SessionValue(string key, string value)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.SessionValue);
+        w.WriteString(key);
+        w.WriteString(value);
+        return w.ToArray();
+    }
+
+    /// <summary><c>LP_MassacreIncGauge</c>: the massacre energy bar (0–100).</summary>
+    public byte[] MassacreIncGauge(int amount)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MassacreIncGauge);
+        w.WriteInt(amount);
+        return w.ToArray();
+    }
+
+    /// <summary><c>LP_MassacreResult</c>: the result window — rank 0 (best) to 4 (unranked) and the exp paid.</summary>
+    public byte[] MassacreResult(byte rank, int exp)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.MassacreResult);
+        w.WriteByte(rank);
+        w.WriteInt(exp);
+        return w.ToArray();
+    }
+
     /// <summary>Builds <c>LP_CONTIMOVE</c> (ports <c>ResCField_ContiMove.ContiMove</c>: two ops).</summary>
     public byte[] ContiMove(byte first, byte second)
     {

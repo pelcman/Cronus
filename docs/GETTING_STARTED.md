@@ -29,7 +29,7 @@ Cronus — JMS v186, region Jms
 Accounts auto-register on first login. Press Ctrl+C to stop.
 ```
 
-With nothing else configured the server persists accounts/characters to a SQLite file
+With nothing else configured the server persists accounts/characters to MySQL (database `Cronus186` on 127.0.0.1, user root/root, created on first start)
 (`cronus.db` next to the executable) and has no map/NPC data (you can still log in, create a
 character, enter the game, and walk around — the client renders the map from its own wz
 files). Configuration is by environment variables — the easy way is to copy
@@ -39,7 +39,7 @@ change storage, set:
 
 | Env var | Effect |
 |---|---|
-| `CRONUS_DB` | unset = SQLite file (persistent, zero setup); a MySQL connection string switches to MySQL; `memory` = in-process only |
+| `CRONUS_DB` | unset = MySQL from `CRONUS_DB_HOST/PORT/NAME/USER/PASSWORD` (defaults 127.0.0.1/3306/Cronus186/root/root); a full connection string, `sqlite` (file) or `memory` override it |
 | `CRONUS_GAMEDATA` | a `gamedata.db` built from the client's .wz files (`dotnet run --project src/Cronus.Ingest -- <client dir>`) → all maps/NPCs/mobs/quests/strings |
 | `CRONUS_CLIENT` | or just the client folder — `gamedata.db` is built from it on first boot |
 | `CRONUS_WZ` | legacy: a loose wz_xml tree (try the bundled `data/sample-wz`) |
