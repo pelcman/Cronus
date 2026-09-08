@@ -160,14 +160,20 @@ public sealed partial class ChannelHandler : IMassacreHost
 
         if (massacreStage)
         {
-            if (_massacre is null)
+            // A live run follows the player (next stage → new clock); a run that ended (the
+            // result map, or a stage outside its range) is replaced, exactly as the oracle's
+            // Massacre_first creates a fresh Event_PyramidSubway whenever none is attached. The
+            // second sweep crash (910330200, fieldType 23 with an empty onUserEnter) was a
+            // disposed run left attached: no packets went out and the gauge UI died.
+            if (_massacre is { IsDisposed: false })
+            {
+                await _massacre.OnChangeMapAsync(mapId).ConfigureAwait(false);
+            }
+
+            if (_massacre is null || _massacre.IsDisposed)
             {
                 _massacre = new MassacreEvent(this, mapId);
                 await _massacre.StartAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                await _massacre.OnChangeMapAsync(mapId).ConfigureAwait(false);
             }
 
             return;

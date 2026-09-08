@@ -211,6 +211,30 @@ public class MassacreEventTests
         Assert.False(await MassacreEvent.WarpStartSubwayAsync(host));
     }
 
+    [Theory]
+    [InlineData(910320100, -1)]
+    [InlineData(910330200, -1)]
+    [InlineData(926010100, 0)]
+    [InlineData(926012300, 2)]
+    public void TypeOf_SubwayIsMinusOne_PyramidIsItsDifficulty(int mapId, int type)
+        => Assert.Equal(type, MassacreEvent.TypeOf(mapId));
+
+    [Fact]
+    public async Task ArrivingOnA91033Stage_KeepsTheRunGoing()
+    {
+        var host = new FakeHost();
+        using var ev = new MassacreEvent(host, MassacreEvent.SubwayFirstStage);
+        await ev.StartAsync();
+        host.Clear();
+        host.MapId = 910330200;
+
+        await ev.OnChangeMapAsync(910330200);
+
+        Assert.False(ev.IsDisposed);
+        Assert.Equal(Packets.ClockCountdown(179), host.Party[0]);          // stage 2's clock
+        Assert.Contains(host.Owner, p => p.AsSpan().SequenceEqual(Packets.SessionValue("massacre_laststage", "1")));
+    }
+
     [Fact]
     public void Packets_CarryTheOracleBytes()
     {

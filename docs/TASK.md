@@ -92,6 +92,10 @@
       ゲージ)を Cronus が一切送っていなかった。oracle `Event_PyramidSubway` を `MassacreEvent` として移植
       (下記フェーズ4)。MapData に `FieldType` / `OnUserEnter` / `OnFirstUserEnter` / `ForcedReturn` を追加。
       **他の fieldType≠0 のマップも同種の危険がある** → スイープ再開で洗う。
+- [x] **クラッシュ #2: 910330200(同・91033 系の殲滅ステージ)**(2026-09-08, 再開スイープ) — 結果マップ 910330001 を
+      通過した時点でイベントが終了(成功扱い)し、終了済みのまま握っていたため次の fieldType 23 マップで
+      新しいイベントを作らず、パケットが出ずに落ちた。oracle は終了時に null に戻して `Massacre_first` で
+      毎回作り直す → 同じ形に修正(終了済みなら作り直す)。91033 系は地下鉄扱い(`TypeOf`)。
 - [x] **未対応パケットの安全化**(2026-09-08) — クライアントが送る 219 opcode のうち **132** をサーバーは
       黙って捨てていた(if/else 連鎖に default 無し)。`HandleUnhandledAsync` を追加: `*UseRequest` と
       修理/製作/ガシャポン等はインベントリのロック解除(空 InventoryOperation)、マップ転送系は

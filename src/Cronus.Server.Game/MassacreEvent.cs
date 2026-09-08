@@ -68,7 +68,7 @@ public interface IMassacreHost
 public sealed class MassacreEvent : IDisposable
 {
     public const int SubwayFirstStage = 910320100;
-    public const int SubwayLastStageMap = 910320304;
+    public const int SubwayLastStageMap = 910330304;   // the 91033 stages (910330100/200/…) belong to the subway run too
     public const int SubwayLobby = 910320001;
     public const int SubwayResult = 910330001;
     public const int SubwayBonus = 910320010;
@@ -114,8 +114,10 @@ public sealed class MassacreEvent : IDisposable
     public bool IsSubway => _type == -1;
     public bool IsDisposed => _disposed;
 
-    /// <summary>-1 for the subway maps (91032xxxx), else the pyramid difficulty digit.</summary>
-    public static int TypeOf(int mapId) => mapId / 10000 == 91032 ? -1 : mapId % 10000 / 1000;
+    /// <summary>-1 for the subway maps (91032xxxx and the 91033 stages), else the pyramid difficulty digit.
+    /// The oracle only tests 91032; its 91033 stages are reached through the run itself, never by a
+    /// free warp, so the difference never showed there.</summary>
+    public static int TypeOf(int mapId) => mapId / 10000 is 91032 or 91033 ? -1 : mapId % 10000 / 1000;
 
     public static bool IsStageMap(int mapId)
         => (mapId >= SubwayFirstStage && mapId <= SubwayLastStageMap)
