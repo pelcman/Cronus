@@ -6,6 +6,7 @@ using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
 using Cronus.Scripting;
+using Cronus.Server.Core;
 
 namespace Cronus.Server.Channel;
 
@@ -158,8 +159,16 @@ public sealed partial class ChannelHandler
             return;
         }
 
+        // The World records the hand-off and says where the cash shop is.
+        System.Net.IPEndPoint? shop = await _world.MigrateOutAsync(_player.Character.AccountId, _player.Character.Id, WorldState.CashShopChannel, MigrationSource.Channel).ConfigureAwait(false);
+        if (shop is null)
+        {
+            await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 2)).ConfigureAwait(false);
+            return;
+        }
+
         _characters.Save(_player.Character);
-        await session.SendAsync(_packets.MigrateCommand(_cashShopEndpoint.Address, _cashShopEndpoint.Port)).ConfigureAwait(false);
+        await session.SendAsync(_packets.MigrateCommand(shop.Address, shop.Port)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -171,17 +180,17 @@ public sealed partial class ChannelHandler
     private async ValueTask HandleTransferChannelAsync(MapleSession session, PacketReader packet)
     {
         int target = packet.Remaining > 0 ? packet.ReadByte() : -1;
-        if (_player is null || _channelEndpoints is null
-            || target < 0 || target >= _channelEndpoints.Count || target == _channelId
-            || _player.Character.Hp <= 0)
+        System.Net.IPEndPoint? endpoint = _player is null || target < 0 || target == _channelId || _player.Character.Hp <= 0
+            ? null
+            : await _world.MigrateOutAsync(_player.Character.AccountId, _player.Character.Id, target, MigrationSource.Channel).ConfigureAwait(false);
+        if (endpoint is null)
         {
-            // Single-channel server / bad target / dead: decline so the channel menu unblocks.
+            // Single-channel world / unknown target / dead: decline so the channel menu unblocks.
             await session.SendAsync(_packets.TransferChannelReqIgnored(reason: 1)).ConfigureAwait(false);
             return;
         }
 
-        _characters.Save(_player.Character);
-        System.Net.IPEndPoint endpoint = _channelEndpoints[target];
+        _characters.Save(_player!.Character);
         await session.SendAsync(_packets.MigrateCommand(endpoint.Address, endpoint.Port)).ConfigureAwait(false);
     }
 
@@ -314,6 +323,36 @@ public sealed partial class ChannelHandler
         if (summon.Hp <= 0 && _field.RemoveSummon(summon.ObjectId) is not null)
         {
             await _field.BroadcastAsync(_packets.SummonedLeaveField(summon, animated: true)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>In-process world-wide delivery: every field of every channel this process runs.</summary>
+    private async ValueTask BroadcastLocalAsync(byte[] packet, int excludeChannel)
+    {
+        foreach ((FieldRegistry fields, int channelId) in WorldChannels())
+        {
+            if (channelId == excludeChannel)
+            {
+                continue;
+            }
+
+            foreach (Field field in fields.Fields)
+            {
+                await field.BroadcastAsync(packet).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>Drops the connection (a client the World did not send here).</summary>
+    private static async ValueTask CloseSessionAsync(MapleSession session)
+    {
+        try
+        {
+            await session.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // already gone
         }
     }
 }

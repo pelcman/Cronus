@@ -1,12 +1,17 @@
 @echo off
 rem ---------------------------------------------------------------------------
-rem  Cronus - JMS v186 server launcher
+rem  Cronus - JMS v186 server launcher (three processes, like Maple2's start.bat)
 rem
-rem    run-server.bat            build + run (Debug: keeps the existing cronus.db)
-rem    run-server.bat Release    build + run in Release
+rem    run-server.bat            build once, then start World / Login / Channel
+rem    run-server.bat Release    the same in Release
+rem
+rem  World   - the hub the other two register with (gRPC on 127.0.0.1:8585)
+rem  Login   - port 8484: authentication, world/channel list, character select
+rem  Channel - ports 7575.. (CRONUS_CHANNELS of them) + the cash shop: the game
 rem
 rem  Settings come from the .env file next to this script (copy .env.example to
-rem  .env and edit). Close the window or press Ctrl+C to stop the server.
+rem  .env and edit). With Windows Terminal installed the three run as tabs of one
+rem  window; otherwise as three console windows. stop-server.bat stops them all.
 rem ---------------------------------------------------------------------------
 setlocal
 cd /d "%~dp0"
@@ -35,25 +40,37 @@ echo [1/2] Building (%CONFIG%)...
 dotnet build Cronus.slnx -c %CONFIG% --nologo -v quiet
 if errorlevel 1 (
     echo.
-    echo [!] Build failed. If the error mentions a locked file, another Cronus server
-    echo     is still running - close it and try again.
+    echo [!] Build failed. If the error mentions a locked file, a Cronus server
+    echo     is still running - run stop-server.bat and try again.
     goto :halt
 )
 
-echo [2/2] Starting the server...
-echo.
-dotnet run --project src\Cronus.Server.Host -c %CONFIG% --no-build
-set "EXITCODE=%ERRORLEVEL%"
+set "WORLD=src\Cronus.Server.World\bin\%CONFIG%\net10.0\Cronus.Server.World.exe"
+set "LOGIN=src\Cronus.Server.Login\bin\%CONFIG%\net10.0\Cronus.Server.Login.exe"
+set "CHANNEL=src\Cronus.Server.Channel\bin\%CONFIG%\net10.0\Cronus.Server.Channel.exe"
 
+echo [2/2] Starting World, Login and Channel...
 echo.
-if not "%EXITCODE%"=="0" (
-    echo [!] The server exited with code %EXITCODE%. The newest file in
-    echo     src\Cronus.Server.Host\bin\%CONFIG%\net10.0\logs has the details.
+rem The processes run from the repo root so .env and relative data paths resolve.
+rem World first; Login and Channel retry for 15 s until it answers.
+where wt >nul 2>&1
+if %errorlevel%==0 (
+    wt -d "%CD%" --title "Cronus World" cmd /k "%WORLD%" ; ^
+       nt -d "%CD%" --title "Cronus Login" cmd /k "%LOGIN%" ; ^
+       nt -d "%CD%" --title "Cronus Channel" cmd /k "%CHANNEL%"
 ) else (
-    echo [i] Server stopped.
+    start "Cronus World" /d "%CD%" cmd /k "%WORLD%"
+    start "Cronus Login" /d "%CD%" cmd /k "%LOGIN%"
+    start "Cronus Channel" /d "%CD%" cmd /k "%CHANNEL%"
 )
+
+echo [i] Three windows/tabs opened: World, Login, Channel. Point the client at port 8484.
+echo     Logs: src\Cronus.Server.^<World^|Login^|Channel^>\bin\%CONFIG%\net10.0\logs\
+echo     To stop everything: stop-server.bat
+goto :end
 
 :halt
 echo.
 pause
+:end
 endlocal

@@ -4,6 +4,7 @@ using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Network.Packets;
 using Cronus.Server.Game;
+using Cronus.Server.Core;
 using Cronus.Server.Login;
 
 namespace Cronus.Server.Channel;
@@ -39,6 +40,7 @@ public sealed class CashShopHandler : PacketHandlerBase
     private readonly IAccountRepository _accounts;
     private readonly ICommodityProvider _commodities;
     private readonly IReadOnlyList<System.Net.IPEndPoint> _channelEndpoints;
+    private readonly IWorldClient _world;
     private readonly int _nxFloor;
     private readonly int _characterSlots;
 
@@ -63,7 +65,8 @@ public sealed class CashShopHandler : PacketHandlerBase
         ICommodityProvider? commodities = null,
         IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
         int nxFloor = 0,
-        int characterSlots = 3)
+        int characterSlots = 3,
+        IWorldClient? world = null)
     {
         _cs = new CashShopPackets(serverOpcodes, config);
         _packets = new ChannelPackets(serverOpcodes, config);
@@ -71,6 +74,7 @@ public sealed class CashShopHandler : PacketHandlerBase
         _accounts = accounts;
         _commodities = commodities ?? new InMemoryCommodityProvider();
         _channelEndpoints = channelEndpoints ?? Array.Empty<System.Net.IPEndPoint>();
+        _world = world ?? new LocalWorld(_channelEndpoints.Count > 0 ? _channelEndpoints : new[] { new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 7575) });
         _nxFloor = nxFloor;
         _characterSlots = characterSlots;
 
@@ -122,6 +126,14 @@ public sealed class CashShopHandler : PacketHandlerBase
         }
     }
 
+    public override async ValueTask OnDisconnectedAsync(MapleSession session, Exception? error)
+    {
+        if (_character is not null)
+        {
+            await _world.PlayerOfflineAsync(_character.Id, WorldState.CashShopChannel).ConfigureAwait(false);
+        }
+    }
+
     private ValueTask SendBalanceAsync(MapleSession session)
         => session.SendAsync(_cs.QueryCashResult(_account!.NexonPoint, _account.MaplePoint));
 
@@ -136,6 +148,23 @@ public sealed class CashShopHandler : PacketHandlerBase
         Character? character = _characters.Find(characterId);
         if (character is null)
         {
+            return;
+        }
+
+        // The World must have sent this character to the cash shop.
+        MigrateInResult admitted = await _world.MigrateInAsync(characterId, WorldState.CashShopChannel).ConfigureAwait(false);
+        if (!admitted.Ok)
+        {
+            Console.WriteLine($"[cashshop] {character.Name} ({characterId}) not admitted: {admitted.Reason}");
+            try
+            {
+                await session.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // already gone
+            }
+
             return;
         }
 
@@ -170,12 +199,24 @@ public sealed class CashShopHandler : PacketHandlerBase
         _characters.Save(c);
         _accounts.Save(_account!);
 
-        if (_channelEndpoints.Count == 0)
+        // Back to the channel the player came from, through the World; if that channel is gone,
+        // the first one the World still has.
+        System.Net.IPEndPoint? back = await _world.MigrateOutAsync(c.AccountId, c.Id, c.LastChannel, MigrationSource.CashShop).ConfigureAwait(false);
+        if (back is null)
         {
+            WorldView view = await _world.GetWorldAsync().ConfigureAwait(false);
+            if (view.Channels.Count > 0 && view.Channels[0].Id != c.LastChannel)
+            {
+                back = await _world.MigrateOutAsync(c.AccountId, c.Id, view.Channels[0].Id, MigrationSource.CashShop).ConfigureAwait(false);
+            }
+        }
+
+        if (back is null)
+        {
+            Console.WriteLine($"[cashshop] no channel to send {c.Name} back to");
             return;
         }
 
-        System.Net.IPEndPoint back = _channelEndpoints[Math.Clamp(c.LastChannel, 0, _channelEndpoints.Count - 1)];
         await session.SendAsync(_packets.MigrateCommand(back.Address, back.Port)).ConfigureAwait(false);
     }
 

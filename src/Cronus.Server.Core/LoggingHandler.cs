@@ -1,7 +1,7 @@
 using Cronus.Network;
 using Cronus.Network.Packets;
 
-namespace Cronus.Server.Host;
+namespace Cronus.Server.Core;
 
 /// <summary>
 /// Decorates an <see cref="IPacketHandler"/> with console lifecycle/packet logging.

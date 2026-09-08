@@ -67,19 +67,38 @@ public enum AirshipPhase
 public static class AirshipSchedule
 {
     /// <summary>Full cycle length.</summary>
-    public static readonly TimeSpan Cycle = TimeSpan.FromMinutes(15);
+    public static TimeSpan Cycle { get; private set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>How long boarding stays open at the start of each cycle.</summary>
-    public static readonly TimeSpan BoardingWindow = TimeSpan.FromMinutes(10);
+    public static TimeSpan BoardingWindow { get; private set; } = TimeSpan.FromMinutes(10);
 
     /// <summary>Flight length (the rest of the cycle).</summary>
     public static TimeSpan FlightTime => Cycle - BoardingWindow;
 
     /// <summary>How far into the flight the Balrog ship pulls alongside.</summary>
-    public static readonly TimeSpan RaidStart = TimeSpan.FromSeconds(60);
+    public static TimeSpan RaidStart { get; private set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>How long before landing the Balrog ship peels away (raiders vanish).</summary>
-    public static readonly TimeSpan RaidEndBeforeArrival = TimeSpan.FromSeconds(30);
+    public static TimeSpan RaidEndBeforeArrival { get; private set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Applies the timetable the World hands out at registration, so every channel of every
+    /// Channel process runs the same clock. Rejects a boarding window that is not shorter than the
+    /// cycle (the ship would never fly) and keeps the previous values.
+    /// </summary>
+    public static bool Apply(TimeSpan cycle, TimeSpan boarding, TimeSpan raidStart, TimeSpan raidEndBeforeArrival)
+    {
+        if (cycle <= TimeSpan.Zero || boarding <= TimeSpan.Zero || boarding >= cycle)
+        {
+            return false;
+        }
+
+        Cycle = cycle;
+        BoardingWindow = boarding;
+        RaidStart = raidStart;
+        RaidEndBeforeArrival = raidEndBeforeArrival;
+        return true;
+    }
 
     /// <summary>The clock every airship decision reads — swap it in tests to pin a moment.</summary>
     public static Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;

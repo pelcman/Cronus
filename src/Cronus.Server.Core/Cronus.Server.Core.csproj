@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Shared by the three server processes (World / Login / Channel): the gRPC contract between
+    them (proto/world.proto), the World's in-memory state and its service, the client the other
+    two processes use to reach it, and the start-up helpers every process shares (.env, log
+    mirror, opcode tables, the MySQL repositories). Mirrors Maple2.Server.Core.
+  -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cronus.Common\Cronus.Common.csproj" />
+    <ProjectReference Include="..\Cronus.Data\Cronus.Data.csproj" />
+    <ProjectReference Include="..\Cronus.Database\Cronus.Database.csproj" />
+    <ProjectReference Include="..\Cronus.Domain\Cronus.Domain.csproj" />
+    <ProjectReference Include="..\Cronus.Network\Cronus.Network.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.69.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="proto\world.proto" GrpcServices="Both" />
+  </ItemGroup>
+
+</Project>

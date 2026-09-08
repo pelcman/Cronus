@@ -24,7 +24,7 @@ Nexon client expects. This guide is the workflow to close that gap.
 1. **Capture the oracle.** Run the Java JMSv186 server, connect the real client through
    EmuClient, and use RirePE to log the full session: handshake → login → world/char select →
    game entry → a few moves, a chat, an NPC talk. Save the hex dumps per opcode.
-2. **Capture Cronus.** Run `dotnet run --project src/Cronus.Server.Host`, connect the same
+2. **Capture Cronus.** Run `run-server.bat` (World, Login, Channel), connect the same
    client, and log the same steps with RirePE.
 3. **Diff per opcode.** For each server→client packet, compare Cronus' bytes to the oracle's.
    The first differing byte points at the field to fix. Dynamic fields (timestamps, random

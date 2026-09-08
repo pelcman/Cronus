@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The World process (Maple2.Server.World): the gRPC hub the Login and Channel processes
+       register with. Owns the channel list, presence, hand-offs, world-wide broadcasts and the
+       world-common timetables. Loopback only by default (CRONUS_WORLD_BIND / CRONUS_WORLD_PORT). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cronus.Server.Core\Cronus.Server.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore.Server" Version="2.67.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\data\opcodes\*.properties" Link="opcodes\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

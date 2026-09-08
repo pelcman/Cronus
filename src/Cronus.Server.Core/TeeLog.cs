@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Cronus.Server.Host;
+namespace Cronus.Server.Core;
 
 /// <summary>
 /// Mirrors everything written to the console into a per-run log file, so the server always
@@ -13,7 +13,8 @@ public static class TeeLog
 {
     private const int KeepFiles = 20;
 
-    public static string? Attach()
+    /// <param name="role">world / login / channel — part of the file name, so the three processes' logs tell apart.</param>
+    public static string? Attach(string role = "server")
     {
         string? dirSetting = Environment.GetEnvironmentVariable("CRONUS_LOG_DIR");
         if (dirSetting is "0" or "off" or "false")
@@ -30,7 +31,7 @@ public static class TeeLog
 
             Prune(dir);
 
-            string path = Path.Combine(dir, $"cronus-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+            string path = Path.Combine(dir, $"cronus-{role}-{DateTime.Now:yyyyMMdd-HHmmss}.log");
             var file = new StreamWriter(path, append: false, Encoding.UTF8) { AutoFlush = true };
             Console.SetOut(new TeeWriter(Console.Out, file));
             return path;

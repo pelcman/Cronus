@@ -63,18 +63,21 @@ By hand, from the repo root:
 ```powershell
 dotnet build Cronus.slnx -c Release
 dotnet run --project src/Cronus.Ingest -- <client dir>   # -> gamedata.db (once)
-dotnet run --project src/Cronus.Server.Host              # login 8484, channel 7575
+run-server.bat                                           # World + Login + Channel
 ```
 
-You should see:
+(`run-server.bat` = `dotnet run --project src/Cronus.Server.World`, then `…Login`, then
+`…Channel`, each from the repo root; `stop-server.bat` stops all three.) You should see, in
+the Channel window:
 
 ```
-Cronus — JMS v186, region Jms
-  login   : listening on 0.0.0.0:8484
+[world] registered with http://127.0.0.1:8585 as PC-1234: channel(s) 1, 2, heartbeat every 5s
+Cronus Channel — JMS v186, region Jms
   channels: 2 — ports 7575..7576, advertised to clients as 127.0.0.1
   (localhost only — set CRONUS_HOST=<your LAN/public IP> so friends can connect)
-Accounts auto-register on first login. Press Ctrl+C to stop.
 ```
+
+The World's gRPC port (8585) is loopback-only and is **not** opened to the internet.
 
 Confirm it works locally first (Part 4/5 with `127.0.0.1`) before going remote.
 
@@ -106,7 +109,8 @@ environment overrides the file. The one that matters most for remote play is
 | `CRONUS_CHANNELS` | How many game channels to run (1–8, default 2). Channels listen on **consecutive ports** from the channel port (7575, 7576, …) — open/forward all of them. In-game channel change works between them. | `2` |
 | `CRONUS_NX` | The cash-shop allowance: each account is topped up to this NX floor when entering the shop. The cash-shop server listens on the **next port after the channels** (7577 with 2 channels) — open/forward it too. `0` disables the shop. | `300000` |
 | `CRONUS_STARTMAP` | Map new characters spawn in. | `100000000` |
-| *(args)* | `dotnet run --project src/Cronus.Server.Host <loginPort> <channelPort>` overrides the ports. | `8484 7575` |
+| `CRONUS_LOGIN_PORT` / `CRONUS_CHANNEL_PORT` | The Login's port and the first channel port (also the first argument of `…Server.Login` / `…Server.Channel`). | `8484` / `7575` |
+| `CRONUS_WORLD_PORT` / `CRONUS_WORLD_BIND` / `CRONUS_WORLD_URI` | Where the World listens (loopback:8585 by default) and where the other two processes find it. Only change these when the processes run on different machines. | `8585` |
 
 Find your **public IP** by visiting e.g. https://ifconfig.me from the server PC.
 Then edit `.env`:
@@ -118,10 +122,10 @@ CRONUS_HOST=203.0.113.9     # <-- your public IP
 and run the server (PowerShell alternative: `$env:CRONUS_HOST = "..."` before the run):
 
 ```powershell
-dotnet run --project src/Cronus.Server.Host
+run-server.bat
 ```
 
-The startup log should now show `advertised to clients as 203.0.113.9`.
+The Channel window should now show `advertised to clients as 203.0.113.9`.
 
 > Note: a home public IP usually changes over time. For a stable address use a free
 > **Dynamic DNS** hostname (e.g. DuckDNS) — `CRONUS_HOST` accepts a hostname too
@@ -254,14 +258,14 @@ it (all keys kept) and renames it `cronus.db.imported`.
 #          run-server.bat to play; ingest.bat rebuilds gamedata.db after a
 #          client change; port_open.bat / port_close.bat manage the firewall
 
-# Minimal local test (persists to cronus.db automatically, localhost)
-dotnet run --project src/Cronus.Server.Host
+# Minimal local test (MySQL Cronus186 on 127.0.0.1, localhost clients)
+run-server.bat                                   # = World, Login, Channel
 
-# Friends over the internet, with map/NPC data (MySQL default: Cronus186 on 127.0.0.1)
+# Friends over the internet, with map/NPC data
 $env:CRONUS_HOST    = "203.0.113.9"     # your public IP or a DDNS hostname
 $env:CRONUS_WZ      = "data/sample-wz"
 $env:CRONUS_STARTMAP= "100000000"
-dotnet run --project src/Cronus.Server.Host 8484 7575
+run-server.bat
 
 # Optional: a SQLite file (no MySQL on this machine) or pure memory (throwaway tests)
 # $env:CRONUS_DB = "server=localhost;database=cronus;user=root;password=YOURPW"

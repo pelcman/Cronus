@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package cronus.world;
+
+option csharp_namespace = "Cronus.Server.Core.Grpc";
+
+import "google/protobuf/empty.proto";
+
+// The World process (Maple2's Maple2.Server.World): the one process every Login and Channel
+// process registers with. It owns what is shared by the whole world — which channels exist and
+// where, who is online where, the login→channel / channel→channel / cash-shop hand-offs, the
+// world-wide broadcasts, and the world-common timetables (airships). Channel processes receive
+// the World's callbacks over the Subscribe stream instead of hosting a gRPC server of their own.
+service World {
+  // A Channel process announces the channels it listens on; the World assigns their ids.
+  rpc RegisterChannels (RegisterChannelsRequest) returns (RegisterChannelsResponse);
+  // Liveness. `known = false` means the World restarted and the caller must register again.
+  rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse);
+  // The channel list the Login shows (ids, names, endpoints, populations) and the cash shop.
+  rpc Channels (google.protobuf.Empty) returns (ChannelsResponse);
+  // Hand a character to a channel (or the cash shop): records the pending transfer, returns where.
+  rpc MigrateOut (MigrateOutRequest) returns (MigrateOutResponse);
+  // The receiving process asks whether the character was really sent here; marks it online.
+  rpc MigrateIn (MigrateInRequest) returns (MigrateInResponse);
+  // The character's session ended on that channel.
+  rpc PlayerOffline (PlayerOfflineRequest) returns (google.protobuf.Empty);
+  // Deliver one packet to every player on every channel of every Channel process.
+  rpc Broadcast (BroadcastRequest) returns (google.protobuf.Empty);
+  // The World's callbacks to a Channel process: broadcasts, forced disconnects, timetable changes.
+  rpc Subscribe (SubscribeRequest) returns (stream WorldEvent);
+}
+
+message RegisterChannelsRequest {
+  // Stable for the life of the Channel process (machine + pid); re-registering with it is idempotent.
+  string instance_id = 1;
+  // The address clients are told to connect to (CRONUS_HOST), IPv4 as text.
+  string host = 2;
+  // One listening port per channel, in channel order.
+  repeated int32 ports = 3;
+  // The cash-shop listener this process runs, 0 when it has none.
+  int32 cash_shop_port = 4;
+}
+
+message RegisterChannelsResponse {
+  // The world-wide channel id of each port in `ports`, same order.
+  repeated int32 channel_ids = 1;
+  string world_name = 2;
+  int32 heartbeat_seconds = 3;
+  Timetable timetable = 4;
+}
+
+message HeartbeatRequest {
+  string instance_id = 1;
+}
+
+message HeartbeatResponse {
+  bool known = 1;
+}
+
+message ChannelsResponse {
+  string world_name = 1;
+  repeated ChannelInfo channels = 2;
+  // Absent when no Channel process runs a cash shop.
+  Endpoint cash_shop = 3;
+}
+
+message ChannelInfo {
+  int32 id = 1;
+  string name = 2;
+  string host = 3;
+  int32 port = 4;
+  int32 online = 5;
+}
+
+message Endpoint {
+  string host = 1;
+  int32 port = 2;
+}
+
+enum MigrationSource {
+  LOGIN = 0;
+  CHANNEL = 1;
+  CASH_SHOP = 2;
+}
+
+message MigrateOutRequest {
+  int32 account_id = 1;
+  int32 character_id = 2;
+  // Target channel id; -1 is the cash shop.
+  int32 channel = 3;
+  MigrationSource source = 4;
+}
+
+message MigrateOutResponse {
+  bool ok = 1;
+  string host = 2;
+  int32 port = 3;
+  int32 channel = 4;
+  string reason = 5;
+}
+
+message MigrateInRequest {
+  int32 character_id = 1;
+  // The channel the character arrived at; -1 is the cash shop.
+  int32 channel = 2;
+}
+
+message MigrateInResponse {
+  bool ok = 1;
+  int32 account_id = 2;
+  string reason = 3;
+}
+
+message PlayerOfflineRequest {
+  int32 character_id = 1;
+  int32 channel = 2;
+}
+
+message BroadcastRequest {
+  // A complete server packet body (opcode included), sent to every player as-is.
+  bytes packet = 1;
+  // A channel id to leave out, or -1 for none.
+  int32 exclude_channel = 2;
+}
+
+message SubscribeRequest {
+  string instance_id = 1;
+}
+
+message WorldEvent {
+  oneof event {
+    BroadcastRequest broadcast = 1;
+    Timetable timetable = 2;
+    DisconnectPlayer disconnect = 3;
+  }
+}
+
+// Kick a character this process hosts (it logged in again elsewhere).
+message DisconnectPlayer {
+  int32 character_id = 1;
+}
+
+// The airship timetable every channel follows (pure wall-clock arithmetic, so all channels agree).
+message Timetable {
+  int32 cycle_seconds = 1;
+  int32 boarding_seconds = 2;
+  int32 raid_start_seconds = 3;
+  int32 raid_end_before_arrival_seconds = 4;
+  double balrog_chance = 5;
+}

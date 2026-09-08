@@ -6,6 +6,8 @@ using Cronus.Network;
 using Cronus.Network.Packets;
 using Cronus.Scripting;
 
+using Cronus.Server.Core;
+
 namespace Cronus.Server.Channel;
 
 /// <summary>
@@ -49,6 +51,9 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     private readonly IReactorDropProvider _reactorDrops;
     private readonly PortalScriptEngine? _reactorScripts;
     private readonly INpcNameProvider? _npcNames;
+
+    /// <summary>The World: hand-offs to other channels and the cash shop, presence, world-wide broadcasts.</summary>
+    private readonly IWorldClient _world;
 
     /// <summary>Valid hair/face/skin ids from game data, for salon scripts; null without wz.</summary>
     private readonly IStyleProvider? _styles;
@@ -204,7 +209,8 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         IReadOnlyList<System.Net.IPEndPoint>? channelEndpoints = null,
         IReadOnlyList<FieldRegistry>? worldFields = null,
         System.Net.IPEndPoint? cashShopEndpoint = null,
-        IAccountRepository? accounts = null)
+        IAccountRepository? accounts = null,
+        IWorldClient? world = null)
     {
         _accounts = accounts;
         _packets = new ChannelPackets(serverOpcodes, config);
@@ -237,6 +243,17 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _channelEndpoints = channelEndpoints;
         _worldFields = worldFields;
         _cashShopEndpoint = cashShopEndpoint;
+        if (world is null)
+        {
+            // No World process (tests, single-process use): this process is the whole world.
+            var local = new LocalWorld(
+                _channelEndpoints is { Count: > 0 } ? _channelEndpoints : new[] { new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 7575) },
+                cashShopEndpoint);
+            local.Broadcast = BroadcastLocalAsync;
+            world = local;
+        }
+
+        _world = world;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
         _channelId = channelId;
@@ -607,6 +624,11 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _sweep = null;
         EndMassacreOnDisconnect();
 
+        if (_player is not null)
+        {
+            await _world.PlayerOfflineAsync(_player.Character.Id, _channelId).ConfigureAwait(false);
+        }
+
         if (_player is not null && _field is not null)
         {
             if (sweeping)
@@ -735,6 +757,15 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         Character? character = _characters.Find(characterId);
         if (character is null)
         {
+            return;
+        }
+
+        // The World must have sent this character here (login, channel change or cash-shop return).
+        MigrateInResult admitted = await _world.MigrateInAsync(characterId, _channelId).ConfigureAwait(false);
+        if (!admitted.Ok)
+        {
+            Console.WriteLine($"[channel{_channelId}] {character.Name} ({characterId}) not admitted: {admitted.Reason}");
+            await CloseSessionAsync(session).ConfigureAwait(false);
             return;
         }
 

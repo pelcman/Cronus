@@ -1,13 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- The Login process (Maple2.Server.Login): authentication, the world/channel list it gets
+       from the World, character select, and the hand-off to a channel through the World. -->
   <PropertyGroup>
-    <OutputType>Library</OutputType>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Cronus.Common\Cronus.Common.csproj" />
     <ProjectReference Include="..\Cronus.Domain\Cronus.Domain.csproj" />
     <ProjectReference Include="..\Cronus.Network\Cronus.Network.csproj" />
+    <ProjectReference Include="..\Cronus.Server.Core\Cronus.Server.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\data\opcodes\*.properties" Link="opcodes\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

@@ -177,7 +177,7 @@ Maple2 は `start.bat` 1つで **World / Login / Web / Game** を別プロセス
 登録し(`ChannelClientLookup`)、World からの呼び戻し(`channel.proto`)を受ける。Login は World に
 ハートビートを送り、チャンネル一覧と移送トークンを World から得る。
 
-Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + キャッシュショップ + 全 tick
+Cronus は 2026-09-09 まで `Cronus.Server.Host` 1プロセスに Login + N チャンネル + キャッシュショップ + 全 tick
 (Mob 湧き・回復・バフ期限・飛行船)を載せ、パーティ/ギルド/メッセンジャー等はプロセス内の
 レジストリを共有している。同じ形に寄せる:
 
@@ -204,11 +204,20 @@ Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + 
 | `appsettings.json` + Serilog + Autofac | 設定・ログ・DI | `.env` → `appsettings.json`(+ `.env` 上書き)、Serilog、Microsoft DI(Autofac は不要) |
 | `Maple2.Server.Web` / `Trigger` / `Navmeshes` / `LuaFunctions` | MS2 固有(HTTP 配信・トリガー・3D ナビ) | **採用しない**(v186 は 2D、HTTP 無し。スクリプトは Jint のまま) |
 
-- [ ] **段階 A: プロセス分割** — `Cronus.Server.World` 新設、gRPC(Grpc.AspNetCore / Grpc.Net.Client、
-      `src/Cronus.Server.Core/proto/*.proto` を Maple2 に倣って定義)で Login↔World↔Game を接続。
-      World へ移すもの: 飛行船運航、ボス湧きタイマー、チャンネル登録、移送トークン、お知らせ/拡声器の
-      全体放送。Game は起動時に World へ登録+ハートビート。`run-server.bat` は Maple2 の `start.bat`
-      と同じ「ビルド1回 → `wt` タブ3つ(World / Login / Game)、無ければ `start` 窓」に。`stop-server.bat` 追加。
+- [x] **段階 A: プロセス分割**(2026-09-09、`feat/process-split`) — `Cronus.Server.Core`(`proto/world.proto`、
+      `WorldState`、`WorldGrpcService`、`GrpcWorldClient`、`ServerBootstrap`)と `Cronus.Server.World`(gRPC ハブ、
+      既定 127.0.0.1:8585)を新設し、`Cronus.Server.Login` / `Cronus.Server.Channel` をそれぞれプロセス(exe)化、
+      `Cronus.Server.Host` を削除。World が持つもの: チャンネル登録(ID 割当・5 秒ハートビート・15 秒で失効)、
+      在席(誰がどのチャンネルか)、移送(`MigrateOut` で記録 → 受け側が `MigrateIn` で照合、30 秒で失効、
+      World が送っていないクライアントは切断、二重ログインは古い方を切断)、全体放送(`/notice all` は
+      World 経由で全プロセスへ)、飛行船時刻表(World が配り Channel が `AirshipSchedule.Apply`)。
+      Channel→World の呼び戻しは Channel 側に gRPC サーバーを立てず `Subscribe` ストリームで受ける。
+      World 不達時: Login/Channel は 3 回(15 秒)再試行して終了コード 3、稼働中の不達は「チャンネル無し/移送不可」に
+      退化してログ 1 行(復帰も 1 行)。`run-server.bat` は Maple2 の `start.bat` と同じ「ビルド 1 回 → `wt` タブ 3 つ
+      (World / Login / Channel)、無ければ `start` 窓」、`stop-server.bat` 追加。テスト: `Cronus.Server.Core.Tests`
+      (WorldState 8 件 + Kestrel 実ホストの gRPC 往復 3 件)。World 無しで作った Handler は `LocalWorld`(同じ状態を
+      プロセス内で)を持つので既存テストは無変更。残: ボス湧きタイマー(対象がまだ無い)、`_worldFields` の
+      「index = channel id」前提(段階 B で World に移す)。
 - [ ] **段階 B: 共有レジストリの World 移設** — パーティ・ギルド・バディ・メッセンジャー・`/find`・
       ささやきをプロセス内共有から World の gRPC サービス+Game への呼び戻しへ。これで
       1 Game プロセス=1 チャンネルにでき、チャンネル単位の再起動が可能になる。
@@ -217,8 +226,9 @@ Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + 
       `CRONUS_DB=sqlite|memory|<接続文字列>` は代替。MySQL 不達時は黙ってメモリに落ちず終了コード2で停止。
       初回の MySQL 起動時に隣の `cronus.db` を1回だけ取り込み(`DatabaseCopy`、キー保持)`cronus.db.imported` に改名。
       `setup.bat` が接続情報を尋ねて `.env` に記録し、mysql.exe があれば接続確認。
-- [ ] 完了基準: 1 bat で 3 プロセスが立ち上がり、bot スイート 99 ステップ(チャンネル移動・
-      キャッシュショップ往復を含む)がそのまま通る。
+- [x] 完了基準: 1 bat で 3 プロセスが立ち上がり、bot スイート 99 ステップ(チャンネル移動・
+      キャッシュショップ往復を含む)がそのまま通る — 2026-09-09 に 99/99(World 経由の移送で `/gender` の
+      同一チャンネル再入場も通過)。実機ログインの確認は develop マージ後に依頼。
 
 ## フェーズ2: ワールド(マップ・NPC・ポータル・リアクター)を 100% に
 

@@ -152,7 +152,7 @@ def main():
             logfile = args[i]; i += 1
 
     if logfile is None:
-        logs = glob.glob(os.path.join(ROOT, "src", "Cronus.Server.Host", "bin", "*", "net*", "logs", "*.log"))
+        logs = glob.glob(os.path.join(ROOT, "src", "Cronus.Server.Channel", "bin", "*", "net*", "logs", "*.log"))
         if not logs:
             print("no logs found"); return 1
         logfile = max(logs, key=os.path.getmtime)

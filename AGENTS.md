@@ -91,24 +91,34 @@ Details in CLAUDE.md §2. Key points only:
 
 ---
 
-## 3. Architecture Diagram (initial, single process)
+## 3. Architecture Diagram (three processes since 2026-09-09, Maple2's shape)
 
 ```
-                    ┌─────────────────────────────────────┐
-   JMS v186 client  │            Cronus.Server.Host        │
-   (+ EmuClient) ───┼──► Login (8484) ──┐                  │
-                    │                    ├─► World registry │
-                    │    Channel (7575)──┘   (in-process)   │
-                    └──────────┬──────────────────┬─────────┘
-                               │                  │
-                     Cronus.Network        Cronus.Database (MySQL)
-                    (crypto/codec/opcode)   Cronus.Data (wz_xml)
-                               │
-                        Cronus.Scripting (Jint)
+                       ┌──────────────────────┐   gRPC (loopback 8585)
+   JMS v186 client ──► │ Cronus.Server.Login  │ ◄──────────────┐
+   (+ EmuClient)       │   :8484              │                │
+        │              └──────────────────────┘        ┌───────┴──────────────┐
+        │  LP_SelectCharacterResult (ip:port)          │ Cronus.Server.World  │
+        ▼                                              │  channel registry,   │
+   ┌──────────────────────────────┐   register /       │  presence, hand-offs,│
+   │ Cronus.Server.Channel        │   heartbeat /      │  broadcasts, airship │
+   │   channels :7575.. + cash    │ ◄────────────────► │  timetable           │
+   │   shop, field ticks          │   Subscribe stream └──────────────────────┘
+   └──────────────┬───────────────┘
+                  │
+   Cronus.Server.Core (proto/world.proto, WorldState, GrpcWorldClient, ServerBootstrap)
+   Cronus.Network (crypto/codec/opcode) · Cronus.Database (MySQL Cronus186) · Cronus.Data (gamedata.db) · Cronus.Scripting (Jint)
 ```
 
-Project dependencies: `Host → Server.* → {Network, Database, Data, Scripting} → Common`.
-`Network` depends only on `Common` and knows nothing about game logic (layer separation).
+`run-server.bat` builds once and starts World → Login → Channel (`wt` tabs, else windows);
+`stop-server.bat` stops them. Every hand-off between processes (login → channel, channel →
+channel, channel ↔ cash shop) is recorded in the World (`MigrateOut`) and checked by the
+receiver (`MigrateIn`); a client the World did not send is dropped. Handlers built without a
+World (tests) get a `LocalWorld` with the same state in-process.
+
+Project dependencies: `{World, Login, Channel} → Server.Core → {Network, Database, Data} → Common`;
+`Channel → Server.Game → Server.Login` (encoders). `Network` depends only on `Common` and knows
+nothing about game logic (layer separation).
 
 ---
 
@@ -134,9 +144,11 @@ Cronus/
 │  ├─ Cronus.Database/           (EF Core + Pomelo/MySQL; CronusDbContext, DbAccountRepository)
 │  ├─ Cronus.Data/               (later — wz_xml loader)
 │  ├─ Cronus.Scripting/          (later — Jint)
-│  ├─ Cronus.Server.Login/       (LoginHandler, LoginService, LoginPackets, World)
-│  ├─ Cronus.Server.Channel/     (later)
-│  └─ Cronus.Server.Host/        (runnable console host)
+│  ├─ Cronus.Server.Core/        (proto/world.proto, WorldState, WorldGrpcService, GrpcWorldClient, ServerBootstrap)
+│  ├─ Cronus.Server.World/       (process: the gRPC hub)
+│  ├─ Cronus.Server.Login/       (process: LoginHandler, LoginService, LoginPackets)
+│  ├─ Cronus.Server.Channel/     (process: ChannelHandler.*, CashShopHandler)
+│  ├─ Cronus.Server.Game/        (fields, parties, inventory, buffs, airships … the game systems)
 ├─ tests/
 │  ├─ Cronus.Network.Tests/
 │  ├─ Cronus.Server.Login.Tests/
