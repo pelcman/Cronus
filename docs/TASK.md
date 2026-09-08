@@ -225,9 +225,16 @@ Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + 
 [NPC_COVERAGE.md](NPC_COVERAGE.md) 基準(2026-09-07 時点: 1,447体中 800対応 = 55%、none 647)。
 `python DevTools/npc_coverage.py` で再生成。
 
-- [ ] **現行スクリプトと Cosmic のスクリプトの突き合わせ**(本格着手の最初の作業) — `scripts/{npc,quest,portal,reactor}`
-      と `Reference/Cosmic/scripts/*` を ID/役割で突き合わせ、Cosmic にあって Cronus に無いもの(NPC 会話・クエスト・
-      ポータル・リアクター・イベント)を一覧化して順に実装する(ID・数値は v186 データで置換、`[DEV]` 規約)。
+- [~] **現行スクリプトと Cosmic のスクリプトの突き合わせ**(2026-09-09 一覧化完了) — `DevTools/cosmic_gap.py` が
+      Cosmic と Cronus を ID/名前で突き合わせ、**JMS v186 クライアントに実在するものだけ**(画像のある NPC・
+      Check.img にあるクエスト・マップが使うポータルスクリプト名・マップに置かれたリアクター)に絞った作業表
+      [COSMIC_GAP.md](COSMIC_GAP.md)(生成物)を出す。現在値: NPC 418(うち JMS マップに配置 304)、
+      クエストスクリプト 220、ポータル 324(+Cosmic にも無い JMS 固有 208)、リアクター 235、
+      JMS マップを参照するイベントスクリプト 85。配置マップ数の多い順に並ぶので上から潰す。
+      最上位: 武陵道場(NPC 2091005 素公パンダ 39 マップ + ポータル dojang_next/dojang_up 70 マップ)、
+      モンスターカーニバル(シュピゲルマン 2042000〜2042007 + 助手)、月うさぎ 9001102(ヘネシス PQ、19 町)、
+      帰還碑/名誉の石碑 9040004/9040005、忍耐の森 1061007、timeQuest(思い出の道 16)、rankRoom/tutorialNPC
+      (職業別施設)。実装のたびに再生成して残数を更新(ID・数値は v186 データで置換、`[DEV]` 規約)。
 - [ ] **NPC 100%** — none 647 → 0。順序: ビクトリア → オシリア → ジパング/自由市場 → イベント
       NPC(期限切れイベントは `[DEV]` 案内)。会話の流れは JMS 原文(Riremito/jms_scripts)→ Cosmic
       `scripts/npc`(708) の順で参照。
