@@ -200,6 +200,11 @@ public sealed partial class ChannelHandler
             // Server authority: bound the client-reported damage to what a legit pre-BB client
             // can produce (per-line cap) rather than trusting target.TotalDamage verbatim.
             long damage = DamageValidator.ValidatedDamage(target);
+            if (damage == 0 && _massacre is not null)
+            {
+                await _massacre.OnMissAsync().ConfigureAwait(false); // the massacre gauge counts whiffs
+            }
+
             if (ZakumGate.IsBody(mob.TemplateId) && ZakumGate.BodyProtected(_field.Mobs))
             {
                 continue; // the body ignores everything while an arm still stands
@@ -222,6 +227,10 @@ public sealed partial class ChannelHandler
                 await UpdateQuestKillsAsync(session, mob.TemplateId).ConfigureAwait(false);
                 await DropLootAsync(mob).ConfigureAwait(false);
                 await SpawnRevivesAsync(mob).ConfigureAwait(false);
+                if (_massacre is not null)
+                {
+                    await _massacre.OnKillAsync().ConfigureAwait(false);
+                }
             }
         }
     }

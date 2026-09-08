@@ -1527,6 +1527,11 @@ public sealed partial class ChannelHandler
         _player!.Character, _characters, session, _packets,
         warp: (map, portal) => MovePlayerToMapAsync(session, map, portal),
         findPortal: (map, name) => _maps.GetMap(map)?.FindPortal(name)?.Id,
+        isPartyLeader: () => ((IMassacreHost)this).IsPartyLeader,
+        startSubway: TryStartSubwayMassacre,
+        bonusSubway: TryEnterSubwayBonus,
+        questData: id => ((IMassacreHost)this).GetQuestData(id),
+        setQuestData: (id, data) => ((IMassacreHost)this).SetQuestData(id, data),
         openShop: shopId => _shops.GetShop(shopId) is { } s ? OpenShopAsync(session, s) : ValueTask.CompletedTask,
         openStorage: () => OpenStorageAsync(session),
         openParcel: () => session.SendAsync(_packets.ParcelOpen(fromNpc: true)),
@@ -1813,6 +1818,7 @@ public sealed partial class ChannelHandler
 
         await session.SendAsync(_packets.SetFieldChangeMap(player.Character, _channelId)).ConfigureAwait(false);
         await SendFieldClockAsync(session, targetMapId).ConfigureAwait(false);
+        await OnFieldEnteredAsync(targetMapId).ConfigureAwait(false);
 
         Field newField = _fields.Get(targetMapId);
         foreach (FieldPlayer other in newField.Players)

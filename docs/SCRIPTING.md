@@ -126,3 +126,15 @@ See `scripts/portal/example.js`.
 - `setJob`, `gain*`, `warp`, and `heal` are **server-authoritative**: the change is applied and the
   client is told, so scripts can't be spoofed by the client.
 - If `CRONUS_SCRIPTS` is unset, NPC dialogs and portal scripts are simply disabled.
+
+## Party and event helpers (2026-09-08)
+
+| Call | Meaning |
+|---|---|
+| `player.isPartyLeader()` | true when the player leads their party or has none |
+| `player.startSubwayMassacre()` | Kerning Subway massacre: warps the party (level check is the script's job) into a free stage-1 instance; false when all five are busy |
+| `player.bonusSubwayMassacre()` | the 999 bonus carriage for this player alone; false when all are busy |
+| `player.getQuestData(id)` / `player.setQuestData(id, text)` | a quest record's custom data — the counters the oracle keeps in `getQuestNAdd(id).getCustomData()` (e.g. 7662 = subway kills) |
+
+The massacre itself (gauge, timers, stage warps, ranks) is server code (`MassacreEvent`, a port of the
+oracle's `Event_PyramidSubway`); the NPC only picks the instance. See `scripts/npc/1052115.js`.

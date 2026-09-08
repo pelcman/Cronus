@@ -425,6 +425,52 @@ public sealed class Field
         }
     }
 
+    /// <summary>
+    /// The oracle's <c>resetFully</c> for an event instance about to be handed to a fresh party:
+    /// runtime summons go, every spawn-point mob is back alive at full HP, the drops are gone.
+    /// Meant for an empty map (nothing is announced).
+    /// </summary>
+    public void ResetForEvent()
+    {
+        lock (_gate)
+        {
+            _mobs.RemoveAll(m => m.MobTime < 0);
+            foreach (FieldMob mob in _mobs)
+            {
+                mob.Respawn();
+            }
+
+            _drops.Clear();
+        }
+    }
+
+    /// <summary><c>map.respawn(true)</c>: every dead mob that would respawn later becomes due now, for the respawn tick to bring back.</summary>
+    public void RespawnDeadNow(long nowTick)
+    {
+        foreach (FieldMob mob in Mobs)
+        {
+            if (mob.IsDead && mob.RespawnAtTick != 0)
+            {
+                mob.RespawnAtTick = nowTick;
+            }
+        }
+    }
+
+    /// <summary>Live mobs of one template on the field.</summary>
+    public int CountMobs(int templateId)
+    {
+        int n = 0;
+        foreach (FieldMob mob in Mobs)
+        {
+            if (mob.TemplateId == templateId && !mob.IsDead)
+            {
+                n++;
+            }
+        }
+
+        return n;
+    }
+
     /// <summary>Finds a spawned NPC by its runtime object id.</summary>
     public FieldNpc? FindNpc(int objectId)
     {

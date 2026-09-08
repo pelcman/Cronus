@@ -122,6 +122,20 @@ public interface INpcPlayer
     /// <summary>How many of the item the player carries across all stacks.</summary>
     int itemQuantity(int itemId);
 
+    /// <summary>True when the player leads their party, or has none.</summary>
+    bool isPartyLeader();
+
+    /// <summary>Kerning Subway massacre: puts the party into a free stage-1 instance. False when all five are busy.</summary>
+    bool startSubwayMassacre();
+
+    /// <summary>Kerning Subway bonus (the 999 carriage) for this player alone. False when all are busy.</summary>
+    bool bonusSubwayMassacre();
+
+    /// <summary>A quest record's custom data (the oracle's <c>getQuestNAdd(id).getCustomData()</c>), or null.</summary>
+    string? getQuestData(int questId);
+
+    void setQuestData(int questId, string data);
+
     /// <summary>Opens the NPC shop with the given shop id (no-op when unknown).</summary>
     void openShop(int shopId);
 

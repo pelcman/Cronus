@@ -85,6 +85,13 @@
       (実クライアント起動→ログイン→`/sweep`→死活監視→記録→再起動→`resume`)。RunAsInvoker で UAC 回避・
       強制終了可を確認、ログイン画面の座標は校正済み。**残: ワールド/キャラ選択の座標校正**(stage1/stage2)。
       スイープ中に切断されたキャラは救済マップに保存し `# crash? <map>` を progress に記録(実装済み)。
+- [x] **クラッシュ #1: 910320100 ホコリだらけのプラットフォーム(地下鉄殲滅 1ステージ)**(2026-09-08) —
+      初回スイープ(TunaYukke、2171/3264 マップ通過)で唯一落ちた地点。入場3秒後に切断。原因はマップの
+      `info/fieldType 23`(Massacre 特殊フィールド): クライアントのゲージ UI が入場時に受け取るはずの
+      パケット(カウントダウン Clock、`killing/first/*` 画面エフェクト、`massacre_*` セッション値6つ、
+      ゲージ)を Cronus が一切送っていなかった。oracle `Event_PyramidSubway` を `MassacreEvent` として移植
+      (下記フェーズ4)。MapData に `FieldType` / `OnUserEnter` / `OnFirstUserEnter` / `ForcedReturn` を追加。
+      **他の fieldType≠0 のマップも同種の危険がある** → スイープ再開で洗う。
 - [x] **未対応パケットの安全化**(2026-09-08) — クライアントが送る 219 opcode のうち **132** をサーバーは
       黙って捨てていた(if/else 連鎖に default 無し)。`HandleUnhandledAsync` を追加: `*UseRequest` と
       修理/製作/ガシャポン等はインベントリのロック解除(空 InventoryOperation)、マップ転送系は
@@ -207,6 +214,14 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
 - [ ] **PQ**(存在は wz で確認して列挙): カニングシティ PQ(999番の客車 — 林次長 1052115 の
       `[DEV]` 案内が入口)、ルディブリアム PQ、オルビス PQ、LMPQ、ヘネシス PQ、アモリア PQ、
       ピラミッド PQ。
+- [x] **地下鉄殲滅 / ピラミッド殲滅(Massacre)**(2026-09-08) — oracle `Event_PyramidSubway` の逐語移植
+      `MassacreEvent`(`IMassacreHost` 越しにセッション・パーティ・フィールドへ): エネルギーバー(毎秒 −5/−10、
+      討伐 +5、ミス −5、0 で失敗)、ステージ計時(地下鉄 180 秒、ピラミッド 240/300 秒)と次ステージへの
+      空きインスタンス探索(5面)、結果マップでのランク(討伐数)と経験値表、記録クエスト 7662/7760、
+      パケット5種(ClockCountdown / FieldEffectScreen / SessionValue / MassacreIncGauge / MassacreResult)。
+      入口 NPC 林次長 1052115 は Cosmic の流れで実装(台詞は創作)。**残**: ピラミッドの入口 NPC、
+      スキル使用時の `onSkillUse`(ピラミッドのスキル回数)、イェティ湧きの実機確認、
+      勲章 1142141 / クエスト 29931 の v186 データ確認。テスト 11 件。
 - [ ] **モンスターカーニバル 1/2**。
 - [ ] **遠征隊** — ホーンテイル入口(道標/標識は現在 `[DEV]` 簡易入場)、人数・時間管理。
 - [ ] **ボス** — エリアボス群(Cosmic `AreaBoss*`)、ザクム(祭壇の完全フロー)、ホーンテイル、

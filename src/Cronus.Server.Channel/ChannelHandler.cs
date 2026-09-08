@@ -605,6 +605,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         bool sweeping = _sweep is not null;
         _sweep?.Cancel();
         _sweep = null;
+        EndMassacreOnDisconnect();
 
         if (_player is not null && _field is not null)
         {
@@ -772,6 +773,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         await session.SendAsync(_packets.FamilyInfoResult()).ConfigureAwait(false);
         await session.SendAsync(_packets.BroadcastSlideClear()).ConfigureAwait(false);
         await SendFieldClockAsync(session, character.MapId).ConfigureAwait(false);
+        await OnFieldEnteredAsync(character.MapId).ConfigureAwait(false);
 
         // Join the field: tell the newcomer about everyone already there, and vice versa.
         Field field = _fields.Get(character.MapId);

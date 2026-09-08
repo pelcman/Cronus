@@ -241,6 +241,16 @@ public class NpcScriptEngineTests
 
         public int itemQuantity(int itemId) => Items.GetValueOrDefault(itemId);
 
+        public bool isPartyLeader() => true;
+
+        public bool startSubwayMassacre() => false;
+
+        public bool bonusSubwayMassacre() => false;
+
+        public string? getQuestData(int questId) => null;
+
+        public void setQuestData(int questId, string data) { }
+
         public void openShop(int shopId) => OpenedShops.Add(shopId);
 
         public void openStorage() => StorageOpened = true;
