@@ -963,6 +963,7 @@ public sealed partial class ChannelHandler
                 AppendSweepLine("# done");
                 Console.WriteLine("[sweep] done — every map entered without losing the client");
                 await ReplyAsync(session, "sweep: 全マップ完了。落ちたマップはありません").ConfigureAwait(false);
+                _sweep = null;   // finished: a later logout is a logout, not a crash
             }
         }
         catch (OperationCanceledException)

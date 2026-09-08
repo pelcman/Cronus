@@ -187,6 +187,7 @@ public sealed partial class ChannelHandler
                 AppendSweepLine("# npcs done");
                 Console.WriteLine("[sweep] npcs done — every scripted NPC's dialog rendered without losing the client");
                 await ReplyAsync(session, "sweep: 全 NPC 会話完了。落ちた NPC はありません").ConfigureAwait(false);
+                _sweep = null;   // finished: a later logout is a logout, not a crash
             }
         }
         catch (OperationCanceledException)
