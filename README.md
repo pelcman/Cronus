@@ -106,7 +106,7 @@ Requires .NET SDK 10.x. All optional integrations degrade gracefully when unset:
 
 | Env var | Effect |
 |---|---|
-| `CRONUS_DB` | MySQL connection string; else in-memory accounts/characters. Schema auto-creates and auto-migrates on upgrades |
+| `CRONUS_DB` | unset = MySQL (`Cronus186` from `CRONUS_DB_HOST/PORT/NAME/USER/PASSWORD`, created on first start); a connection string, `sqlite` or `memory` override it. Schema auto-creates and auto-migrates on upgrades |
 | `CRONUS_WZ` | wz_xml data root; enables maps/NPCs/mobs/items/skills/quests |
 | `CRONUS_SCRIPTS` | script root (`{root}/npc/{id}.js`, `portal/`, `quest/`); enables scripted content |
 | `CRONUS_DROPS` | `drop_data.sql` dump; enables mob item/meso drop tables |

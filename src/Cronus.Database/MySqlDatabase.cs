@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using MySqlConnector;
 
 namespace Cronus.Database;
 
@@ -11,11 +12,37 @@ namespace Cronus.Database;
 /// </summary>
 public static class MySqlDatabase
 {
+    /// <summary>The database every Cronus process shares by default (decided 2026-09-08).</summary>
+    public const string DefaultDatabaseName = "Cronus186";
+
+    /// <summary>A connection string from its parts (the CRONUS_DB_HOST/PORT/NAME/USER/PASSWORD settings).</summary>
+    public static string BuildConnectionString(string host, int port, string database, string user, string password)
+        => new MySqlConnectionStringBuilder
+        {
+            Server = host,
+            Port = (uint)port,
+            Database = database,
+            UserID = user,
+            Password = password,
+        }.ConnectionString;
+
+    /// <summary>"host:port/database as user" for logs — never the password.</summary>
+    public static string Describe(string connectionString)
+    {
+        var b = new MySqlConnectionStringBuilder(connectionString);
+        return $"{b.Server}:{b.Port}/{b.Database} as {b.UserID}";
+    }
+
     public static Func<CronusDbContext> CreateFactory(string connectionString)
     {
+        // Probe the server version without naming the database: on a first start the database
+        // does not exist yet, and EnsureCreated (below) is what creates it.
+        var probe = new MySqlConnectionStringBuilder(connectionString) { Database = string.Empty };
+        ServerVersion version = ServerVersion.AutoDetect(probe.ConnectionString);
+
         DbContextOptions<CronusDbContext> options =
             new DbContextOptionsBuilder<CronusDbContext>()
-                .UseMySql(connectionString, ServerVersion.AutoDetect(connectionString))
+                .UseMySql(connectionString, version)
                 .Options;
 
         return () => new CronusDbContext(options);

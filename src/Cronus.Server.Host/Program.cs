@@ -481,47 +481,104 @@ static void WarnUnresolved(string which, OpcodeTable table)
 
 static (IAccountRepository, ICharacterRepository, IStorageRepository?, IKeymapRepository?, IGuildRepository?, IHiredMerchantRepository?, IParcelRepository) CreateRepositories()
 {
-    string? connectionString = Environment.GetEnvironmentVariable("CRONUS_DB");
+    string? mode = Environment.GetEnvironmentVariable("CRONUS_DB");
 
     // Explicit opt-out: CRONUS_DB=memory keeps everything in process (wiped on restart).
-    if (string.Equals(connectionString, "memory", StringComparison.OrdinalIgnoreCase))
+    if (string.Equals(mode, "memory", StringComparison.OrdinalIgnoreCase))
     {
         Console.WriteLine("[db] CRONUS_DB=memory — using in-memory stores (not persistent).");
         return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null, new InMemoryParcelRepository());
     }
 
-    // A connection string selects MySQL (multi-process / production deployments).
-    if (!string.IsNullOrWhiteSpace(connectionString))
+    // Explicit opt-in: CRONUS_DB=sqlite — one file next to the host (or CRONUS_DB_FILE), for a
+    // machine without MySQL. Not the default any more: several server processes will share the
+    // store (docs/TASK.md フェーズ1b), which a file database does not do well.
+    if (string.Equals(mode, "sqlite", StringComparison.OrdinalIgnoreCase))
     {
+        string dbFile = LegacySqlitePath();
         try
         {
-            Func<CronusDbContext> factory = MySqlDatabase.CreateFactory(connectionString);
-            MySqlDatabase.EnsureCreated(factory);
-            Console.WriteLine("[db] Connected to MySQL; accounts, characters, storage, keymaps, and guilds are persistent.");
+            Func<CronusDbContext> factory = SqliteDatabase.CreateFactory(dbFile);
+            SqliteDatabase.EnsureCreated(factory);
+            Console.WriteLine($"[db] SQLite at {dbFile} — accounts, characters, storage, keymaps, and guilds are persistent.");
             return DbRepositories(factory);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[db] MySQL unavailable ({ex.Message}); falling back to in-memory stores.");
+            Console.WriteLine($"[db] SQLite unavailable ({ex.Message}); falling back to in-memory stores.");
             return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null, new InMemoryParcelRepository());
         }
     }
 
-    // Default: a SQLite file next to the host — zero-setup persistence, so a plain
-    // `Cronus.Server.Host.exe` run survives restarts. CRONUS_DB_FILE overrides the path.
-    string dbFile = Environment.GetEnvironmentVariable("CRONUS_DB_FILE")
-        ?? Path.Combine(AppContext.BaseDirectory, "cronus.db");
+    // Default: MySQL — the standard store since 2026-09-08, one database (Cronus186) shared by
+    // every server process. CRONUS_DB may carry a full connection string; otherwise it is built
+    // from CRONUS_DB_HOST / PORT / NAME / USER / PASSWORD (127.0.0.1 / 3306 / Cronus186 / root / root).
+    // The database and its tables are created on first start; an old cronus.db next to the host
+    // is imported once into the empty database.
+    string connectionString = !string.IsNullOrWhiteSpace(mode)
+        ? mode
+        : MySqlDatabase.BuildConnectionString(
+            Environment.GetEnvironmentVariable("CRONUS_DB_HOST") ?? "127.0.0.1",
+            int.TryParse(Environment.GetEnvironmentVariable("CRONUS_DB_PORT"), out int dbPort) ? dbPort : 3306,
+            Environment.GetEnvironmentVariable("CRONUS_DB_NAME") ?? MySqlDatabase.DefaultDatabaseName,
+            Environment.GetEnvironmentVariable("CRONUS_DB_USER") ?? "root",
+            Environment.GetEnvironmentVariable("CRONUS_DB_PASSWORD") ?? "root");
+    string where = MySqlDatabase.Describe(connectionString);
     try
     {
-        Func<CronusDbContext> factory = SqliteDatabase.CreateFactory(dbFile);
-        SqliteDatabase.EnsureCreated(factory);
-        Console.WriteLine($"[db] SQLite at {dbFile} — accounts, characters, storage, keymaps, and guilds are persistent.");
+        Func<CronusDbContext> factory = MySqlDatabase.CreateFactory(connectionString);
+        MySqlDatabase.EnsureCreated(factory);
+        Console.WriteLine($"[db] MySQL {where} — accounts, characters, storage, keymaps, guilds, merchants and parcels are persistent.");
+        ImportLegacySqlite(factory);
         return DbRepositories(factory);
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[db] SQLite unavailable ({ex.Message}); falling back to in-memory stores.");
-        return (new InMemoryAccountRepository(), new InMemoryCharacterRepository(), null, null, null, null, new InMemoryParcelRepository());
+        // No silent fallback: a server that quietly ran in memory would lose everyone's progress.
+        Console.WriteLine($"[db] MySQL に接続できません ({where}): {ex.Message}");
+        Console.WriteLine("[db] MySQL 8 を起動し、.env の CRONUS_DB_HOST / CRONUS_DB_PORT / CRONUS_DB_USER / CRONUS_DB_PASSWORD を確認してください。");
+        Console.WriteLine("[db] MySQL 無しで動かすには CRONUS_DB=sqlite（ファイル保存）または CRONUS_DB=memory（保存しない）。");
+        Environment.Exit(2);
+        throw;
+    }
+}
+
+static string LegacySqlitePath()
+    => Environment.GetEnvironmentVariable("CRONUS_DB_FILE") ?? Path.Combine(AppContext.BaseDirectory, "cronus.db");
+
+/// <summary>
+/// First start on MySQL: when the database is still empty and the old SQLite save is next to the
+/// host, copy everything across once (keys intact) and rename the file so it is never imported
+/// twice. A failure leaves the file alone and the MySQL database empty.
+/// </summary>
+static void ImportLegacySqlite(Func<CronusDbContext> target)
+{
+    string path = LegacySqlitePath();
+    if (!File.Exists(path))
+    {
+        return;
+    }
+
+    using (CronusDbContext db = target())
+    {
+        if (db.Accounts.Any())
+        {
+            return;
+        }
+    }
+
+    try
+    {
+        Func<CronusDbContext> source = SqliteDatabase.CreateFactory(path);
+        DatabaseCopy.Report report = DatabaseCopy.CopyAll(source, target);
+        SqliteDatabase.ReleaseFiles();
+        string moved = path + ".imported";
+        File.Move(path, moved, overwrite: true);
+        Console.WriteLine($"[db] imported the SQLite save into MySQL: {report}. The file is now {Path.GetFileName(moved)} (kept as a backup).");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[db] SQLite import skipped ({ex.Message}); MySQL starts empty and {path} is untouched.");
     }
 }
 

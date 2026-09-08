@@ -147,9 +147,11 @@ Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + 
 - [ ] **段階 B: 共有レジストリの World 移設** — パーティ・ギルド・バディ・メッセンジャー・`/find`・
       ささやきをプロセス内共有から World の gRPC サービス+Game への呼び戻しへ。これで
       1 Game プロセス=1 チャンネルにでき、チャンネル単位の再起動が可能になる。
-- [ ] **DB の同時アクセス** — 複数プロセスが同じ `cronus.db`(SQLite)に書く形になるため、
-      WAL モード+書き手の分担(キャラ保存は Game、アカウントは Login、World は自前テーブル)を決めるか、
-      Maple2 と同じ MySQL 既定に切り替えるかを段階 A の前に決める。
+- [x] **DB は MySQL 既定**(2026-09-08 決定・実装) — 既定 DB 名 **`Cronus186`**(127.0.0.1:3306、root/root、
+      初回起動で作成、テーブルは追加型マイグレーション)。`CRONUS_DB_HOST/PORT/NAME/USER/PASSWORD` で変更、
+      `CRONUS_DB=sqlite|memory|<接続文字列>` は代替。MySQL 不達時は黙ってメモリに落ちず終了コード2で停止。
+      初回の MySQL 起動時に隣の `cronus.db` を1回だけ取り込み(`DatabaseCopy`、キー保持)`cronus.db.imported` に改名。
+      `setup.bat` が接続情報を尋ねて `.env` に記録し、mysql.exe があれば接続確認。
 - [ ] 完了基準: 1 bat で 3 プロセスが立ち上がり、bot スイート 99 ステップ(チャンネル移動・
       キャッシュショップ往復を含む)がそのまま通る。
 
@@ -158,6 +160,9 @@ Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + 
 [NPC_COVERAGE.md](NPC_COVERAGE.md) 基準(2026-09-07 時点: 1,447体中 800対応 = 55%、none 647)。
 `python DevTools/npc_coverage.py` で再生成。
 
+- [ ] **現行スクリプトと Cosmic のスクリプトの突き合わせ**(本格着手の最初の作業) — `scripts/{npc,quest,portal,reactor}`
+      と `Reference/Cosmic/scripts/*` を ID/役割で突き合わせ、Cosmic にあって Cronus に無いもの(NPC 会話・クエスト・
+      ポータル・リアクター・イベント)を一覧化して順に実装する(ID・数値は v186 データで置換、`[DEV]` 規約)。
 - [ ] **NPC 100%** — none 647 → 0。順序: ビクトリア → オシリア → ジパング/自由市場 → イベント
       NPC(期限切れイベントは `[DEV]` 案内)。会話の流れは JMS 原文(Riremito/jms_scripts)→ Cosmic
       `scripts/npc`(708) の順で参照。
@@ -250,6 +255,7 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
   (`DevTools/edited_exe`)を削除、空の `DevTools/cronus-wz` と 8/22〜9/7 の古いログを削除、
   役目を終えた文書(旧 TASK、入場クラッシュ診断、デプロイリハーサル記録、AGENTS.md の
   マイルストーン/バックログ 780 行)を削除
+- MySQL 既定化(2026-09-08): `Cronus186`、SQLite 保存の1回取り込み、setup.bat の接続手順
   (外部プレイの2本 9/7 21:08・9/8 12:13 は棚卸し用に保持)。
 
 ---
