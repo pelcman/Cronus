@@ -55,6 +55,10 @@ public sealed class PortalScriptEngine
 
     public PortalScriptEngine(IPortalScriptSource scripts) => _scripts = scripts;
 
+    /// <summary>Raised when a script throws (script name, error). The engine also logs it; the
+    /// all-scripts exerciser subscribes to fail the run.</summary>
+    public event Action<string, Exception>? ScriptFailed;
+
     /// <summary>Runs the named portal script with <paramref name="player"/>; a no-op if none exists.</summary>
     public void Run(string scriptName, object player)
     {
@@ -71,13 +75,16 @@ public sealed class PortalScriptEngine
             engine.Execute(code);
             engine.Invoke("start");
         }
-        catch (JavaScriptException)
+        catch (JavaScriptException ex)
         {
-            // Script bug: ignore rather than break the portal.
+            // Script bug: don't break the portal — but never silently.
+            Console.WriteLine($"[script] portal {scriptName}: {ex.Message} (line {ex.Location.Start.Line})");
+            ScriptFailed?.Invoke(scriptName, ex);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Any other failure (including a warp error) shouldn't crash the handler.
+            Console.WriteLine($"[script] portal {scriptName}: {ex.GetType().Name}: {ex.Message}");
+            ScriptFailed?.Invoke(scriptName, ex);
         }
     }
 }

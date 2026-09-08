@@ -241,6 +241,12 @@ public class NpcScriptEngineTests
 
         public int itemQuantity(int itemId) => Items.GetValueOrDefault(itemId);
 
+        public void warpPortal(int mapId, string portalName) => warp(mapId, 0);
+        public bool airshipBoarding() => true;
+        public int airshipMinutes() => 5;
+        public void openParcel() { }
+        public int parcelCount() => 0;
+        public int receiveParcels() => 0;
         public bool isPartyLeader() => true;
 
         public bool startSubwayMassacre() => false;

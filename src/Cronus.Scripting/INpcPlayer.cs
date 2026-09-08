@@ -83,6 +83,24 @@ public interface INpcPlayer
     /// <summary>Warps the player to a specific spawn portal of another map.</summary>
     void warp(int mapId, int portal);
 
+    /// <summary>Warps to the portal named <paramref name="portalName"/> (the wz <c>pn</c>), or portal 0 when the map has no such portal.</summary>
+    void warpPortal(int mapId, string portalName);
+
+    /// <summary>Airship stations: true while boarding is open for the next departure.</summary>
+    bool airshipBoarding();
+
+    /// <summary>Airship stations: minutes until the next departure.</summary>
+    int airshipMinutes();
+
+    /// <summary>Opens the parcel (宅配) send window.</summary>
+    void openParcel();
+
+    /// <summary>Parcels waiting for this character.</summary>
+    int parcelCount();
+
+    /// <summary>Hands over the waiting parcels; returns how many were delivered.</summary>
+    int receiveParcels();
+
     /// <summary>Adds (or removes) ability points, floored at zero, and notifies the client.</summary>
     void gainAp(int amount);
 
