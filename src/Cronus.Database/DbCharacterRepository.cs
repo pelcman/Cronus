@@ -1,5 +1,6 @@
 using Cronus.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Cronus.Database;
 
@@ -68,6 +69,19 @@ public sealed class DbCharacterRepository : ICharacterRepository
 
     public void Save(Character character)
     {
+        // The autosave tick and the character's own session both save this live object. Two
+        // contexts racing on the same rows produced "expected to affect 1 row(s), but actually
+        // affected 0 row(s)" — one save had already deleted an item row the other still meant to
+        // update — and the exception took the session down (2026-09-07, external play). One save
+        // at a time per character; the recovery below covers the rest.
+        lock (character)
+        {
+            SaveLocked(character);
+        }
+    }
+
+    private void SaveLocked(Character character)
+    {
         using CronusDbContext db = _contextFactory();
 
         // Update() upserts the character and every item still on the entity, but it cannot know
@@ -88,7 +102,22 @@ public sealed class DbCharacterRepository : ICharacterRepository
             db.Entry(new InventoryItem { Id = id, ItemId = 0, CharacterId = character.Id }).State = EntityState.Deleted;
         }
 
-        db.SaveChanges();
+        try
+        {
+            db.SaveChanges();
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // A row this save meant to update or delete is already gone (a stale delete). The
+            // in-memory object is the truth: re-insert what still exists on it, forget the rest,
+            // and save again rather than failing the caller.
+            foreach (EntityEntry entry in ex.Entries)
+            {
+                entry.State = entry.State == EntityState.Deleted ? EntityState.Detached : EntityState.Added;
+            }
+
+            db.SaveChanges();
+        }
     }
 
     public bool Delete(int characterId)
