@@ -33,6 +33,7 @@ which is what keeps `/help`, the usage replies, and this document describing the
 | `/pos` | Show your position and map id |
 | `/conti state|move <a> [b]` | Send one airship effect packet to yourself (live bisect of the unverified values) |
 | `/sweep maps [from] [to] [seconds]` · `/sweep resume [seconds]` · `/sweep stop` | Automated crash inventory: warp through every map; on a crash the last line of `sweep-progress.txt` names the map |
+| `/talk <npc id>` | Start that NPC's script conversation here (real effects) |
 | `/sweep npcs [from npc] [seconds per page]` | Stream every scripted NPC's dialog to this client (render-crash inventory); on a crash the last `npc` line names it |
 | `/gmmove [on|off|<speed×> [<jump×> [<attack×>]]]` | GM movement: speed/jump/attack-speed multipliers, no damage taken, no skill MP cost or cooldown |
 

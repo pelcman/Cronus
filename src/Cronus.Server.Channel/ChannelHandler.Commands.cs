@@ -163,6 +163,33 @@ public sealed partial class ChannelHandler
                 break;
             }
 
+            case "talk" when parts.Length >= 2 && int.TryParse(parts[1], out int talkNpcId):
+            {
+                // /talk <npcId>: start that NPC's script here, wherever the NPC actually stands. The
+                // real dialog and the real script player — warps, items, quests all happen. The bot
+                // exerciser drives every scripted NPC through this; it is handy by hand too.
+                if (_npcScripts is null)
+                {
+                    await ReplyAsync(session, NpcConversation.DevPrefix + "NPC スクリプトが読み込まれていません").ConfigureAwait(false);
+                    break;
+                }
+
+                if (_conversation is { IsEnded: false })
+                {
+                    _conversation.End();
+                }
+
+                NpcConversation? talk = _npcScripts.Start(talkNpcId, new ChannelNpcDialog(session, _packets), CreateScriptPlayer(session));
+                if (talk is null)
+                {
+                    await ReplyAsync(session, $"talk: NPC {talkNpcId} にはスクリプトがありません").ConfigureAwait(false);
+                    break;
+                }
+
+                _conversation = talk;
+                break;
+            }
+
             case "sweep":
             {
                 // Crash inventory without a human list (docs/TASK.md フェーズ0): warp this client

@@ -39,6 +39,7 @@ internal static class CommandTable
         new("dbgwarp", "/dbgwarp", "地域 → マップ を選んでワープするウィンドウを開きます（IDを覚える必要はありません）。", CategoryMove),
         new("pos", "/pos", "現在の座標とマップIDを表示します。", CategoryMove),
         new("gmmove", "/gmmove [on|off|<速度倍率> [<ジャンプ倍率> [<攻撃速度倍率>]]]", "GM移動モード。速度・ジャンプ・攻撃速度の倍率指定、被ダメージ無効、スキルのMP消費・クールタイム無し。引数なしで切替。", CategoryCharacter),
+        new("talk", "/talk <NPC ID>", "その NPC のスクリプト会話をその場で開始します（本物の効果あり: ワープ・アイテム・クエスト）。bot の全 NPC 走査が使う入口。", CategorySystem),
         new("sweep", "/sweep maps [開始ID] [終了ID] [秒] | resume [秒] | npcs [開始NPC] [秒/ページ] | stop", "クラッシュ棚卸しの自動巡回。maps は全マップに順番にワープ、npcs は全スクリプト NPC の会話をこのクライアントに流す。直前に sweep-progress.txt へ記録し、落ちたら最終行が原因。", CategorySystem),
         new("conti", "/conti state|move <値1> [値2]", "飛行船の演出パケットを自分にだけ試験送信します（LP_CONTISTATE / LP_CONTIMOVE の実機切り分け用）。", CategorySystem),
 
