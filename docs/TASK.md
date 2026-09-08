@@ -123,6 +123,22 @@ Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + 
 | **Game** | チャンネル(フィールド・戦闘・NPC・PQ インスタンス) | `Cronus.Server.Channel` + `Cronus.Server.Game`。段階 A は 1 プロセスで N チャンネル、段階 B で 1 プロセス 1 チャンネル。キャッシュショップは Game に同居 |
 | (Web) | MS2 のクライアント用 HTTP | **不要**(v186 クライアントは HTTP を使わない) |
 
+**Maple2 → Cronus のプロジェクト対応(倣う部分と、MS2 固有で捨てる部分)**:
+
+| Maple2 | 役割 | Cronus(既存 → 目標) |
+|---|---|---|
+| `Maple2.Server.Core` | Session(Pipelines)・`PacketRouter`(`PacketHandler<T>` を DI で集めて opcode 表に)・gRPC proto・DI モジュール | `Cronus.Network` + 新設 `Cronus.Server.Core`(proto・共通ハンドラ基底・DI モジュール)。`ChannelHandler.*` の巨大 partial を opcode ごとの `PacketHandler<ChannelSession>` に分割 |
+| `Maple2.Server.World` | 共有状態の Lookup/Manager(Party/Guild/Buddy/GroupChat/PlayerInfo/GlobalPortal/WorldBoss)+ `WorldService`(gRPC) | 新設 `Cronus.Server.World` |
+| `Maple2.Server.Login` | 認証・キャラ選択、World とハートビート | `Cronus.Server.Login` を単独ホスト化 |
+| `Maple2.Server.Game` | `GameServer`+`Manager/*`(Buff/Quest/Skill/Shop/Trade/Party…)+`Session`+`PacketHandlers` | `Cronus.Server.Channel`(セッション/ハンドラ)+ `Cronus.Server.Game`(Manager 群) |
+| `Maple2.Model` | Enum/Game/Metadata/Error/Validators | `Cronus.Domain` + `Cronus.Common` |
+| `Maple2.Database` | EF Core コンテキスト・Migrations・Storage | `Cronus.Database` |
+| `Maple2.File.Ingest` | クライアントデータ → DB 取り込み | `Cronus.Ingest`(gamedata.db、既に同型) |
+| `Maple2.Server.DebugGame` | デバッグ用クライアント | `Cronus.Debug.Bot` |
+| `Maple2.Server.Tests` | テスト | `tests/*` |
+| `appsettings.json` + Serilog + Autofac | 設定・ログ・DI | `.env` → `appsettings.json`(+ `.env` 上書き)、Serilog、Microsoft DI(Autofac は不要) |
+| `Maple2.Server.Web` / `Trigger` / `Navmeshes` / `LuaFunctions` | MS2 固有(HTTP 配信・トリガー・3D ナビ) | **採用しない**(v186 は 2D、HTTP 無し。スクリプトは Jint のまま) |
+
 - [ ] **段階 A: プロセス分割** — `Cronus.Server.World` 新設、gRPC(Grpc.AspNetCore / Grpc.Net.Client、
       `src/Cronus.Server.Core/proto/*.proto` を Maple2 に倣って定義)で Login↔World↔Game を接続。
       World へ移すもの: 飛行船運航、ボス湧きタイマー、チャンネル登録、移送トークン、お知らせ/拡声器の
