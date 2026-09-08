@@ -17,10 +17,23 @@ An open-source private-server emulator for the Japanese version of MapleStory
   [Riremito/JMSv186](https://github.com/Riremito/JMSv186) (Java)
 - Client-side tools: [EmuClient](https://github.com/Riremito/EmuClient) /
   [RirePE](https://github.com/Riremito/RirePE) (reused as-is)
+- Content reference: [P0nk/Cosmic](https://github.com/P0nk/Cosmic) (Java, GMS v83) for
+  party quests, events, bosses and quest/reactor/NPC flows the JMS reference lacks —
+  never for bytes or opcodes (v83 differs from v186)
+- Architecture template: [MS2Community/Maple2](https://github.com/MS2Community/Maple2) (C#)
 
 Using the existing Java implementation JMSv186 as a "reference oracle", Cronus
 reimplements the protocol, crypto, and game logic in C# — to fully understand and own
 them as our own asset.
+
+## Direction (2026-09-08)
+
+The in-group milestone is reached: external players connected over the public IP. The goal
+is now a **full rebuild of the JMS v186 game** that takes the best of three projects: Cosmic's
+content completeness and easy setup-to-operations, JMSv186's byte-exact protocol fidelity,
+and Maple2's modern .NET architecture. Two rules follow: nothing may crash the client, and
+anything not yet implemented shows a `[DEV]` message instead of failing. The plan is
+[docs/TASK.md](docs/TASK.md). Docker support was dropped the same day.
 
 ## Current status
 
@@ -124,15 +137,6 @@ dotnet run --project src/Cronus.Server.Host
 
 New characters start in that map; the NPC (9010000) runs
 [scripts/npc/9010000.js](scripts/npc/9010000.js) when clicked.
-
-### Docker (with MySQL persistence)
-
-```bash
-docker compose up --build
-```
-
-Starts MySQL + the host (login 8484, channel 7575) with persistent accounts/characters.
-Mount a wz_xml tree into the `cronus` service and set `CRONUS_WZ` to enable maps/NPCs.
 
 ## License
 

@@ -233,7 +233,7 @@ In-game commands use the `/` prefix — `/warp <mapId|player>`, `/dbgwarp`, `/st
 
 With the default SQLite storage, everything (accounts, characters, items, guilds,
 storage, keymaps) lives in **one file**: `cronus.db` next to the server executable
-(or wherever `CRONUS_DB_FILE` points; the `cronus-save` volume in Docker).
+(or wherever `CRONUS_DB_FILE` points).
 
 - **Back up**: stop the server (Ctrl+C), copy `cronus.db` somewhere safe, restart.
   Copying while stopped is the safe way — a copy taken mid-write can be torn.

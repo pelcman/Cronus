@@ -18,6 +18,15 @@ following upstream projects. We gratefully credit their authors.
   injection (localhost redirect, CRC bypass). Used as-is; not modified by Cronus.
 - **[Riremito/RirePE](https://github.com/Riremito/RirePE)** — packet editor used for
   differential packet verification between the Java oracle and Cronus.
+- **[P0nk/Cosmic](https://github.com/P0nk/Cosmic)** — Java. A GMS v83 server emulator in the
+  HeavenMS / OdinMS lineage, licensed **AGPL-3.0**. Since 2026-09-08 Cronus uses it as its
+  **content and game-logic reference** (party quests, events, area bosses, quest / reactor /
+  NPC scripts, the id handbook and feature docs) for everything JMSv186 does not cover.
+  Packet layouts, opcodes and crypto are never taken from it (v83 differs from v186). Files
+  that port or derive from Cosmic say so in their header. A local clone lives at
+  `Reference/Cosmic`, outside this repository.
+- **[MS2Community/Maple2](https://github.com/MS2Community/Maple2)** — C#. The architecture
+  template (layering, dependency injection, EF Core, services). No code is copied from it.
 
 ## Licensing consequence
 

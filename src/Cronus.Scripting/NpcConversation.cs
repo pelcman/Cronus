@@ -70,6 +70,15 @@ public sealed class NpcConversation : IDisposable
 
     public void sendOk(string text) => Prompt(ScriptMessageType.Say, () => _dialog.Say(NpcId, text, false, false));
 
+    /// <summary>The marker every player-visible text about unimplemented, simplified or invented
+    /// content must carry (project rule since 2026-09-08, docs/TASK.md): players can tell
+    /// "not built yet" from "broken", and the remaining count is the progress figure.</summary>
+    public const string DevPrefix = "[DEV] ";
+
+    /// <summary>One OK page that says this content is not implemented (or is a stand-in), prefixed
+    /// with <see cref="DevPrefix"/>. Say what is missing.</summary>
+    public void sendDev(string text) => sendOk(DevPrefix + text);
+
     public bool askYesNo(string text)
     {
         Prompt(ScriptMessageType.AskYesNo, () => _dialog.AskYesNo(NpcId, text));

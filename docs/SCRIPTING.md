@@ -31,6 +31,7 @@ straight-line code.
 | Call | Shows | Returns |
 |---|---|---|
 | `cm.sendOk(text)` | text with an OK button | — |
+| `cm.sendDev(text)` | like `sendOk`, prefixed with `[DEV] `; **mandatory** for anything unimplemented, simplified or invented (say what is missing) | — |
 | `cm.sendNext(text)` | text with a Next arrow | — |
 | `cm.sendPrev(text)` | text with a Prev arrow | — |
 | `cm.sendNextPrev(text)` | text with Prev + Next | — |

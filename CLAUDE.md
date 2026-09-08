@@ -22,6 +22,12 @@ reimplemented in **C# / .NET**.
     injection (localhost redirect, CRC bypass). Verified on JMS v164/165/186/188/194.
   - [Riremito/RirePE](https://github.com/Riremito/RirePE) — packet editor / analyzer.
     The core tool for **differential packet verification** between the C# and Java builds.
+- **Content reference (since 2026-09-08)**: [P0nk/Cosmic](https://github.com/P0nk/Cosmic)
+  (Java, GMS v83, AGPL-3.0), cloned at `Reference/Cosmic`. Used for content flow (party
+  quests, events, area bosses, quest/reactor/NPC logic) that JMSv186 lacks. Never a source
+  for bytes, opcodes or crypto (v83 differs from v186); every id and number is re-checked
+  against v186 data.
+- **Architecture template**: [MS2Community/Maple2](https://github.com/MS2Community/Maple2) (C#).
 
 ### Why rewrite Java into C#
 
@@ -59,6 +65,11 @@ the thing that hurts most in a rewrite — subtle behavioral drift.
 6. **Follow modern .NET idioms.** Don't port MINA; rewrite the async I/O on
    `System.IO.Pipelines`. Use the DI / structured-logging / EF Core stack that
    Maple2 (MS2Community) established as a template.
+
+7. **Fidelity first, and never crash.** Since 2026-09-08 the goal is a full rebuild of the
+   v186 game (see [docs/TASK.md](docs/TASK.md)). Unimplemented or simplified content must show
+   a `[DEV]` message (`NpcConversation.DevPrefix`, `cm.sendDev`) and do nothing harmful:
+   never silence, never a client crash.
 
 ### Networking design reference (conceptual)
 

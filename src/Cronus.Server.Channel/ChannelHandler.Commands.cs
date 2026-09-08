@@ -833,7 +833,7 @@ public sealed partial class ChannelHandler
     {
         try
         {
-            cm.sendOk("（今は特に話すことはないようだ……）");
+            cm.sendDev("このNPCはまだ実装されていません。\r\n（今は特に話すことはないようだ……）");
         }
         catch (ConversationEndedException)
         {
