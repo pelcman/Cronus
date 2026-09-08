@@ -26,7 +26,8 @@ following upstream projects. We gratefully credit their authors.
   that port or derive from Cosmic say so in their header. A local clone lives at
   `Reference/Cosmic`, outside this repository.
 - **[MS2Community/Maple2](https://github.com/MS2Community/Maple2)** — C#. The architecture
-  template (layering, dependency injection, EF Core, services). No code is copied from it.
+  template (layering, dependency injection, EF Core, services, the World / Login / Game process
+  split over gRPC). No code is copied from it. A local clone lives at `Reference/Maple2`.
 
 ## Licensing consequence
 

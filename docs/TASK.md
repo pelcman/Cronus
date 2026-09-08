@@ -15,7 +15,7 @@
 |---|---|---|
 | **Riremito/JMSv186**(Java, JMS v186) | パケットのバイト配置・送信タイミング・enum/効果ID(**唯一のオラクル**)、JMS 原文スクリプト | v131〜302 の多バージョン同居、MINA |
 | **P0nk/Cosmic**(Java, GMS v83, `Reference/Cosmic`) | コンテンツの網羅(PQ・イベント・エリアボス・クエスト・リアクター・NPC の流れ)、設定ファイル1枚+handbook の運用の簡単さ、feature_list の粒度 | パケット・opcode・暗号(v83≠v186)、GMS 固有の ID/マップ |
-| **MS2Community/Maple2**(C#) | レイヤ分離・DI・EF Core・サービス構成(保守しやすい骨格) | コードそのもの(MS2 用) |
+| **MS2Community/Maple2**(C#, `Reference/Maple2`) | レイヤ分離・DI・EF Core・サービス構成、**Login / World / Game のプロセス分割と gRPC 連携**、1 bat で全プロセス起動(`start.bat`) | コードそのもの(MS2 用)、Web サーバー(v186 クライアントには不要) |
 
 **転換の理由**: 公開IPで外部プレイヤーと遊べるところまでは 2026-09-08 に確認できたが、
 多くのコンテンツでクライアントがクラッシュした。「最小限の遊べる」は基準として低すぎた。
@@ -101,6 +101,41 @@
       プレイヤー向け文言にも `[DEV]` を入れる(料金だけ創作のものは対象外)。
 - [ ] 未実装の機能に触れる応答(ギルドBBS・アライアンス・道場・遠征隊・PQ 入口)に `[DEV]`。
 - [ ] `npc_coverage.py` に「`[DEV]` 表示あり」の列を足し、`[DEV]` 残数を進捗指標にする。
+
+## フェーズ1b: プロセス分割(Maple2 型の基盤、フェーズ0の棚卸し後に着手)
+
+Maple2 は `start.bat` 1つで **World / Login / Web / Game** を別プロセスとして起動する
+(Windows Terminal の `wt ... ; nt ...` でタブ分割、無ければ `start` で別窓)。World が
+ワールド共通の状態(パーティ・ギルド・バディ・チャット経路・プレイヤー所在・ワールドボス湧き・
+グローバルポータル=イベント・ログイン→ゲームの移送トークン・ロック)を gRPC(`Maple2.Server.Core/proto`:
+`world.proto` / `channel.proto` / `login.proto` / `global.proto`)で持ち、Game は各チャンネルを World に
+登録し(`ChannelClientLookup`)、World からの呼び戻し(`channel.proto`)を受ける。Login は World に
+ハートビートを送り、チャンネル一覧と移送トークンを World から得る。
+
+Cronus は今 `Cronus.Server.Host` 1プロセスに Login + N チャンネル + キャッシュショップ + 全 tick
+(Mob 湧き・回復・バフ期限・飛行船)を載せ、パーティ/ギルド/メッセンジャー等はプロセス内の
+レジストリを共有している。同じ形に寄せる:
+
+| プロセス | 役割 | Cronus での中身 |
+|---|---|---|
+| **Login** | 認証・キャラ選択・チャンネル案内 | `Cronus.Server.Login`(既存)を単独ホスト化。チャンネル一覧と移送トークンは World から |
+| **World** | ワールド共通イベントと共有状態 | 新規 `Cronus.Server.World`: 飛行船運航(`AirshipService` の時刻線)、エリア/ワールドボス湧きタイマー、パーティ・ギルド・バディ・メッセンジャー・`/find`・拡声器・お知らせの経路、プレイヤー所在、チャンネル登録・ポート割当、移送トークン |
+| **Game** | チャンネル(フィールド・戦闘・NPC・PQ インスタンス) | `Cronus.Server.Channel` + `Cronus.Server.Game`。段階 A は 1 プロセスで N チャンネル、段階 B で 1 プロセス 1 チャンネル。キャッシュショップは Game に同居 |
+| (Web) | MS2 のクライアント用 HTTP | **不要**(v186 クライアントは HTTP を使わない) |
+
+- [ ] **段階 A: プロセス分割** — `Cronus.Server.World` 新設、gRPC(Grpc.AspNetCore / Grpc.Net.Client、
+      `src/Cronus.Server.Core/proto/*.proto` を Maple2 に倣って定義)で Login↔World↔Game を接続。
+      World へ移すもの: 飛行船運航、ボス湧きタイマー、チャンネル登録、移送トークン、お知らせ/拡声器の
+      全体放送。Game は起動時に World へ登録+ハートビート。`run-server.bat` は Maple2 の `start.bat`
+      と同じ「ビルド1回 → `wt` タブ3つ(World / Login / Game)、無ければ `start` 窓」に。`stop-server.bat` 追加。
+- [ ] **段階 B: 共有レジストリの World 移設** — パーティ・ギルド・バディ・メッセンジャー・`/find`・
+      ささやきをプロセス内共有から World の gRPC サービス+Game への呼び戻しへ。これで
+      1 Game プロセス=1 チャンネルにでき、チャンネル単位の再起動が可能になる。
+- [ ] **DB の同時アクセス** — 複数プロセスが同じ `cronus.db`(SQLite)に書く形になるため、
+      WAL モード+書き手の分担(キャラ保存は Game、アカウントは Login、World は自前テーブル)を決めるか、
+      Maple2 と同じ MySQL 既定に切り替えるかを段階 A の前に決める。
+- [ ] 完了基準: 1 bat で 3 プロセスが立ち上がり、bot スイート 99 ステップ(チャンネル移動・
+      キャッシュショップ往復を含む)がそのまま通る。
 
 ## フェーズ2: ワールド(マップ・NPC・ポータル・リアクター)を 100% に
 
@@ -205,7 +240,7 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
 
 ## 進行ルール
 
-1. 着手順は **0 → 1 → 2/3 並行 → 4 → 5/6 → 7**。8 は随時、9 は維持。
+1. 着手順は **0 → 1 → 1b(プロセス分割) → 2/3 並行 → 4 → 5/6 → 7**。8 は随時、9 は維持。
 2. 1コミット=1まとまり。チェック更新はそのコミットに含める。
 3. クライアントを落としうる変更は、コミット前にテスト+botスイート、コミット後に
    実機確認を依頼する(「◯◯を踏んでみて」と明示)。
