@@ -199,10 +199,15 @@ root `CLIENT_RENDERING_FIX.md`.
 
 ## 8. Agent Operating Rules
 
-- **Commit frequently and push** (per meaningful unit). Branching since 2026-09-08: `main` is the
-  stable line (pivot point `INITIAL COMMIT 2`); day-to-day work happens on `develop`, larger
-  pieces on `feature/<topic>` / `fix/<topic>` branches cut from `develop` and merged back; `main`
-  receives `develop` once it has been verified on the real client.
+- **Commit frequently and push** (per meaningful unit). Branch flow since 2026-09-09: one branch
+  per **test item** (a verifiable piece of work), `feat/<item>` or `fix/<item>` cut from `develop`;
+  every commit of that item goes there and is pushed there. The item is done when its tests are
+  green (`dotnet test`, the bot suite, and a real-client check when the change can crash the
+  client); then `git merge --no-ff` into `develop`, push, delete the branch (local and origin).
+  When a systematic body of work is finished and `develop` runs stably on the real client, merge
+  `develop` into `main` (`--no-ff`) and add an annotated tag `stable-N` (next after `stable-1`,
+  message = what was verified), `git push origin main --tags`. Never commit to `main` directly.
+  Docs-only / generated-report-only updates may go straight to `develop`.
 - Any change touching byte boundaries must be committed **together with its test**.
 - Do not fill unknown protocol behavior by guessing; ground it in the relevant JMSv186
   code. Mark ungrounded spots as TODO and add them to the Backlog.

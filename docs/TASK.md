@@ -350,6 +350,16 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
 5. リファレンスの優先順位: **JMSv186(バイト・タイミング)→ Cosmic(コンテンツの流れ)→ 創作**。
    Cosmic から写した流れは、ファイル先頭に出典(`Reference/Cosmic/scripts/...`)を書く。
 6. 週次目安で `npc_coverage.py` を再生成し、`[DEV]` 残数と none 数を更新する。
-7. **ブランチ運用(2026-09-08〜)**: `main` は安定版(方針転換の起点 = `INITIAL COMMIT 2`)。
-   日々の作業は `develop` で行い、大きめの作業は `develop` から作業ブランチ(`feature/<内容>`、
-   `fix/<内容>`)を切って `develop` へマージする。`main` へは動作確認の取れた `develop` をマージする。
+7. **ブランチ運用(2026-09-09 改訂)**: `main` = 安定版、`develop` = 統合、作業は **テスト項目ごとのブランチ**。
+   - 作業単位は「1 つのテスト項目」= 検証できるまとまり(例: `feat/mu-lung-dojo`、`feat/process-split`、
+     `fix/npc-image-guard`)。`develop` から `feat/<項目>` / `fix/<項目>` を切り、コミットは全部そこへ、
+     push も同名ブランチへ(バックアップ)。
+   - 完了条件 = その項目のテストが全部緑: `dotnet test`、bot スイート、クライアントを落としうる変更は
+     実機確認(ユーザーに「◯◯を踏んでみて」と依頼し、結果を待つ)。TASK.md のチェック更新も同じブランチで。
+   - 緑になったら `develop` へ `git merge --no-ff`(項目の境界を履歴に残す)→ push → 作業ブランチを削除
+     (ローカルと origin)。
+   - 体系的な作業(フェーズや大きな機能群)が終わり、`develop` が実機で安定して動くことを確認できたら
+     `main` へ `--no-ff` でマージし、注釈付きタグ `stable-N`(`stable-1` からの連番、メッセージに確認した内容)
+     を付けて `git push origin main --tags`。`main` へ直接コミットしない。
+   - 例外: ドキュメントや生成物(COSMIC_GAP.md など)だけの更新はテスト項目にならないので `develop` へ直接
+     コミットしてよい。
