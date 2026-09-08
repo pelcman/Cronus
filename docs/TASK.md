@@ -81,7 +81,10 @@
       `/sweep maps` で全マップを自動巡回し `sweep-progress.txt` の最終行で原因マップを特定する
       (2026-09-08 実装)。落ちたマップは1件=1項目としてここに追記し、wirelog の文脈と突き合わせて
       原因を分類(未実装の入口 / 送信契約のズレ / データ不整合 / サーバー例外)。
-      **実機で `/sweep maps` を地域ごとに回してもらう(次の依頼)。**
+      実機で `/sweep maps` を回す(ユーザーは TunaYukke で手動実行)。**無人化**: `DevTools/crash_harness.py`
+      (実クライアント起動→ログイン→`/sweep`→死活監視→記録→再起動→`resume`)。RunAsInvoker で UAC 回避・
+      強制終了可を確認、ログイン画面の座標は校正済み。**残: ワールド/キャラ選択の座標校正**(stage1/stage2)。
+      スイープ中に切断されたキャラは救済マップに保存し `# crash? <map>` を progress に記録(実装済み)。
 - [x] **未対応パケットの安全化**(2026-09-08) — クライアントが送る 219 opcode のうち **132** をサーバーは
       黙って捨てていた(if/else 連鎖に default 無し)。`HandleUnhandledAsync` を追加: `*UseRequest` と
       修理/製作/ガシャポン等はインベントリのロック解除(空 InventoryOperation)、マップ転送系は

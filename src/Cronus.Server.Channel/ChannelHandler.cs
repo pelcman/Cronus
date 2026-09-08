@@ -602,11 +602,23 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     {
         _conversation?.End();
         _conversation = null;
+        bool sweeping = _sweep is not null;
         _sweep?.Cancel();
         _sweep = null;
 
         if (_player is not null && _field is not null)
         {
+            if (sweeping)
+            {
+                // A client lost mid-sweep most likely crashed on the map it was just sent to. Save it
+                // in the rescue town instead, or the next login would replay the crash; and mark the
+                // suspect in the progress file for the crash harness / the operator.
+                Console.WriteLine($"[sweep] client lost on map {_player.Character.MapId} — saving {_player.Character.Name} at the rescue map");
+                AppendSweepLine($"# crash? {_player.Character.MapId} {DateTime.Now:HH:mm:ss}");
+                _player.Character.MapId = GameConstants.RescueMapId;
+                _player.Character.Portal = 0;
+            }
+
             _characters.Save(_player.Character); // persist last known map/stats on logout
 
             // Cancel any open trade so staged items/meso return to their owners.
