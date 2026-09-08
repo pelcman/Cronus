@@ -59,6 +59,12 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     /// <summary>Every named map grouped by region (for /dbgwarp); null without wz.</summary>
     private readonly IMapCatalog? _mapCatalog;
 
+    /// <summary>The client opcode table, kept for naming packets no handler claims.</summary>
+    private readonly OpcodeTable _clientOps;
+
+    /// <summary>The running /sweep, if any (cancelled on disconnect).</summary>
+    private CancellationTokenSource? _sweep;
+
     /// <summary>Which NPCs have quests (their clicks stay silent for the client's quest UI).</summary>
     private readonly IQuestNpcIndex? _questNpcs;
 
@@ -237,6 +243,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _messengers = messengers ?? new MessengerRegistry(_packets);
         _parties = parties ?? new PartyRegistry();
 
+        _clientOps = clientOpcodes;
         _opMigrateIn = clientOpcodes.Get(ClientOpcode.MigrateIn);
         _opAliveAck = clientOpcodes.Get(ClientOpcode.AliveAck);
         _opUserMove = clientOpcodes.Get(ClientOpcode.UserMove);
@@ -585,12 +592,18 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         {
             // Keep-alive acknowledged; nothing to do.
         }
+        else
+        {
+            await HandleUnhandledAsync(session, opcode).ConfigureAwait(false);
+        }
     }
 
     public override async ValueTask OnDisconnectedAsync(MapleSession session, Exception? error)
     {
         _conversation?.End();
         _conversation = null;
+        _sweep?.Cancel();
+        _sweep = null;
 
         if (_player is not null && _field is not null)
         {

@@ -39,6 +39,7 @@ internal static class CommandTable
         new("dbgwarp", "/dbgwarp", "地域 → マップ を選んでワープするウィンドウを開きます（IDを覚える必要はありません）。", CategoryMove),
         new("pos", "/pos", "現在の座標とマップIDを表示します。", CategoryMove),
         new("gmmove", "/gmmove [on|off|<速度倍率> [<ジャンプ倍率> [<攻撃速度倍率>]]]", "GM移動モード。速度・ジャンプ・攻撃速度の倍率指定、被ダメージ無効、スキルのMP消費・クールタイム無し。引数なしで切替。", CategoryCharacter),
+        new("sweep", "/sweep maps [開始ID] [終了ID] [秒] | resume [秒] | stop", "全マップ自動巡回（クラッシュ棚卸し）。各マップに順番にワープし、直前に sweep-progress.txt へ記録。落ちたら最終行のマップが原因、resume で続きから。", CategorySystem),
         new("conti", "/conti state|move <値1> [値2]", "飛行船の演出パケットを自分にだけ試験送信します（LP_CONTISTATE / LP_CONTIMOVE の実機切り分け用）。", CategorySystem),
 
         new("status", "/status [項目 値]", "ステータスを表示 / 変更します。項目: " + "level job exp hp maxhp mp maxmp str dex int luk ap sp fame meso"

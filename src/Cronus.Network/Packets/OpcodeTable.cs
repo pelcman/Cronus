@@ -32,6 +32,33 @@ public sealed class OpcodeTable
     /// <summary>True if <paramref name="name"/> resolved to a real (non -1) value.</summary>
     public bool IsDefined(string name) => this[name] != Undefined;
 
+    private Dictionary<int, string>? _names;
+
+    /// <summary>The first name that resolved to <paramref name="value"/> (file order), or null.</summary>
+    public string? NameOf(int value)
+    {
+        if (value == Undefined)
+        {
+            return null;
+        }
+
+        if (_names is null)
+        {
+            var names = new Dictionary<int, string>();
+            foreach ((string name, int v) in _values)
+            {
+                if (v != Undefined)
+                {
+                    names.TryAdd(v, name);
+                }
+            }
+
+            _names = names;
+        }
+
+        return _names.TryGetValue(value, out string? found) ? found : null;
+    }
+
     /// <summary>All resolved (name, value) pairs with a defined value.</summary>
     public IEnumerable<KeyValuePair<string, int>> Entries
         => _values.Where(kv => kv.Value != Undefined);

@@ -32,6 +32,7 @@ which is what keeps `/help`, the usage replies, and this document describing the
 | `/dbgwarp` | Windowed warp console — pick a region, an area, then a map (no ids to type) |
 | `/pos` | Show your position and map id |
 | `/conti state|move <a> [b]` | Send one airship effect packet to yourself (live bisect of the unverified values) |
+| `/sweep maps [from] [to] [seconds]` · `/sweep resume [seconds]` · `/sweep stop` | Automated crash inventory: warp through every map; on a crash the last line of `sweep-progress.txt` names the map |
 | `/gmmove [on|off|<speed×> [<jump×> [<attack×>]]]` | GM movement: speed/jump/attack-speed multipliers, no damage taken, no skill MP cost or cooldown |
 
 ### Character
@@ -245,6 +246,15 @@ weapon's attackSpeed; hits show their number but take no HP; skills cost no MP/H
 cooldown (the client's own bar prediction is snapped back). A stock client caps speed at 140%,
 jump at 123% and attack speed at degree 2; `DevTools\clientpatch_speedcap.py apply` lifts all
 three — see [CLIENT_PATCHES.md](CLIENT_PATCHES.md). Re-logging turns it off.
+
+### `/sweep maps [from] [to] [seconds]` · `/sweep resume [seconds]` · `/sweep stop`
+Automates the crash inventory. The server warps you through every map it knows (String.wz ∩
+Map.wz) in id order, writing the map id and name to the console and to `sweep-progress.txt` next
+to the host **before** each warp. When the client crashes, the last line is the culprit;
+`/sweep resume` continues from the map after it, `/sweep stop` ends the run. Default dwell is 3 s;
+`/sweep maps 100000000 200000000 2` limits the range (about 5,900 maps × 3 s ≈ 5 h, so run it by
+region). `python DevTools/wirelog.py` then gives the packet context of the disconnect; each crash
+becomes one item in [TASK.md](TASK.md) phase 0.
 
 ### `/conti state|move <a> [b]`
 Sends one airship effect packet to **you only**: `/conti state 4 1` is `LP_CONTISTATE [4][1]`,

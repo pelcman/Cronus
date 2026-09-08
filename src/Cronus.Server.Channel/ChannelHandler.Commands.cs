@@ -163,6 +163,81 @@ public sealed partial class ChannelHandler
                 break;
             }
 
+            case "sweep":
+            {
+                // Crash inventory without a human list (docs/TASK.md フェーズ0): warp this client
+                // through every map the catalog knows, a few seconds apart, logging each map to the
+                // console and to sweep-progress.txt BEFORE the warp. When the client crashes, the
+                // last line names the map; /sweep resume continues from the one after it.
+                //   /sweep maps [from] [to] [seconds]   every map in [from, to] (defaults: all, 3s)
+                //   /sweep resume [seconds]             from the map after the last logged one
+                //   /sweep stop
+                string sub = parts.Length >= 2 ? parts[1].ToLowerInvariant() : string.Empty;
+                if (sub == "stop")
+                {
+                    _sweep?.Cancel();
+                    _sweep = null;
+                    await ReplyAsync(session, "sweep: 停止しました").ConfigureAwait(false);
+                    break;
+                }
+
+                if (sub is not ("maps" or "resume"))
+                {
+                    await ReplyAsync(session, "使い方: /sweep maps [開始ID] [終了ID] [秒]  /sweep resume [秒]  /sweep stop").ConfigureAwait(false);
+                    break;
+                }
+
+                if (_mapCatalog is null || _mapCatalog.Regions.Count == 0)
+                {
+                    await ReplyAsync(session, NpcConversation.DevPrefix + "マップ一覧がありません（gamedata が必要です）").ConfigureAwait(false);
+                    break;
+                }
+
+                int from = 0;
+                int to = int.MaxValue;
+                double seconds = SweepDefaultDwellSeconds;
+                if (sub == "maps")
+                {
+                    if (parts.Length >= 3 && int.TryParse(parts[2], out int f)) from = f;
+                    if (parts.Length >= 4 && int.TryParse(parts[3], out int t)) to = t;
+                    if (parts.Length >= 5 && double.TryParse(parts[4], NumberStyles.Float, CultureInfo.InvariantCulture, out double sec)) seconds = sec;
+                }
+                else
+                {
+                    int? last = LastSweptMapId();
+                    if (last is null)
+                    {
+                        await ReplyAsync(session, "sweep: 前回の記録がありません。/sweep maps から始めてください").ConfigureAwait(false);
+                        break;
+                    }
+
+                    from = last.Value + 1;
+                    if (parts.Length >= 3 && double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double sec)) seconds = sec;
+                    await ReplyAsync(session, $"sweep: 前回の最終マップ {last.Value} が容疑者です。その次から再開します").ConfigureAwait(false);
+                }
+
+                seconds = Math.Clamp(seconds, 0.05, 60);
+                List<MapEntry> queue = _mapCatalog.Regions
+                    .SelectMany(r => r.Maps)
+                    .Where(m => m.MapId >= from && m.MapId <= to)
+                    .GroupBy(m => m.MapId)
+                    .Select(g => g.First())
+                    .OrderBy(m => m.MapId)
+                    .ToList();
+                if (queue.Count == 0)
+                {
+                    await ReplyAsync(session, "sweep: 対象のマップがありません").ConfigureAwait(false);
+                    break;
+                }
+
+                _sweep?.Cancel();
+                var sweepCts = new CancellationTokenSource();
+                _sweep = sweepCts;
+                await ReplyAsync(session, $"sweep: {queue.Count} マップを {seconds:0.##} 秒間隔で巡回します。落ちたら {Path.GetFileName(SweepProgressFile)} の最終行が原因のマップ、/sweep resume で続き、/sweep stop で停止").ConfigureAwait(false);
+                _ = RunSweepAsync(session, queue, TimeSpan.FromSeconds(seconds), sweepCts.Token);
+                break;
+            }
+
             case "conti" when parts.Length >= 3:
             {
                 // Live bisect for the airship packets the oracle never verified: sends one
@@ -758,6 +833,167 @@ public sealed partial class ChannelHandler
     /// <summary>Sends a chat line visible only to the calling player (as their own message).</summary>
     private ValueTask ReplyAsync(MapleSession session, string text)
         => session.SendAsync(_packets.UserChat(_player!.Character.Id, isGm: true, text, onlyBalloon: false));
+
+    // ----- /sweep: automated crash inventory ------------------------------------------------
+
+    private const double SweepDefaultDwellSeconds = 3;
+
+    /// <summary>Where the sweep logs each map before warping to it (next to the host executable).</summary>
+    public static string SweepProgressFile => Path.Combine(AppContext.BaseDirectory, "sweep-progress.txt");
+
+    private static readonly object SweepFileLock = new();
+
+    /// <summary>The map id on the last non-comment line of the progress file, if any.</summary>
+    private static int? LastSweptMapId()
+    {
+        lock (SweepFileLock)
+        {
+            if (!File.Exists(SweepProgressFile))
+            {
+                return null;
+            }
+
+            foreach (string line in File.ReadAllLines(SweepProgressFile).Reverse())
+            {
+                if (line.Length == 0 || line[0] == '#')
+                {
+                    continue;
+                }
+
+                string head = line.Split('\t')[0];
+                if (int.TryParse(head, out int id))
+                {
+                    return id;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    private static void AppendSweepLine(string line)
+    {
+        lock (SweepFileLock)
+        {
+            File.AppendAllText(SweepProgressFile, line + Environment.NewLine);
+        }
+    }
+
+    /// <summary>
+    /// The sweep loop: log, warp, wait, repeat. It runs beside the session's packet loop the same
+    /// way the airship scheduler does (through MovePlayerToMapAsync). A crash ends the session,
+    /// which cancels the token from OnDisconnectedAsync — the last logged map is the suspect.
+    /// </summary>
+    private async Task RunSweepAsync(MapleSession session, List<MapEntry> maps, TimeSpan dwell, CancellationToken ct)
+    {
+        try
+        {
+            AppendSweepLine($"# sweep {DateTime.Now:yyyy-MM-dd HH:mm:ss} — {maps.Count} maps, {dwell.TotalSeconds:0.##}s each");
+            for (int i = 0; i < maps.Count && !ct.IsCancellationRequested; i++)
+            {
+                MapEntry m = maps[i];
+                AppendSweepLine($"{m.MapId}\t{m.DisplayName}\t{DateTime.Now:HH:mm:ss}");
+                Console.WriteLine($"[sweep] {i + 1}/{maps.Count} {m.MapId} {m.DisplayName}");
+                await ReplyAsync(session, $"[sweep {i + 1}/{maps.Count}] {m.MapId} {m.DisplayName}").ConfigureAwait(false);
+                await MovePlayerToMapAsync(session, m.MapId, spawnPortal: 0).ConfigureAwait(false);
+                await Task.Delay(dwell, ct).ConfigureAwait(false);
+            }
+
+            if (!ct.IsCancellationRequested)
+            {
+                AppendSweepLine("# done");
+                Console.WriteLine("[sweep] done — every map entered without losing the client");
+                await ReplyAsync(session, "sweep: 全マップ完了。落ちたマップはありません").ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // stopped, or the client went away
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[sweep] stopped: {ex.Message}");
+        }
+    }
+
+    // ----- unhandled client packets: never silence (docs/TASK.md フェーズ0) ----------------
+
+    /// <summary>Opcode names this session already reported, so the log line and the [DEV] line come once each.</summary>
+    private readonly HashSet<string> _unhandledSeen = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Requests the client answers with an inventory lock: until a response arrives the player can
+    /// not touch the inventory. The oracle's contract for a failed request is an empty
+    /// InventoryOperation (unlock), so an unimplemented one gets that too. Every *UseRequest is in
+    /// this family by name; these are the rest.
+    /// </summary>
+    private static readonly HashSet<string> InventoryLockingRequests = new(StringComparer.Ordinal)
+    {
+        "CP_UserRepairDurability", "CP_UserRepairDurabilityAll", "CP_UserItemMakeRequest",
+        "CP_UserUseGachaponBoxRequest", "CP_UserItemReleaseRequest", "CP_UserActivateEffectItem",
+        "CP_CashGachaponOpenRequest", "CP_UserChangeStatRequestByItemOption", "CP_UserUpgradeTombEffect",
+    };
+
+    /// <summary>Packets the client sends on its own (probes, timers, mob bookkeeping): logged, never announced.</summary>
+    private static readonly HashSet<string> SilentUnhandled = new(StringComparer.Ordinal)
+    {
+        "CP_INVITE_PARTY_MATCH", "CP_CANCEL_INVITE_PARTY_MATCH", "CP_RequestFootHoldInfo", "CP_FootHoldInfo",
+        "CP_RequireFieldObstacleStatus", "CP_PetUpdateExceptionListRequest", "CP_MobRequestEscortInfo",
+        "CP_MobEscortStopEndRequest", "CP_MobDropPickUpRequest", "CP_UserTemporaryStatUpdateRequest",
+        "CP_UserCalcDamageStatSetRequest", "CP_CashShopQueryCashRequest", "CP_CashShopChargeParamRequest",
+        "CP_UserHP", "CP_UserBanMapByMob", "CP_MobHitByObstacle", "CP_MobHitByMob", "CP_MobSelfDestruct",
+        "CP_MobAttackMob", "CP_MobSkillDelayEnd", "CP_MobTimeBombEnd", "CP_MobEscortCollision",
+        "CP_PassiveskillInfoUpdate", "CP_QuickslotKeyMappedModified", "CP_ExceptionLog", "CP_Log",
+        "CP_SecurityPacket", "CP_UserEffectLocal",
+    };
+
+    /// <summary>Player actions whose opcode name lacks the "Request" suffix but still deserve the [DEV] line.</summary>
+    private static readonly HashSet<string> UnhandledActions = new(StringComparer.Ordinal)
+    {
+        "CP_GuildBBS", "CP_UserThrowGrenade", "CP_TalkToTutor", "CP_UserRepairDurability",
+        "CP_UserRepairDurabilityAll", "CP_UserActivateEffectItem", "CP_UserAttackUser", "CP_UserBodyAttack",
+        "CP_ReactorTouch", "CP_EventStart", "CP_SnowBallHit", "CP_CoconutHit", "CP_UserMonsterBookSetCover",
+        "CP_AllianceResult", "CP_FamilyJoinResult", "CP_FamilySummonResult", "CP_JMS_JUKEBOX",
+        "CP_JMS_MapleGift", "CP_JMS_Poll_Answer", "CP_JMS_PachinkoPrizes", "CP_UserADBoardClose",
+    };
+
+    /// <summary>
+    /// A packet none of the handlers claim. The rule since 2026-09-08: never silence. Whatever lock
+    /// the client took for the request is released (empty InventoryOperation, or the
+    /// transfer-ignored packet for map requests), the player sees one [DEV] line per opcode per
+    /// session, and the server log gets <c>[dev] unhandled …</c> — the list of what players really
+    /// tried is the work list for docs/TASK.md フェーズ0.
+    /// </summary>
+    private async ValueTask HandleUnhandledAsync(MapleSession session, int opcode)
+    {
+        string name = _clientOps.NameOf(opcode) ?? $"0x{opcode:X4}";
+        bool first = _unhandledSeen.Add(name);
+        if (first)
+        {
+            Console.WriteLine($"[dev] unhandled {name} from {_player?.Character.Name ?? "(no player)"} on map {_player?.Character.MapId ?? 0}");
+        }
+
+        if (_player is null)
+        {
+            return;
+        }
+
+        if (name.EndsWith("UseRequest", StringComparison.Ordinal) || InventoryLockingRequests.Contains(name))
+        {
+            await session.SendAsync(_packets.InventoryOperation(Array.Empty<InventoryChange>())).ConfigureAwait(false);
+        }
+        else if (name is "CP_UserMapTransferRequest" or "CP_UserPortalTeleportRequest" or "CP_EnterOpenGateRequest")
+        {
+            await session.SendAsync(_packets.TransferFieldReqIgnored(TransferDisabledPortal)).ConfigureAwait(false);
+        }
+
+        bool playerAction = !SilentUnhandled.Contains(name)
+            && (name.EndsWith("Request", StringComparison.Ordinal) || UnhandledActions.Contains(name));
+        if (first && playerAction)
+        {
+            await ReplyAsync(session, $"{NpcConversation.DevPrefix}この操作はまだ実装されていません（{name}）").ConfigureAwait(false);
+        }
+    }
 
     /// <summary>
     /// Sends several chat lines in order. The client renders each chat packet as its own row, so
