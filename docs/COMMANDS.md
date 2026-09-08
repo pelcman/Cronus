@@ -258,8 +258,10 @@ region). `python DevTools/wirelog.py` then gives the packet context of the disco
 becomes one item in [TASK.md](TASK.md) phase 0.
 
 `/sweep npcs` is the dialog version: the server starts every scripted NPC's conversation (248),
-lets this client draw each page, then picks the first option itself (against a read-only stand-in
-for the character: no warps, items or exp). 1.5 s per page by default; `/sweep npcs 2000000 1`
+lets this client draw the FIRST page (against a read-only stand-in for the character: no warps,
+items or exp), then closes the dialog with a same-map SetField before the next NPC — the client
+disconnects when a second script message arrives over an unanswered dialog (seen 2026-09-09), and
+only the client can answer a page. 1.5 s per page by default; `/sweep npcs 2000000 1`
 sets the first NPC and the pace. Script logic is already covered headless by
 `AllScriptsExerciseTests` (every branch, three profiles); this sweep only asks whether the client
 can render the pages.

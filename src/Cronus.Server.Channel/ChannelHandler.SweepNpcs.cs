@@ -11,10 +11,11 @@ namespace Cronus.Server.Channel;
 /// (AllScriptsExerciseTests) already runs every script's every branch; what it cannot see is the
 /// client rendering the pages — a dialog tag the client's data lacks kills it. So the sweep
 /// starts each scripted NPC's conversation server-side (the client shows a dialog it never
-/// clicked for, exactly as quest scripts do), answers every prompt itself after a short dwell,
-/// and logs each NPC to sweep-progress.txt BEFORE its first page, so a crash names the NPC. The
-/// script runs against a read-only stand-in for the character (no warps, items or exp are
-/// applied), and the first option is taken at every prompt.
+/// clicked for, exactly as quest scripts do), lets the client draw the first page for a moment,
+/// and logs each NPC to sweep-progress.txt BEFORE its page, so a crash names the NPC. The script
+/// runs against a read-only stand-in for the character (no warps, items or exp are applied).
+/// Only the first page: the client disconnects when a second script message arrives over an
+/// unanswered dialog, and only the client can answer one.
 /// </summary>
 public sealed partial class ChannelHandler
 {
@@ -109,20 +110,9 @@ public sealed partial class ChannelHandler
         public void setQuestData(int questId, string data) { }
     }
 
-    private const int SweepNpcMaxPages = 12;
-
-    private static (int Action, int Selection, string Text) SweepAnswer(SweepPrompt p) => p.Type switch
-    {
-        5 => (1, p.Options.Count > 0 ? p.Options[0] : 0, string.Empty),
-        3 => (1, -1, "abc"),
-        8 => (1, 0, string.Empty),
-        _ => (1, -1, string.Empty),
-    };
-
     /// <summary>
-    /// Streams every scripted NPC's conversation to this client, one after another. Each NPC is
-    /// logged before its first page; the loop answers each prompt after <paramref name="dwell"/>
-    /// (the client has to render the page first — that is what is being tested).
+    /// Shows every scripted NPC's first dialog page on this client, one after another, logging
+    /// each NPC before its page and closing the dialog with a same-map SetField between NPCs.
     /// </summary>
     private async Task RunNpcSweepAsync(MapleSession session, List<int> npcIds, TimeSpan dwell, CancellationToken ct)
     {
@@ -145,39 +135,38 @@ public sealed partial class ChannelHandler
                     continue;
                 }
 
+                // First page only. The client closes its socket when a new script message arrives
+                // while its dialog is still open and unanswered (2026-09-09: the first version of
+                // this sweep sent NPC 2's page over NPC 1's and was thrown back to the login
+                // screen), and only the client can answer a page. So: show the page, let the
+                // client draw it for `dwell`, end the script server-side, and close the dialog the
+                // one way the server can — a SetField onto the same map. Deeper pages are covered
+                // headless by AllScriptsExerciseTests; the crash harness (keyboard) can walk them.
                 _conversation = cm;
-                int pages = 0;
                 var idle = System.Diagnostics.Stopwatch.StartNew();
-                while (!ct.IsCancellationRequested && pages < SweepNpcMaxPages)
+                SweepPrompt? first = null;
+                while (!ct.IsCancellationRequested && first is null && !cm.IsEnded && idle.Elapsed < TimeSpan.FromSeconds(5))
                 {
-                    if (!dialog.Prompts.TryTake(out SweepPrompt? prompt, 50))
-                    {
-                        if (cm.IsEnded || idle.Elapsed > TimeSpan.FromSeconds(5))
-                        {
-                            break;
-                        }
-
-                        continue;
-                    }
-
-                    pages++;
-                    idle.Restart();
-                    await Task.Delay(dwell, ct).ConfigureAwait(false);   // let the client draw the page
-                    (int action, int selection, string text) = SweepAnswer(prompt);
-                    cm.Advance(prompt.Type, action, selection, text);
+                    dialog.Prompts.TryTake(out first, 50);
                 }
 
-                if (!cm.IsEnded)
+                if (first is not null)
                 {
-                    cm.End();
+                    await Task.Delay(dwell, ct).ConfigureAwait(false);   // the client draws the page
                 }
 
+                cm.End();
+                _conversation = null;
                 if (cm.Error is not null)
                 {
                     AppendSweepLine($"# script error {npcId}: {cm.Error.Message}");
                 }
 
-                _conversation = null;
+                if (first is not null && _player is not null)
+                {
+                    await MovePlayerToMapAsync(session, _player.Character.MapId, spawnPortal: 0).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromMilliseconds(700), ct).ConfigureAwait(false);   // let the field reload
+                }
             }
 
             if (!ct.IsCancellationRequested)
