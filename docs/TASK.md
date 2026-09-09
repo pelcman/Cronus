@@ -312,6 +312,11 @@ Cronus は 2026-09-09 まで `Cronus.Server.Host` 1プロセスに Login + N チ
       **設計課題(インスタンス)**: `FieldRegistry` はマップ ID で 1 フィールド。ミニダンジョンの複製・PQ・ボス部屋・武陵道場特別層・
       マッハ暴走戦などはすべて「同じマップ ID の別フィールド」を要する(Maple2 の instanced field 相当)。`MovePlayerToMapAsync` が
       フィールドを ID で引いているので、フィールド参照渡しへの整理とパーティー窓/ささやきの位置表示への影響を含めて別途設計する。
+      **移動・関門ポータル 35 本**(2026-09-10、`feat/portal-entrances-and-gates`、キュー #23): Cosmic の単純ワープと条件付きワープを JMS の
+      マップ・ポータル名・アイテム・クエストで全件確認して移植。見送り: met_in/met_out(Cosmic の行き先 103000103 が JMS の配置
+      910320000 と合わない)、magatia_dark0(クエスト 7770 が JMS に無い)、skyrom/enterNepenthes/enterRider/enterMCave/enterPort/enterInfo/
+      enterMagiclibrar/dragonNest/Zakum03/05(インスタンス・イベント)、undodraco/templeenter/outTemple(ミニドラゴン変身 2210016 の
+      useItem/cancelItem API が未実装)、thief_in1/enterDollcave(パスワード NPC 1063011)、highposition(runMapScript)、DragonEggNotice/evan*(エヴァン)。
       残る最上位:
       モンスターカーニバル(シュピゲルマン 2042000〜2042007 + 助手)、月うさぎ 9001102(ヘネシス PQ、19 町)、
       帰還碑/名誉の石碑 9040004/9040005、忍耐の森 1061007、timeQuest(思い出の道 16)、rankRoom/tutorialNPC

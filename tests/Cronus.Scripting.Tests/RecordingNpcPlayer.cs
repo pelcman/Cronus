@@ -45,8 +45,10 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public int Exp;
     public void gainExp(int amount) => Exp += amount;
     public void heal() { }
-    public void rememberMap() { }
-    public void warpToRememberedMap(int fallbackMapId) { }
+    public bool Remembered;
+    public void rememberMap() => Remembered = true;
+    public int? RememberedFallback;
+    public void warpToRememberedMap(int fallbackMapId) => RememberedFallback = fallbackMapId;
     public void warp(int mapId, int portal = 0) => Warped = (mapId, portal);
     public void warpPortal(int mapId, string portalName) => WarpedNamed = (mapId, portalName);
     public bool airshipBoarding() => false;
