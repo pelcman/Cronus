@@ -118,6 +118,7 @@ Rates rates = CreateRates();
 NpcScriptEngine? npcScripts = CreateNpcScriptEngine();
 PortalScriptEngine? portalScripts = CreatePortalScriptEngine();
 PortalScriptEngine? reactorScripts = CreateReactorScriptEngine();
+PortalScriptEngine? mapScripts = CreateMapScriptEngine();
 
 // Shared across all connections so messenger/party windows tie players together across fields.
 // (Phase 1b stage B moves these into the World, so channels can be separate processes.)
@@ -142,7 +143,7 @@ for (int i = 0; i < channelCount; i++)
         new IPEndPoint(IPAddress.Any, channelPorts[i]),
         config,
         () => new LoggingHandler(
-            new ChannelHandler(clientOps, serverOps, repos.Characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, accounts: repos.Accounts, itemCatalog: itemCatalog, mapCatalog: mapCatalog, questNpcs: questNpcs, parcels: repos.Parcels, npcNames: npcNames, styles: styles, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null, world: world),
+            new ChannelHandler(clientOps, serverOps, repos.Characters, config, chFields, maps, npcScripts, skills, channelId: channelId, messengers: messengers, parties: parties, portalScripts: portalScripts, items: items, drops: drops, shops: shops, storages: storages, keymaps: keymaps, quests: quests, rates: rates, trades: trades, buffs: buffs, guilds: guilds, miniGames: miniGames, playerShops: playerShops, merchants: merchants, reactors: reactorProvider, reactorDrops: reactorDrops, reactorScripts: reactorScripts, accounts: repos.Accounts, itemCatalog: itemCatalog, mapCatalog: mapCatalog, questNpcs: questNpcs, parcels: repos.Parcels, npcNames: npcNames, styles: styles, worldFields: channelFields, cashShopEndpoint: cashShopEnabled ? cashShopEndpoint : null, world: world, mapScripts: mapScripts),
             $"channel{channelId}", verbose: boot.WireDebug),
         keepAlive));
 }
@@ -453,6 +454,19 @@ static PortalScriptEngine? CreateReactorScriptEngine()
     }
 
     return new PortalScriptEngine(new FolderPortalScriptSource(Path.Combine(scriptRoot, "reactor")));
+}
+
+// Map-enter scripts: the wz info/onUserEnter name of a map → CRONUS_SCRIPTS/map/{name}.js, run with
+// the portal-script shape (start() + player) after the client is placed on the field.
+static PortalScriptEngine? CreateMapScriptEngine()
+{
+    string? scriptRoot = Environment.GetEnvironmentVariable("CRONUS_SCRIPTS");
+    if (string.IsNullOrWhiteSpace(scriptRoot))
+    {
+        return null;
+    }
+
+    return new PortalScriptEngine(new FolderPortalScriptSource(Path.Combine(scriptRoot, "map")));
 }
 
 static PortalScriptEngine? CreatePortalScriptEngine()

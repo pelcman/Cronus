@@ -59,7 +59,7 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public void setJob(int job) { }
     public void gainMaxHp(int amount) { }
     public void gainMaxMp(int amount) { }
-    public bool hasQuest(int questId) => false;
+    public bool hasQuest(int questId) => StartedQuests.Contains(questId);
     public bool isQuestDone(int questId) => _done.Contains(questId);
     public readonly System.Collections.Generic.List<int> StartedQuests = new();
     public void startQuest(int questId) => StartedQuests.Add(questId);
@@ -71,8 +71,9 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public bool isPartyLeader() => false;
     public bool startSubwayMassacre() => false;
     public bool bonusSubwayMassacre() => false;
-    public string? getQuestData(int questId) => null;
-    public void setQuestData(int questId, string data) { }
+    public readonly System.Collections.Generic.Dictionary<int,string> QuestData = new();
+    public string? getQuestData(int questId) => QuestData.TryGetValue(questId, out string? d) ? d : null;
+    public void setQuestData(int questId, string data) => QuestData[questId] = data;
     public int dojoPoints() => 0;
     public void setDojoPoints(int points) { }
     public bool dojoEnter(bool party, int fromStage) => false;
@@ -90,6 +91,8 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public void gainBuddyCapacity(int amount) { }
     public int Hour = 12;
     public int hourOfDay() => Hour;
+    public readonly System.Collections.Generic.List<string> ScreenEffects = new();
+    public void showScreenEffect(string path) => ScreenEffects.Add(path);
     public int? OpenedNpc;
     public void openNpc(int npcId) => OpenedNpc = npcId;
     private readonly System.Collections.Generic.HashSet<int> _done = new();

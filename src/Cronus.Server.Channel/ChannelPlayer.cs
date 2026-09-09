@@ -405,7 +405,13 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public string? getQuestData(int questId) => _questData?.Invoke(questId);
 
-    public void setQuestData(int questId, string data) => _setQuestData?.Invoke(questId, data);
+    public void setQuestData(int questId, string data)
+    {
+        _setQuestData?.Invoke(questId, data);
+        // The client gates "investigate" completions (Quest Check infoex) on this string, so the
+        // journal must hear it — the oracle's updateQuest sends the started record with the data.
+        Send(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted, data));
+    }
 
     public int dojoPoints() => _dojoPoints?.Invoke() ?? 0;
 
@@ -424,6 +430,8 @@ public sealed class ChannelPlayer : INpcPlayer
     public void openNpc(int npcId) => _openNpc?.Invoke(npcId);
 
     public int hourOfDay() => DateTime.Now.Hour;
+
+    public void showScreenEffect(string path) => Send(_packets.FieldEffectScreen(path));
 
     public int getBuddyCapacity() => _character.BuddyCapacity;
 
