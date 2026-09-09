@@ -4,9 +4,9 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 
 | | Cosmic | Cronus | gap (JMS-relevant) |
 |---|---|---|---|
-| NPC scripts | 682 | 243 | 418 (on JMS maps: 304) |
+| NPC scripts | 682 | 244 | 417 (on JMS maps: 303) |
 | quest scripts | 250 | 1 | 220 |
-| portal scripts | 458 | 23 | 324 (+208 JMS portal scripts neither has) |
+| portal scripts | 458 | 29 | 318 (+208 JMS portal scripts neither has) |
 | reactor scripts | 292 | 1 | 235 |
 | event scripts (PQ / boss / ride) | 108 | — | 85 reference JMS maps |
 
@@ -14,7 +14,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 
 | npc | JMS name | JMS maps | Cosmic file |
 |---|---|---|---|
-| 2091005 | 素公パンダ | 39: 925020001 武陵道場入口, 925020100 武陵道場 1階, 925020200 武陵道場 2階 … | `Reference/Cosmic/scripts/npc/2091005.js` |
 | 2042002 | シュピゲルマン | 20: 103000000 カニングシティー, 980000010 モンスターカーニバル出口, 980000103 カーニバルフィールド1&lt;勝者ルーム&gt; … | `Reference/Cosmic/scripts/npc/2042002.js` |
 | 9001102 | 月うさぎ | 19: 100000000 ヘネシス, 101000000 エリニア, 102000000 ぺリオン … | `Reference/Cosmic/scripts/npc/9001102.js` |
 | 2042001 | シュピゲルマン | 9: 980000100 カーニバルフィールド1&lt;控え室&gt;, 980000200 カーニバルフィールド2&lt;控え室&gt;, 980000300 カーニバルフィールド3&lt;控え室&gt; … | `Reference/Cosmic/scripts/npc/2042001.js` |
@@ -665,8 +664,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 
 | script | JMS maps | Cosmic file |
 |---|---|---|
-| dojang_next | 38: 925020100 武陵道場 1階, 925020200 武陵道場 2階, 925020300 武陵道場 3階 … | `Reference/Cosmic/scripts/portal/dojang_next.js` |
-| dojang_up | 32: 925020100 武陵道場 1階, 925020200 武陵道場 2階, 925020300 武陵道場 3階 … | `Reference/Cosmic/scripts/portal/dojang_up.js` |
 | timeQuest | 16: 270010100 思い出の道1, 270010200 思い出の道2, 270010300 思い出の道3 … | `Reference/Cosmic/scripts/portal/timeQuest.js` |
 | rankRoom | 8: 100000201 弓使い学院, 101000003 魔法図書館, 102000003 戦士の聖殿 … | `Reference/Cosmic/scripts/portal/rankRoom.js` |
 | NextMap | 7: 980041000 魔女の塔1階, 980041100 魔女の塔2階, 980042000 魔女の塔1階 … | `Reference/Cosmic/scripts/portal/NextMap.js` |
@@ -763,15 +760,12 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | davy_next2 | 1: 925100200 甲板突破1 | `Reference/Cosmic/scripts/portal/davy_next2.js` |
 | davy_next3 | 1: 925100300 甲板突破2 | `Reference/Cosmic/scripts/portal/davy_next3.js` |
 | davy_next4 | 1: 925100400 海賊退治! | `Reference/Cosmic/scripts/portal/davy_next4.js` |
-| dojang_exit | 1: 925020000 武陵道場 | `Reference/Cosmic/scripts/portal/dojang_exit.js` |
-| dojang_tuto | 1: 925020010 武陵道場修練場 | `Reference/Cosmic/scripts/portal/dojang_tuto.js` |
 | dracoout | 1: 240000110 ステーション&lt;オルビス行き&gt; | `Reference/Cosmic/scripts/portal/dracoout.js` |
 | dragonNest | 1: 240040610 危険な巣の下 | `Reference/Cosmic/scripts/portal/dragonNest.js` |
 | dragoneyes | 1: 900010200 夢見る森 | `Reference/Cosmic/scripts/portal/dragoneyes.js` |
 | eliza_Garden | 1: 200010300 空の階段2 | `Reference/Cosmic/scripts/portal/eliza_Garden.js` |
 | end_cow | 1: 912000100 ノーチラスの牛小屋 | `Reference/Cosmic/scripts/portal/end_cow.js` |
 | enterAchter | 1: 100000200 広場 | `Reference/Cosmic/scripts/portal/enterAchter.js` |
-| enterBackStreet | 1: 925020000 武陵道場 | `Reference/Cosmic/scripts/portal/enterBackStreet.js` |
 | enterDisguise0 | 1: 130000200 エレヴの分かれ道 | `Reference/Cosmic/scripts/portal/enterDisguise0.js` |
 | enterDisguise1 | 1: 130010000 修行の森1 | `Reference/Cosmic/scripts/portal/enterDisguise1.js` |
 | enterDisguise2 | 1: 130010000 修行の森1 | `Reference/Cosmic/scripts/portal/enterDisguise2.js` |
@@ -892,7 +886,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | outMaha | 1: 914020000 マッハとの対峙 | `Reference/Cosmic/scripts/portal/outMaha.js` |
 | outNix1 | 1: 240020600 人里離れた森 | `Reference/Cosmic/scripts/portal/outNix1.js` |
 | outNix2 | 1: 240020600 人里離れた森 | `Reference/Cosmic/scripts/portal/outNix2.js` |
-| outSpecialSchool | 1: 925040001 武陵道場特別層 | `Reference/Cosmic/scripts/portal/outSpecialSchool.js` |
 | outTemple | 1: 270000100 時間の神殿 | `Reference/Cosmic/scripts/portal/outTemple.js` |
 | out_pepeking | 1: 106021500 結婚式場入口 | `Reference/Cosmic/scripts/portal/out_pepeking.js` |
 | outtestWolf | 1: 914030000 オオカミの試験 | `Reference/Cosmic/scripts/portal/outtestWolf.js` |
