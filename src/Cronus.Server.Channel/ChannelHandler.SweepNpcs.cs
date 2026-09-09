@@ -92,6 +92,8 @@ public sealed partial class ChannelHandler
         public void resetStatsForJob() { }
         public int getSkillLevel(int skillId) => _c.Skills.GetValueOrDefault(skillId);
         public void teachSkill(int skillId, int level) { }
+        public void message(string text) { }
+        public bool enterMiniDungeon(int dungeonMapId) => false;
         public void setJob(int job) { }
         public void gainMaxHp(int amount) { }
         public void gainMaxMp(int amount) { }

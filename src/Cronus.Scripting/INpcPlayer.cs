@@ -139,6 +139,16 @@ public interface INpcPlayer
     /// </summary>
     void teachSkill(int skillId, int level);
 
+    /// <summary>A blue [Notice] line in the player's chat (the oracle's dropMessage) — portal scripts have no dialog.</summary>
+    void message(string text);
+
+    /// <summary>
+    /// Mini-dungeon entry (the MD_* portals): warps into the dungeon map when nobody is inside, or
+    /// when the people inside are the player's own party; false when strangers hold it. One room per
+    /// dungeon until fields can be instanced.
+    /// </summary>
+    bool enterMiniDungeon(int dungeonMapId);
+
     /// <summary>Raises max HP by <paramref name="amount"/> (clamped to 1..30000) and heals into it.</summary>
     void gainMaxHp(int amount);
 
