@@ -355,4 +355,34 @@ public sealed partial class ChannelHandler
             // already gone
         }
     }
+
+    /// <summary>
+    /// A script opens another NPC's dialog (the job halls' tutorial portal opens the instructor for
+    /// a level-10 beginner): the /talk path — refuse an NPC this client has no image for (its dialog
+    /// crashes the client), end any open conversation, start the new one.
+    /// </summary>
+    private void OpenNpcFromScript(MapleSession session, int npcId)
+    {
+        if (_npcScripts is null || _player is null)
+        {
+            return;
+        }
+
+        if (_npcNames is not null && !_npcNames.HasImage(npcId))
+        {
+            Console.WriteLine($"[script] openNpc {npcId}: no client image — refused");
+            return;
+        }
+
+        if (_conversation is { IsEnded: false })
+        {
+            _conversation.End();
+        }
+
+        NpcConversation? talk = _npcScripts.Start(npcId, new ChannelNpcDialog(session, _packets), CreateScriptPlayer(session));
+        if (talk is not null)
+        {
+            _conversation = talk;
+        }
+    }
 }

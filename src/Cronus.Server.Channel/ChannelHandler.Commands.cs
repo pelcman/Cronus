@@ -1612,7 +1612,8 @@ public sealed partial class ChannelHandler
         dojoNext: () => _ = DojoNextStageAsync(),
         dojoUp: () => DojoTeleportUpAsync().AsTask().GetAwaiter().GetResult(),
         dojoExit: () => _ = DojoExitAsync(),
-        dojoTutorialExit: () => DojoTutorialExitAsync().AsTask().GetAwaiter().GetResult());
+        dojoTutorialExit: () => DojoTutorialExitAsync().AsTask().GetAwaiter().GetResult(),
+        openNpc: npcId => OpenNpcFromScript(session, npcId));
 
     /// <summary>Spawns mobs at the scripting player's feet (boss altars, event NPCs).</summary>
     private async ValueTask ScriptSpawnMobAsync(int mobId, int count)

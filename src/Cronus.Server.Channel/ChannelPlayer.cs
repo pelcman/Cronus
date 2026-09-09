@@ -48,6 +48,7 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<bool>? _dojoUp;
     private readonly Action? _dojoExit;
     private readonly Func<bool>? _dojoTutorialExit;
+    private readonly Action<int>? _openNpc;
 
     public ChannelPlayer(
         Character character,
@@ -83,7 +84,8 @@ public sealed class ChannelPlayer : INpcPlayer
         Action? dojoNext = null,
         Func<bool>? dojoUp = null,
         Action? dojoExit = null,
-        Func<bool>? dojoTutorialExit = null)
+        Func<bool>? dojoTutorialExit = null,
+        Action<int>? openNpc = null)
     {
         _character = character;
         _characters = characters;
@@ -119,6 +121,7 @@ public sealed class ChannelPlayer : INpcPlayer
         _dojoUp = dojoUp;
         _dojoExit = dojoExit;
         _dojoTutorialExit = dojoTutorialExit;
+        _openNpc = openNpc;
     }
 
     public string getName() => _character.Name;
@@ -392,6 +395,8 @@ public sealed class ChannelPlayer : INpcPlayer
     public void dojoExit() => _dojoExit?.Invoke();
 
     public bool dojoTutorialExit() => _dojoTutorialExit?.Invoke() ?? false;
+
+    public void openNpc(int npcId) => _openNpc?.Invoke(npcId);
 
     public int getBuddyCapacity() => _character.BuddyCapacity;
 

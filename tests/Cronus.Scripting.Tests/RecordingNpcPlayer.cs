@@ -10,6 +10,7 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public int Meso;
     public int Level = 70;
     public int MapId;
+    public int Job;
     public string Name = "Tester";
     public (int Map, int Portal)? Warped;
     public (int Map, string Portal)? WarpedNamed;
@@ -22,7 +23,7 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public int getMaxHp() => 0;
     public int getExp() => 0;
     public int getGender() => 0;
-    public int getJob() => 0;
+    public int getJob() => Job;
     public int getStr() => 0;
     public int getDex() => 0;
     public int getInt() => 0;
@@ -82,6 +83,8 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public bool retrieveMerchant() => false;
     public int getBuddyCapacity() => 0;
     public void gainBuddyCapacity(int amount) { }
+    public int? OpenedNpc;
+    public void openNpc(int npcId) => OpenedNpc = npcId;
     private readonly System.Collections.Generic.HashSet<int> _done = new();
     public void SetQuestDone(params int[] ids) { foreach (var i in ids) _done.Add(i); }
 }
