@@ -71,6 +71,9 @@ public interface INpcPlayer
     /// <summary>Restores HP and MP to full and notifies the client.</summary>
     void heal();
 
+    /// <summary>Sets HP (clamped to 1..MaxHp) and tells the client — Roger's tutorial drops HP to show potions.</summary>
+    void setHp(int hp);
+
     /// <summary>Remembers the current map so a later script can send the player back.</summary>
     void rememberMap();
 

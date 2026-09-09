@@ -75,6 +75,7 @@ public sealed partial class ChannelHandler
         public void gainMeso(int amount) { }
         public void gainExp(int amount) { }
         public void heal() { }
+        public void setHp(int hp) { }
         public void rememberMap() { }
         public void warpToRememberedMap(int fallbackMapId) { }
         public void warp(int mapId, int portal = 0) { }

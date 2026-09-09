@@ -19,7 +19,9 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public int getLevel() => Level;
     public int getMapId() => MapId;
     public int getMeso() => Meso;
-    public int getHp() => 0;
+    public int Hp = 100;
+    public int getHp() => Hp;
+    public void setHp(int hp) => Hp = hp;
     public int getMaxHp() => 0;
     public int getExp() => 0;
     public int getGender() => 0;
@@ -39,7 +41,8 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public void setFace(int faceId) { }
     public void setSkin(int skinColor) { }
     public void gainMeso(int amount) => Meso += amount;
-    public void gainExp(int amount) { }
+    public int Exp;
+    public void gainExp(int amount) => Exp += amount;
     public void heal() { }
     public void rememberMap() { }
     public void warpToRememberedMap(int fallbackMapId) { }
@@ -58,8 +61,10 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public void gainMaxMp(int amount) { }
     public bool hasQuest(int questId) => false;
     public bool isQuestDone(int questId) => _done.Contains(questId);
-    public void startQuest(int questId) { }
-    public void completeQuest(int questId) { }
+    public readonly System.Collections.Generic.List<int> StartedQuests = new();
+    public void startQuest(int questId) => StartedQuests.Add(questId);
+    public readonly System.Collections.Generic.List<int> CompletedQuests = new();
+    public void completeQuest(int questId) => CompletedQuests.Add(questId);
     public void gainItem(int itemId, int quantity) => Inventory[itemId] = Inventory.GetValueOrDefault(itemId) + quantity;
     public bool haveItem(int itemId) => Inventory.GetValueOrDefault(itemId) > 0;
     public int itemQuantity(int itemId) => Inventory.GetValueOrDefault(itemId);
