@@ -53,6 +53,7 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<int, ValueTask>? _completeQuest;
     private readonly Action<int>? _changeJob;
     private readonly Action? _resetStats;
+    private readonly Func<int, bool>? _enterMiniDungeon;
 
     public ChannelPlayer(
         Character character,
@@ -93,7 +94,8 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<int, ValueTask>? startQuest = null,
         Func<int, ValueTask>? completeQuest = null,
         Action<int>? changeJob = null,
-        Action? resetStats = null)
+        Action? resetStats = null,
+        Func<int, bool>? enterMiniDungeon = null)
     {
         _character = character;
         _characters = characters;
@@ -134,6 +136,7 @@ public sealed class ChannelPlayer : INpcPlayer
         _completeQuest = completeQuest;
         _changeJob = changeJob;
         _resetStats = resetStats;
+        _enterMiniDungeon = enterMiniDungeon;
     }
 
     public string getName() => _character.Name;
@@ -329,6 +332,10 @@ public sealed class ChannelPlayer : INpcPlayer
     public void resetStatsForJob() => _resetStats?.Invoke();
 
     public int getSkillLevel(int skillId) => _character.Skills.GetValueOrDefault(skillId);
+
+    public void message(string text) => Send(_packets.BroadcastNotice(text));
+
+    public bool enterMiniDungeon(int dungeonMapId) => _enterMiniDungeon?.Invoke(dungeonMapId) ?? false;
 
     public void teachSkill(int skillId, int level)
     {

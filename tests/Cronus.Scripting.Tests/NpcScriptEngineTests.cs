@@ -198,6 +198,8 @@ public class NpcScriptEngineTests
         public void resetStatsForJob() { }
         public int getSkillLevel(int skillId) => 0;
         public void teachSkill(int skillId, int level) { }
+        public void message(string text) { }
+        public bool enterMiniDungeon(int dungeonMapId) { warp(dungeonMapId, 0); return true; }
         public void setJob(int job) => Job = job;
         public int MaxHp = 100;
         public int MaxMp = 100;

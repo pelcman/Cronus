@@ -65,6 +65,11 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public readonly System.Collections.Generic.Dictionary<int,int> Skills = new();
     public int getSkillLevel(int skillId) => Skills.GetValueOrDefault(skillId);
     public void teachSkill(int skillId, int level) { if (level <= 0) Skills.Remove(skillId); else Skills[skillId] = level; }
+    public readonly System.Collections.Generic.List<string> Messages = new();
+    public void message(string text) => Messages.Add(text);
+    public bool MiniDungeonFree = true;
+    public int? EnteredDungeon;
+    public bool enterMiniDungeon(int dungeonMapId) { if (!MiniDungeonFree) return false; EnteredDungeon = dungeonMapId; MapId = dungeonMapId; return true; }
     public void gainMaxHp(int amount) { }
     public void gainMaxMp(int amount) { }
     public bool hasQuest(int questId) => StartedQuests.Contains(questId);

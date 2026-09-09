@@ -1617,7 +1617,8 @@ public sealed partial class ChannelHandler
         startQuest: questId => ForceStartQuestAsync(session, questId, _conversation?.NpcId ?? 0),
         completeQuest: questId => ForceCompleteQuestAsync(session, questId, _conversation?.NpcId ?? 0),
         changeJob: job => ChangeJobFromScript(session, job),
-        resetStats: () => ResetStatsForJobFromScript(session));
+        resetStats: () => ResetStatsForJobFromScript(session),
+        enterMiniDungeon: dungeon => TryEnterMiniDungeon(session, dungeon));
 
     /// <summary>Spawns mobs at the scripting player's feet (boss altars, event NPCs).</summary>
     private async ValueTask ScriptSpawnMobAsync(int mobId, int count)
