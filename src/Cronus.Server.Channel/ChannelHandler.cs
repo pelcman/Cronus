@@ -87,6 +87,9 @@ public sealed partial class ChannelHandler : PacketHandlerBase
     private readonly int _opReactorHit;
     private readonly NpcScriptEngine? _npcScripts;
     private readonly PortalScriptEngine? _portalScripts;
+
+    /// <summary>Map-enter scripts (wz <c>info/onUserEnter</c> names → scripts/map/{name}.js), or null.</summary>
+    private readonly PortalScriptEngine? _mapScripts;
     private readonly MessengerRegistry _messengers;
     private readonly PartyRegistry _parties;
     private readonly int _channelId;
@@ -210,7 +213,8 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         IReadOnlyList<FieldRegistry>? worldFields = null,
         System.Net.IPEndPoint? cashShopEndpoint = null,
         IAccountRepository? accounts = null,
-        IWorldClient? world = null)
+        IWorldClient? world = null,
+        PortalScriptEngine? mapScripts = null)
     {
         _accounts = accounts;
         _packets = new ChannelPackets(serverOpcodes, config);
@@ -256,6 +260,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _world = world;
         _npcScripts = npcScripts;
         _portalScripts = portalScripts;
+        _mapScripts = mapScripts;
         _channelId = channelId;
         _messengers = messengers ?? new MessengerRegistry(_packets);
         _parties = parties ?? new PartyRegistry();

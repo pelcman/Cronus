@@ -145,6 +145,7 @@ public class AllScriptsExerciseTests
         public bool dojoTutorialExit() => false;
         public void openNpc(int npcId) { }
         public int hourOfDay() => 12;
+        public void showScreenEffect(string path) { }
         public string? getQuestData(int questId) => _questData.TryGetValue(questId, out string? d) ? d : null;
         public void setQuestData(int questId, string data) => _questData[questId] = data;
     }
@@ -471,7 +472,7 @@ public class AllScriptsExerciseTests
 
         KnownIds? known = KnownIds.Load(root);
         var problems = new List<string>();
-        foreach (string kind in new[] { "portal", "reactor" })
+        foreach (string kind in new[] { "portal", "reactor", "map" })
         {
             string dir = Path.Combine(root, "scripts", kind);
             if (!Directory.Exists(dir))

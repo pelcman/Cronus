@@ -175,6 +175,10 @@ public interface INpcPlayer
     /// <summary>The server's local hour (0–23) — some quests only work at certain times of day.</summary>
     int hourOfDay();
 
+    /// <summary>Plays a screen effect from the client's Map.wz/Effect (the oracle's FieldEffect_Screen),
+    /// e.g. "temaD/enter/mushCatle" — the themed-dungeon title shown on entering キノコ城.</summary>
+    void showScreenEffect(string path);
+
     /// <summary>Opens the NPC shop with the given shop id (no-op when unknown).</summary>
     void openShop(int shopId);
 

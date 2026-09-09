@@ -194,6 +194,15 @@ public sealed partial class ChannelHandler : IMassacreHost
         {
             await _player.Session.SendAsync(_packets.FieldEffectScreen("killing/fail")).ConfigureAwait(false);
         }
+
+        if (_mapScripts is not null && _player is not null && map is { OnUserEnter.Length: > 0 })
+        {
+            // Generic wz onUserEnter scripts (scripts/map/{name}.js). The oracle's MapScriptMethods
+            // hard-codes these by name (TD_MC_title, dojang_Msg, …); a name without a script file
+            // is a no-op, so the massacre names above stay handled in code.
+            ChannelPlayer scriptPlayer = CreateScriptPlayer(_player.Session);
+            await Task.Run(() => _mapScripts.Run(map.OnUserEnter, scriptPlayer)).ConfigureAwait(false);
+        }
     }
 
     /// <summary>The NPC's "enter the platform": a free stage-1 instance for the owner's party.</summary>

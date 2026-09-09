@@ -262,6 +262,17 @@ Cronus は 2026-09-09 まで `Cronus.Server.Host` 1プロセスに Login + N チ
       ゾンビキノコの信号体系3 2251、ラクダ 2257/2259/2260。Act が付与する報酬(EXP・メソ・人気度・アイテム)はスクリプトで
       二重に渡さない。見送り: 2238(開始のみ forceStart = データ経路と同じ)、2230(ペット卵/キャッシュ)、2232(ファミリー)、
       2245(イベントマネージャ)、2258(時間制限討伐イベント)。
+      **キノコ王国 入口**(2026-09-10、`feat/mushroom-kingdom-entry`、キュー #15): マップ入場スクリプト機構を追加
+      (`MapData.OnUserEnter` の名前 → `scripts/map/{name}.js`、ポータルと同じ `start()`+`player`、`ChannelHandler.OnFieldEnteredAsync`
+      で実行。JMSv186 `MapScriptMethods` の名前表がそのまま置き場になる)。`TD_MC_title` = temaD/enter/mushCatle(JMS 準拠)、
+      `player.showScreenEffect`。`player.setQuestData` はクライアントにも started レコードを送るようにした(Check の infoex 完了条件は
+      クライアント側でこの文字列を見る)。クエスト 2300〜2310(教官 11 人、同内容)、2325/2327 ジェイムズ、2338 予備スプレー、
+      調査ポータル investigate1/2 → セルフ 1300014(forself)の独り言で 2314/2322/2324 の印。蔓の壁 obstacle(2321 以降で通す)と
+      gotocastle(2324 の除去剤使用後に 106020501)は JMS スクリプト本体が参照に無いため Check からの推定 = [DEV]。
+      2312〜2324/2326/2328〜2331/2336/2337 はデータ経路。**未着手**: 東の塔以降 = TD_MC_keycheck / TD_MC_bossEnter(東石塔門 1300012) /
+      TD_MC_violetaEnter(1300013) / 結婚式場インスタンス(106021500〜 summon_pepeking・pepeking_effect・findvioleta・in_secretroom、
+      fieldLimit 271096)と、その先のビオルタ 2332〜2335・2342、TD_MC_Openning/TD_MC_gasi の演出マップ、`onFirstUserEnter`。
+      いずれも JMS/Cosmic に本体が無く、ボス戦インスタンスの設計が要る(実機で検証できる段階で)。
       残る最上位:
       モンスターカーニバル(シュピゲルマン 2042000〜2042007 + 助手)、月うさぎ 9001102(ヘネシス PQ、19 町)、
       帰還碑/名誉の石碑 9040004/9040005、忍耐の森 1061007、timeQuest(思い出の道 16)、rankRoom/tutorialNPC

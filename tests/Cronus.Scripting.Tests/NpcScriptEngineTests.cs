@@ -262,6 +262,7 @@ public class NpcScriptEngineTests
         public bool dojoTutorialExit() => false;
         public void openNpc(int npcId) { }
         public int hourOfDay() => 12;
+        public void showScreenEffect(string path) { }
 
         public string? getQuestData(int questId) => null;
 
