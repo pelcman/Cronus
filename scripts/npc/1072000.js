@@ -14,9 +14,7 @@ function start() {
         }
         var pick = cm.askMenu(menu);
         if (cm.askYesNo(names[pick] + "への転職でいいのか?")) {
-            player.setJob(jobs[pick]);
-            player.gainMaxHp(250);
-            player.gainSp(1);
+            player.changeJob(jobs[pick]);
             cm.sendOk("おめでとう!今日から" + names[pick] + "だ。");
         } else {
             cm.sendOk("よく考えてから決めなさい。");

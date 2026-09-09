@@ -114,6 +114,8 @@ public class AllScriptsExerciseTests
         public void gainAp(int amount) => _ap = Math.Max(0, _ap + amount);
         public void gainSp(int amount) => _sp = Math.Max(0, _sp + amount);
         public void gainFame(int amount) => _fame += amount;
+        public void changeJob(int job) => setJob(job);
+        public void resetStatsForJob() { }
         public void setJob(int job) => Job = job;
         public void gainMaxHp(int amount) { }
         public void gainMaxMp(int amount) { }

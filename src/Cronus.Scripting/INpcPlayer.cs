@@ -117,6 +117,18 @@ public interface INpcPlayer
     /// <summary>Sets the player's job (e.g. a job-advancement NPC) and notifies the client.</summary>
     void setJob(int job);
 
+    /// <summary>
+    /// Job advancement (ports the oracle's MapleCharacter.changeJob): the job, its advancement SP
+    /// (1; +2 for a fourth-tier job; a late first job also gets the 3 per level past 10 — 8 for a
+    /// magician), the job's max HP/MP bonus with a refill, and the client / field notifications.
+    /// The stat distribution is kept — see <see cref="resetStatsForJob"/>.
+    /// </summary>
+    void changeJob(int job);
+
+    /// <summary>The Cygnus / Aran first-job stat reset: the job's base stats with every other point
+    /// returned to AP (the oracle's resetStatsByJob; Cosmic's resetStats). No-op outside a first job.</summary>
+    void resetStatsForJob();
+
     /// <summary>Raises max HP by <paramref name="amount"/> (clamped to 1..30000) and heals into it.</summary>
     void gainMaxHp(int amount);
 

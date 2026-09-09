@@ -9,9 +9,7 @@ function start() {
         return;
     }
     if (cm.askYesNo("魔法使いへの転職を望むか?")) {
-        player.setJob(200);
-        player.gainMaxMp(150);
-        player.gainSp(1);
+        player.changeJob(200);
         cm.sendOk("おめでとう!今日からあなたは魔法使いだ。SPを大切に使いなさい。");
     } else {
         cm.sendOk("焦ることはない。心が決まったらまた来なさい。");

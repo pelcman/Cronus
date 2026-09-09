@@ -11,9 +11,7 @@ function start() {
         return;
     }
     if (cm.askYesNo("ついにここまで来たか。最後の転職を行うか?")) {
-        player.setJob(job + 1);
-        player.gainMaxHp(300);
-        player.gainSp(1);
+        player.changeJob(job + 1);
         cm.sendOk("おめでとう!あなたはこの道を極めた。");
     }
 }

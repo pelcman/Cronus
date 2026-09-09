@@ -194,6 +194,8 @@ public class NpcScriptEngineTests
         public void gainAp(int amount) => Ap = Math.Max(0, Ap + amount);
         public void gainSp(int amount) => Sp = Math.Max(0, Sp + amount);
         public void gainFame(int amount) => Fame = Math.Clamp(Fame + amount, -30000, 30000);
+        public void changeJob(int job) => setJob(job);
+        public void resetStatsForJob() { }
         public void setJob(int job) => Job = job;
         public int MaxHp = 100;
         public int MaxMp = 100;
