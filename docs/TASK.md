@@ -366,6 +366,11 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
 5. リファレンスの優先順位: **JMSv186(バイト・タイミング)→ Cosmic(コンテンツの流れ)→ 創作**。
    Cosmic から写した流れは、ファイル先頭に出典(`Reference/Cosmic/scripts/...`)を書く。
 6. 週次目安で `npc_coverage.py` を再生成し、`[DEV]` 残数と none 数を更新する。
+8. **実機確認の後回し(2026-09-09〜、運用者の指示)**: 運用者がしばらく実クライアント確認をできない間は、
+   テストと bot が緑の機能は実機確認を待たずに develop へマージしてよい。ただし確認すべき項目は
+   [CLIENT_VERIFICATION_QUEUE.ja.md](CLIENT_VERIFICATION_QUEUE.ja.md) に運用者宛で積み、**キューが空になるまで
+   `main` への `stable-N` タグは切らない**。実装ごとにキューへ追記する。
+
 7. **ブランチ運用(2026-09-09 改訂)**: `main` = 安定版、`develop` = 統合、作業は **テスト項目ごとのブランチ**。
    - 作業単位は「1 つのテスト項目」= 検証できるまとまり(例: `feat/mu-lung-dojo`、`feat/process-split`、
      `fix/npc-image-guard`)。`develop` から `feat/<項目>` / `fix/<項目>` を切り、コミットは全部そこへ、
