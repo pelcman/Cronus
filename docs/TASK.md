@@ -273,6 +273,9 @@ Cronus は 2026-09-09 まで `Cronus.Server.Host` 1プロセスに Login + N チ
       TD_MC_violetaEnter(1300013) / 結婚式場インスタンス(106021500〜 summon_pepeking・pepeking_effect・findvioleta・in_secretroom、
       fieldLimit 271096)と、その先のビオルタ 2332〜2335・2342、TD_MC_Openning/TD_MC_gasi の演出マップ、`onFirstUserEnter`。
       いずれも JMS/Cosmic に本体が無く、ボス戦インスタンスの設計が要る(実機で検証できる段階で)。
+      **称号クエスト**(2026-09-10、`feat/quest-title-medals`、キュー #16): 冒険家 29900〜29903(ダリア 9000040、受注で知らせ →
+      ダリアで勲章)、シグナス騎士団 29906〜29909、アラン 29924〜29928(その場で勲章+完了)。勲章 ID は JMS Check の「未所持」条件と
+      String/Eqp で確認(騎士 1142066〜69 は Cosmic と同じ)。ダリア 9000066 は JMS のマップに未配置(自動開始専用)。
       残る最上位:
       モンスターカーニバル(シュピゲルマン 2042000〜2042007 + 助手)、月うさぎ 9001102(ヘネシス PQ、19 町)、
       帰還碑/名誉の石碑 9040004/9040005、忍耐の森 1061007、timeQuest(思い出の道 16)、rankRoom/tutorialNPC
