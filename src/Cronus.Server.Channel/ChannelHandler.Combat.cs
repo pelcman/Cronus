@@ -252,6 +252,15 @@ public sealed partial class ChannelHandler
             MobData? reviveStats = _fields.MobProvider?.GetMob(reviveId);
             FieldMob phase = _field.SpawnMob(reviveId, reviveStats, dead.X, dead.Y, dead.Foothold);
             await _field.BroadcastAsync(_packets.MobEnterField(phase)).ConfigureAwait(false);
+
+            // The Mu Lung Dojo boss's revive is the invincible 9300216 checker: its appearance means
+            // the stage is cleared, so play the clear fanfare (the oracle broadcasts it here too).
+            if (reviveId == MuLungDojo.ClearChecker && MuLungDojo.IsDojo(_field.MapId))
+            {
+                await _field.BroadcastAsync(_packets.FieldEffectSound("Dojang/clear")).ConfigureAwait(false);
+                await _field.BroadcastAsync(_packets.FieldEffectScreen("dojang/end/clear")).ConfigureAwait(false);
+            }
+
             if (_player is not null)
             {
                 phase.ControllerId = _player.Character.Id;

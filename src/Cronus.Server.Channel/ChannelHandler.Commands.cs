@@ -1605,7 +1605,14 @@ public sealed partial class ChannelHandler
         hasMerchant: () => _merchants.GetByOwner(_player!.Character.Id) is not null,
         retrieveMerchant: RetrieveMerchantAsync,
         spawnMob: (mobId, count) => ScriptSpawnMobAsync(mobId, count),
-        mobCount: () => _field?.Mobs.Count(m => !m.IsDead) ?? 0);
+        mobCount: () => _field?.Mobs.Count(m => !m.IsDead) ?? 0,
+        dojoPoints: DojoPoints,
+        setDojoPoints: points => _ = SetDojoPointsAsync(points),
+        dojoEnter: DojoEnter,
+        dojoNext: () => _ = DojoNextStageAsync(),
+        dojoUp: () => DojoTeleportUpAsync().AsTask().GetAwaiter().GetResult(),
+        dojoExit: () => _ = DojoExitAsync(),
+        dojoTutorialExit: () => DojoTutorialExitAsync().AsTask().GetAwaiter().GetResult());
 
     /// <summary>Spawns mobs at the scripting player's feet (boss altars, event NPCs).</summary>
     private async ValueTask ScriptSpawnMobAsync(int mobId, int count)

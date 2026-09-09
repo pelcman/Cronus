@@ -241,7 +241,10 @@ Cronus は 2026-09-09 まで `Cronus.Server.Host` 1プロセスに Login + N チ
       [COSMIC_GAP.md](COSMIC_GAP.md)(生成物)を出す。現在値: NPC 418(うち JMS マップに配置 304)、
       クエストスクリプト 220、ポータル 324(+Cosmic にも無い JMS 固有 208)、リアクター 235、
       JMS マップを参照するイベントスクリプト 85。配置マップ数の多い順に並ぶので上から潰す。
-      最上位: 武陵道場(NPC 2091005 素公パンダ 39 マップ + ポータル dojang_next/dojang_up 70 マップ)、
+      **武陵道場は実装済み**(2026-09-09、`feat/mu-lung-dojo`、実機確認待ち): NPC 2091005 素公パンダ
+      (挑戦/ベルト/点数リセット、パーティー挑戦と勲章は [DEV])、ポータル dojang_next/up/exit/tuto、
+      1〜38階のソロ進行(インスタンス探索・ボス湧き・制限時間クロック・開始/クリア演出)、修練点数の
+      永続化(`MuLungDojo` + `ChannelHandler.Dojo`)。残る最上位:
       モンスターカーニバル(シュピゲルマン 2042000〜2042007 + 助手)、月うさぎ 9001102(ヘネシス PQ、19 町)、
       帰還碑/名誉の石碑 9040004/9040005、忍耐の森 1061007、timeQuest(思い出の道 16)、rankRoom/tutorialNPC
       (職業別施設)。実装のたびに再生成して残数を更新(ID・数値は v186 データで置換、`[DEV]` 規約)。
@@ -363,6 +366,11 @@ FieldSet.img(BMS Server.wz)はオラクル欠落。**Cosmic の EventManager / E
 5. リファレンスの優先順位: **JMSv186(バイト・タイミング)→ Cosmic(コンテンツの流れ)→ 創作**。
    Cosmic から写した流れは、ファイル先頭に出典(`Reference/Cosmic/scripts/...`)を書く。
 6. 週次目安で `npc_coverage.py` を再生成し、`[DEV]` 残数と none 数を更新する。
+8. **実機確認の後回し(2026-09-09〜、運用者の指示)**: 運用者がしばらく実クライアント確認をできない間は、
+   テストと bot が緑の機能は実機確認を待たずに develop へマージしてよい。ただし確認すべき項目は
+   [CLIENT_VERIFICATION_QUEUE.ja.md](CLIENT_VERIFICATION_QUEUE.ja.md) に運用者宛で積み、**キューが空になるまで
+   `main` への `stable-N` タグは切らない**。実装ごとにキューへ追記する。
+
 7. **ブランチ運用(2026-09-09 改訂)**: `main` = 安定版、`develop` = 統合、作業は **テスト項目ごとのブランチ**。
    - 作業単位は「1 つのテスト項目」= 検証できるまとまり(例: `feat/mu-lung-dojo`、`feat/process-split`、
      `fix/npc-image-guard`)。`develop` から `feat/<項目>` / `fix/<項目>` を切り、コミットは全部そこへ、

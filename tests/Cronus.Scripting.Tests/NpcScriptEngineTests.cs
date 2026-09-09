@@ -253,6 +253,14 @@ public class NpcScriptEngineTests
 
         public bool bonusSubwayMassacre() => false;
 
+        public int dojoPoints() => 0;
+        public void setDojoPoints(int points) { }
+        public bool dojoEnter(bool party, int fromStage) => false;
+        public void dojoNextStage() { }
+        public bool dojoTeleportUp() => false;
+        public void dojoExit() { }
+        public bool dojoTutorialExit() => false;
+
         public string? getQuestData(int questId) => null;
 
         public void setQuestData(int questId, string data) { }

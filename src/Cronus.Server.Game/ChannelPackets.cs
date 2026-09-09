@@ -1714,7 +1714,38 @@ public sealed class ChannelPackets
         return w.ToArray();
     }
 
-    /// <summary><c>LP_SessionValue</c>: a named string the client's UI reads (the massacre gauge's
+    /// <summary><c>LP_FieldEffect</c> type 4 (FieldEffect_Sound): a sound-bank path, e.g.
+    /// "Dojang/start" or "Dojang/clear" (ports <c>ResCField.FieldEffect</c> Sound branch).</summary>
+    public byte[] FieldEffectSound(string path)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FieldEffect);
+        w.WriteByte(4);
+        w.WriteString(path);
+        return w.ToArray();
+    }
+
+    /// <summary><c>LP_FieldEffect</c> type 1 (FieldEffect_Tremble): shakes the screen; the dojo start
+    /// uses type 0, delay 1 (ports <c>ResCField.FieldEffect</c> Tremble branch).</summary>
+    public byte[] FieldEffectTremble(byte type = 0, int delay = 1)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.FieldEffect);
+        w.WriteByte(1);
+        w.WriteByte(type);
+        w.WriteInt(delay);
+        return w.ToArray();
+    }
+
+    /// <summary><c>LP_UserTeleport</c>: an in-map teleport to portal <paramref name="portal"/> (the
+    /// dojo "go up" lift; ports <c>ResCUserLocal.UserTeleport</c>): [0][portal].</summary>
+    public byte[] UserTeleport(byte portal)
+    {
+        PacketWriter w = NewPacket(ServerOpcode.UserTeleport);
+        w.WriteByte(0);
+        w.WriteByte(portal);
+        return w.ToArray();
+    }
+
+        /// <summary><c>LP_SessionValue</c>: a named string the client's UI reads (the massacre gauge's
     /// <c>massacre_hit</c> etc.; ports <c>ResCWvsContext.sendString(1, …)</c>).</summary>
     public byte[] SessionValue(string key, string value)
     {
@@ -2787,7 +2818,23 @@ public sealed class ChannelPackets
     /// then per state — started carries the progress string (e.g. per-mob 3-digit kill counts),
     /// completed the completion FILETIME, and none a single 0 byte.
     /// </summary>
-    public byte[] QuestRecordMessage(int questId, byte state, string progress = "")
+    /// <summary>
+    /// The info-quest "ex" record (<c>LP_Message</c> / MS_QuestRecordExMessage = 11, ports
+    /// <c>ResWrapper.updateInfoQuest</c>): a quest id and a free-form string the client's HUD reads
+    /// — the dojo's "pt=…;belt=…;tuto=…" training-points display uses id 1207.
+    /// </summary>
+    public byte[] QuestRecordExMessage(int questId, string data)
+    {
+        const byte msgQuestRecordEx = 11; // MS_QuestRecordExMessage
+
+        PacketWriter w = NewPacket(ServerOpcode.Message);
+        w.WriteByte(msgQuestRecordEx);
+        w.WriteShort((short)questId);
+        w.WriteString(data);
+        return w.ToArray();
+    }
+
+        public byte[] QuestRecordMessage(int questId, byte state, string progress = "")
     {
         const byte msgQuestRecord = 1; // MS_QuestRecordMessage
 
