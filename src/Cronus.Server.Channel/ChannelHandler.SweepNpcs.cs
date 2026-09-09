@@ -77,8 +77,7 @@ public sealed partial class ChannelHandler
         public void heal() { }
         public void rememberMap() { }
         public void warpToRememberedMap(int fallbackMapId) { }
-        public void warp(int mapId) { }
-        public void warp(int mapId, int portal) { }
+        public void warp(int mapId, int portal = 0) { }
         public void warpPortal(int mapId, string portalName) { }
         public bool airshipBoarding() => true;
         public int airshipMinutes() => 5;

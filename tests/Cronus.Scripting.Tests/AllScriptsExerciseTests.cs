@@ -103,8 +103,7 @@ public class AllScriptsExerciseTests
         public void heal() => _hp = 500;
         public void rememberMap() => _remembered = MapId;
         public void warpToRememberedMap(int fallbackMapId) => warp(_remembered > 0 ? _remembered : fallbackMapId, 0);
-        public void warp(int mapId) => warp(mapId, 0);
-        public void warp(int mapId, int portal) { Warps.Add(mapId); MapId = mapId; }
+        public void warp(int mapId, int portal = 0) { Warps.Add(mapId); MapId = mapId; }
         public void warpPortal(int mapId, string portalName) => warp(mapId, 0);
         public bool airshipBoarding() => true;
         public int airshipMinutes() => 5;

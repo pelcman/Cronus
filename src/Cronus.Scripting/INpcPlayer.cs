@@ -77,11 +77,12 @@ public interface INpcPlayer
     /// <summary>Warps to the remembered map (or the fallback when none) and forgets it.</summary>
     void warpToRememberedMap(int fallbackMapId);
 
-    /// <summary>Warps the player to another map's default spawn portal.</summary>
-    void warp(int mapId);
-
-    /// <summary>Warps the player to a specific spawn portal of another map.</summary>
-    void warp(int mapId, int portal);
+    /// <summary>
+    /// Warps the player to <paramref name="mapId"/>, spawn portal <paramref name="portal"/> (0 = default).
+    /// One method, not two overloads: Jint mis-resolves an overloaded method after a blocking dialog
+    /// call and reports it "not a function", so warp must stay a single signature.
+    /// </summary>
+    void warp(int mapId, int portal = 0);
 
     /// <summary>Warps to the portal named <paramref name="portalName"/> (the wz <c>pn</c>), or portal 0 when the map has no such portal.</summary>
     void warpPortal(int mapId, string portalName);

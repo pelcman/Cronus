@@ -242,8 +242,6 @@ public sealed class ChannelPlayer : INpcPlayer
         warp(target, 0);
     }
 
-    public void warp(int mapId) => warp(mapId, 0);
-
     /// <summary>
     /// Warps to the portal named <paramref name="portalName"/> (the wz <c>pn</c>, e.g. the
     /// <c>out00</c> the station scripts arrive at), or to portal 0 when the map has no such portal.
@@ -257,7 +255,7 @@ public sealed class ChannelPlayer : INpcPlayer
     /// no field-mutating packet is being handled concurrently, and the transfer's own operations are
     /// individually thread-safe.
     /// </summary>
-    public void warp(int mapId, int portal)
+    public void warp(int mapId, int portal = 0)
     {
         if (_warp is null)
         {
