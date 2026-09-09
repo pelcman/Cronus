@@ -116,6 +116,8 @@ public class AllScriptsExerciseTests
         public void gainFame(int amount) => _fame += amount;
         public void changeJob(int job) => setJob(job);
         public void resetStatsForJob() { }
+        public int getSkillLevel(int skillId) => 0;
+        public void teachSkill(int skillId, int level) { }
         public void setJob(int job) => Job = job;
         public void gainMaxHp(int amount) { }
         public void gainMaxMp(int amount) { }

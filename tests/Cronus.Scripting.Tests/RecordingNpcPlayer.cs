@@ -62,6 +62,9 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public void changeJob(int job) { Job = job; JobChanges.Add(job); }
     public bool StatsReset;
     public void resetStatsForJob() => StatsReset = true;
+    public readonly System.Collections.Generic.Dictionary<int,int> Skills = new();
+    public int getSkillLevel(int skillId) => Skills.GetValueOrDefault(skillId);
+    public void teachSkill(int skillId, int level) { if (level <= 0) Skills.Remove(skillId); else Skills[skillId] = level; }
     public void gainMaxHp(int amount) { }
     public void gainMaxMp(int amount) { }
     public bool hasQuest(int questId) => StartedQuests.Contains(questId);

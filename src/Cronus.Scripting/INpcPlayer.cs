@@ -129,6 +129,16 @@ public interface INpcPlayer
     /// returned to AP (the oracle's resetStatsByJob; Cosmic's resetStats). No-op outside a first job.</summary>
     void resetStatsForJob();
 
+    /// <summary>The learned level of a skill (0 when the character does not have it).</summary>
+    int getSkillLevel(int skillId);
+
+    /// <summary>
+    /// Sets a skill's learned level (0 forgets it) and pushes the record to the client (ports the
+    /// oracle's changeSkillLevel / ChangeSkillRecordResult). The Aran story quests and the Maker
+    /// lessons teach through this; master levels are derived, not stored.
+    /// </summary>
+    void teachSkill(int skillId, int level);
+
     /// <summary>Raises max HP by <paramref name="amount"/> (clamped to 1..30000) and heals into it.</summary>
     void gainMaxHp(int amount);
 

@@ -90,6 +90,8 @@ public sealed partial class ChannelHandler
         public void gainFame(int amount) { }
         public void changeJob(int job) => setJob(job);
         public void resetStatsForJob() { }
+        public int getSkillLevel(int skillId) => _c.Skills.GetValueOrDefault(skillId);
+        public void teachSkill(int skillId, int level) { }
         public void setJob(int job) { }
         public void gainMaxHp(int amount) { }
         public void gainMaxMp(int amount) { }
