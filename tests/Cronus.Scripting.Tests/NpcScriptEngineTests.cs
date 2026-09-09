@@ -196,6 +196,8 @@ public class NpcScriptEngineTests
         public void gainFame(int amount) => Fame = Math.Clamp(Fame + amount, -30000, 30000);
         public void changeJob(int job) => setJob(job);
         public void resetStatsForJob() { }
+        public int getSkillLevel(int skillId) => 0;
+        public void teachSkill(int skillId, int level) { }
         public void setJob(int job) => Job = job;
         public int MaxHp = 100;
         public int MaxMp = 100;

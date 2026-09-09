@@ -328,6 +328,24 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void resetStatsForJob() => _resetStats?.Invoke();
 
+    public int getSkillLevel(int skillId) => _character.Skills.GetValueOrDefault(skillId);
+
+    public void teachSkill(int skillId, int level)
+    {
+        if (level <= 0)
+        {
+            _character.Skills.Remove(skillId);
+        }
+        else
+        {
+            _character.Skills[skillId] = level;
+        }
+
+        _characters.Save(_character);
+        int masterLevel = CharacterDataEncoder.NeedsMasterLevel(skillId) ? Math.Max(level, 0) : 0;
+        Send(_packets.ChangeSkillRecordResult(skillId, Math.Max(level, 0), masterLevel));
+    }
+
     public void gainMaxHp(int amount)
     {
         _character.MaxHp = (short)Math.Clamp(_character.MaxHp + amount, 1, 30000);
