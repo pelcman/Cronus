@@ -180,6 +180,7 @@ public class NpcScriptEngineTests
         }
         public void gainExp(int amount) => Exp = Math.Max(0, Exp + amount);
         public void heal() => Hp = getMaxHp();
+        public void setHp(int hp) { }
 
         public int Job;
         public int Fame;

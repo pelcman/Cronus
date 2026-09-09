@@ -238,6 +238,13 @@ public sealed class ChannelPlayer : INpcPlayer
         Send(_packets.StatChanged(_character, StatFlag.Hp | StatFlag.Mp));
     }
 
+    public void setHp(int hp)
+    {
+        _character.Hp = (short)Math.Clamp(hp, 1, _character.MaxHp);
+        _characters.Save(_character);
+        Send(_packets.StatChanged(_character, StatFlag.Hp));
+    }
+
     public void rememberMap()
     {
         _character.RememberedMap = _character.MapId;

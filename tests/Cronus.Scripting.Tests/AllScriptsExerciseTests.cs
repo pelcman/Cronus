@@ -101,6 +101,7 @@ public class AllScriptsExerciseTests
         public void gainMeso(int amount) => _meso = Math.Max(0, _meso + amount);
         public void gainExp(int amount) => _exp = Math.Max(0, _exp + amount);
         public void heal() => _hp = 500;
+        public void setHp(int hp) { }
         public void rememberMap() => _remembered = MapId;
         public void warpToRememberedMap(int fallbackMapId) => warp(_remembered > 0 ? _remembered : fallbackMapId, 0);
         public void warp(int mapId, int portal = 0) { Warps.Add(mapId); MapId = mapId; }
