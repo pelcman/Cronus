@@ -65,8 +65,17 @@ public sealed class NpcScriptEngine
             return null;
         }
 
+        // A quest may script only its opening or only its completion (JMS declares startscript /
+        // endscript separately): when the file has no function for this side, it is "no script"
+        // for this side and the caller takes the data-driven path.
+        string entry = ending ? "end" : "start";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(code, @"\bfunction\s+" + entry + @"\s*\("))
+        {
+            return null;
+        }
+
         var conversation = new NpcConversation(npcId, dialog, _answerTimeoutMs);
-        var thread = new Thread(() => Run(code, conversation, player, "qm", ending ? "end" : "start"))
+        var thread = new Thread(() => Run(code, conversation, player, "qm", entry))
         {
             IsBackground = true,
             Name = $"quest-script-{questId}",
