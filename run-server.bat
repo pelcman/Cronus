@@ -52,17 +52,23 @@ set "CHANNEL=src\Cronus.Server.Channel\bin\%CONFIG%\net10.0\Cronus.Server.Channe
 echo [2/2] Starting World, Login and Channel...
 echo.
 rem The processes run from the repo root so .env and relative data paths resolve.
-rem World first; Login and Channel retry for 15 s until it answers.
-where wt >nul 2>&1
-if %errorlevel%==0 (
-    wt -d "%CD%" --title "Cronus World" cmd /k "%WORLD%" ; ^
-       nt -d "%CD%" --title "Cronus Login" cmd /k "%LOGIN%" ; ^
-       nt -d "%CD%" --title "Cronus Channel" cmd /k "%CHANNEL%"
-) else (
-    start "Cronus World" /d "%CD%" cmd /k "%WORLD%"
-    start "Cronus Login" /d "%CD%" cmd /k "%LOGIN%"
-    start "Cronus Channel" /d "%CD%" cmd /k "%CHANNEL%"
-)
+rem Windows Terminal (one window, three tabs) is preferred; three console windows are the fallback.
+where wt >nul 2>&1 && goto :wt
+
+echo [i] Windows Terminal (wt) not found - opening three console windows instead.
+echo     Install it from the Microsoft Store to get one window with three tabs.
+start "Cronus World" /d "%CD%" cmd /k "%WORLD%"
+start "Cronus Login" /d "%CD%" cmd /k "%LOGIN%"
+start "Cronus Channel" /d "%CD%" cmd /k "%CHANNEL%"
+goto :launched
+
+:wt
+rem One Windows Terminal window, three tabs. This MUST stay on a single line: Windows Terminal
+rem reads " ; " as the separator between its new-tab commands (a caret line-continuation in a
+rem batch IF-block breaks it, which is why earlier runs opened plain windows).
+wt -d "%CD%" --title "Cronus World" cmd /k "%WORLD%" ; new-tab -d "%CD%" --title "Cronus Login" cmd /k "%LOGIN%" ; new-tab -d "%CD%" --title "Cronus Channel" cmd /k "%CHANNEL%"
+
+:launched
 
 echo [i] Three windows/tabs opened: World, Login, Channel. Point the client at port 8484.
 echo     Logs: src\Cronus.Server.^<World^|Login^|Channel^>\bin\%CONFIG%\net10.0\logs\
