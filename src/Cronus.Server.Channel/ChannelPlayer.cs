@@ -49,6 +49,8 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Action? _dojoExit;
     private readonly Func<bool>? _dojoTutorialExit;
     private readonly Action<int>? _openNpc;
+    private readonly Func<int, ValueTask>? _startQuest;
+    private readonly Func<int, ValueTask>? _completeQuest;
 
     public ChannelPlayer(
         Character character,
@@ -85,7 +87,9 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<bool>? dojoUp = null,
         Action? dojoExit = null,
         Func<bool>? dojoTutorialExit = null,
-        Action<int>? openNpc = null)
+        Action<int>? openNpc = null,
+        Func<int, ValueTask>? startQuest = null,
+        Func<int, ValueTask>? completeQuest = null)
     {
         _character = character;
         _characters = characters;
@@ -122,6 +126,8 @@ public sealed class ChannelPlayer : INpcPlayer
         _dojoExit = dojoExit;
         _dojoTutorialExit = dojoTutorialExit;
         _openNpc = openNpc;
+        _startQuest = startQuest;
+        _completeQuest = completeQuest;
     }
 
     public string getName() => _character.Name;
@@ -318,6 +324,12 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void startQuest(int questId)
     {
+        if (_startQuest is not null)
+        {
+            _startQuest(questId).AsTask().GetAwaiter().GetResult(); // the real path: rewards, record, journal packet
+            return;
+        }
+
         _character.StartedQuests[questId] = string.Empty;
         _characters.Save(_character);
         Send(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted)); // journal updates live
@@ -325,6 +337,12 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void completeQuest(int questId)
     {
+        if (_completeQuest is not null)
+        {
+            _completeQuest(questId).AsTask().GetAwaiter().GetResult(); // the real path: rewards, record, journal packet, effect
+            return;
+        }
+
         _character.StartedQuests.Remove(questId);
         _character.CompletedQuests[questId] = CharacterDataEncoder.FileTimeNow();
         _characters.Save(_character);

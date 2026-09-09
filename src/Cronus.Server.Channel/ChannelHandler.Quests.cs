@@ -239,6 +239,77 @@ public sealed partial class ChannelHandler
         }
     }
 
+    /// <summary>
+    /// A script starts a quest (the oracle's <c>forceStartQuest</c>): no start-side checks — the
+    /// script decided — but everything the data path does after them: start-act rewards, the
+    /// record with zeroed progress, the journal packet and the Act_Success result. Quests the data
+    /// set does not know are still recorded so the journal and the script agree.
+    /// </summary>
+    private async ValueTask ForceStartQuestAsync(MapleSession session, int questId, int npcId)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        if (c.StartedQuests.ContainsKey(questId))
+        {
+            return;
+        }
+
+        c.CompletedQuests.Remove(questId);
+        QuestData? quest = _quests.GetQuest(questId);
+        if (quest?.StartAct is { } act && !await ApplyQuestActAsync(session, c, act).ConfigureAwait(false))
+        {
+            return; // start rewards don't fit
+        }
+
+        string progress = InitialQuestProgress(quest);
+        c.StartedQuests[questId] = progress;
+        _characters.Save(c);
+        await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordStarted, progress)).ConfigureAwait(false);
+        await session.SendAsync(_packets.UserQuestResult(questId, npcId)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A script completes a quest (the oracle's <c>forceCompleteQuest</c>): no end-side checks —
+    /// the script verified what it wanted — then the data path's completion: end-act rewards, the
+    /// record, the journal packet, the follow-up result when the act names one, the effect.
+    /// A quest that was never started is completed anyway (scripts do this for one-shot flags).
+    /// </summary>
+    private async ValueTask ForceCompleteQuestAsync(MapleSession session, int questId, int npcId)
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        Character c = _player.Character;
+        QuestData? quest = _quests.GetQuest(questId);
+        if (quest?.EndAct is { } act && !await ApplyQuestActAsync(session, c, act).ConfigureAwait(false))
+        {
+            return; // rewards don't fit — keep the quest as it is so the turn-in can be retried
+        }
+
+        c.StartedQuests.Remove(questId);
+        c.CompletedQuests[questId] = CharacterDataEncoder.FileTimeNow();
+        _characters.Save(c);
+
+        await session.SendAsync(_packets.QuestRecordMessage(questId, ChannelPackets.QuestRecordCompleted)).ConfigureAwait(false);
+        short nextQuest = (short)(quest?.EndAct?.NextQuest ?? 0);
+        if (nextQuest != 0)
+        {
+            await session.SendAsync(_packets.UserQuestResult(questId, npcId, nextQuest)).ConfigureAwait(false);
+        }
+
+        await session.SendAsync(_packets.UserEffectLocal(ChannelPackets.UserEffectQuestComplete)).ConfigureAwait(false);
+        if (_field is not null)
+        {
+            await _field.BroadcastAsync(_packets.UserEffectRemote(c.Id, ChannelPackets.UserEffectQuestComplete), exceptCharacterId: c.Id).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>Zeroed per-mob progress ("000" per required mob) for a fresh quest record.</summary>
     private static string InitialQuestProgress(QuestData? quest)
         => quest?.EndCheck is { Mobs.Count: > 0 } end
