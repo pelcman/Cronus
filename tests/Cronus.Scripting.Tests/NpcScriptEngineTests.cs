@@ -259,6 +259,7 @@ public class NpcScriptEngineTests
         public bool dojoTeleportUp() => false;
         public void dojoExit() { }
         public bool dojoTutorialExit() => false;
+        public void openNpc(int npcId) { }
 
         public string? getQuestData(int questId) => null;
 

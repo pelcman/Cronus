@@ -165,6 +165,10 @@ public interface INpcPlayer
     void dojoExit();
     bool dojoTutorialExit();
 
+    /// <summary>Opens another NPC's dialog from a script (the job halls' tutorial portal opens the
+    /// instructor); the same path as the /talk command. Ends any conversation already open.</summary>
+    void openNpc(int npcId);
+
     /// <summary>Opens the NPC shop with the given shop id (no-op when unknown).</summary>
     void openShop(int shopId);
 

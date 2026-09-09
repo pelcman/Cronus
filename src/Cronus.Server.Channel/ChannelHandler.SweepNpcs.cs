@@ -117,6 +117,7 @@ public sealed partial class ChannelHandler
         public bool dojoTeleportUp() => false;
         public void dojoExit() { }
         public bool dojoTutorialExit() => false;
+        public void openNpc(int npcId) { }
     }
 
     /// <summary>
