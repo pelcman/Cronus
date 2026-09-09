@@ -172,6 +172,9 @@ public interface INpcPlayer
     /// instructor); the same path as the /talk command. Ends any conversation already open.</summary>
     void openNpc(int npcId);
 
+    /// <summary>The server's local hour (0–23) — some quests only work at certain times of day.</summary>
+    int hourOfDay();
+
     /// <summary>Opens the NPC shop with the given shop id (no-op when unknown).</summary>
     void openShop(int shopId);
 

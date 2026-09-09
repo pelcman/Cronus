@@ -119,6 +119,7 @@ public sealed partial class ChannelHandler
         public void dojoExit() { }
         public bool dojoTutorialExit() => false;
         public void openNpc(int npcId) { }
+        public int hourOfDay() => 12;
     }
 
     /// <summary>

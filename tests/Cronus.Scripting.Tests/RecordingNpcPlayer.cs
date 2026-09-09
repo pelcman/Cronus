@@ -64,7 +64,7 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public readonly System.Collections.Generic.List<int> StartedQuests = new();
     public void startQuest(int questId) => StartedQuests.Add(questId);
     public readonly System.Collections.Generic.List<int> CompletedQuests = new();
-    public void completeQuest(int questId) => CompletedQuests.Add(questId);
+    public void completeQuest(int questId) { CompletedQuests.Add(questId); _done.Add(questId); }
     public void gainItem(int itemId, int quantity) => Inventory[itemId] = Inventory.GetValueOrDefault(itemId) + quantity;
     public bool haveItem(int itemId) => Inventory.GetValueOrDefault(itemId) > 0;
     public int itemQuantity(int itemId) => Inventory.GetValueOrDefault(itemId);
@@ -88,6 +88,8 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public bool retrieveMerchant() => false;
     public int getBuddyCapacity() => 0;
     public void gainBuddyCapacity(int amount) { }
+    public int Hour = 12;
+    public int hourOfDay() => Hour;
     public int? OpenedNpc;
     public void openNpc(int npcId) => OpenedNpc = npcId;
     private readonly System.Collections.Generic.HashSet<int> _done = new();
