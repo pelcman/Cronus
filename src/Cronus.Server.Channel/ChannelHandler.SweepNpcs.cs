@@ -111,6 +111,13 @@ public sealed partial class ChannelHandler
         public bool bonusSubwayMassacre() => false;
         public string? getQuestData(int questId) => _c.StartedQuests.TryGetValue(questId, out string? d) ? d : null;
         public void setQuestData(int questId, string data) { }
+        public int dojoPoints() => 0;
+        public void setDojoPoints(int points) { }
+        public bool dojoEnter(bool party, int fromStage) => false;
+        public void dojoNextStage() { }
+        public bool dojoTeleportUp() => false;
+        public void dojoExit() { }
+        public bool dojoTutorialExit() => false;
     }
 
     /// <summary>

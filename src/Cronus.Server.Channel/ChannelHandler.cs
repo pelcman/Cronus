@@ -623,6 +623,7 @@ public sealed partial class ChannelHandler : PacketHandlerBase
         _sweep?.Cancel();
         _sweep = null;
         EndMassacreOnDisconnect();
+        CancelDojoTimer();
 
         if (_player is not null)
         {

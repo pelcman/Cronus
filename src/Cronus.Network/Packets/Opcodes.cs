@@ -146,6 +146,7 @@ public static class ServerOpcode
     public const string FieldEffect = "LP_FieldEffect";
     public const string SessionValue = "LP_SessionValue";
     public const string DestroyClock = "LP_DestroyClock";
+    public const string UserTeleport = "LP_UserTeleport";
     public const string MassacreIncGauge = "LP_MassacreIncGauge";
     public const string MassacreResult = "LP_MassacreResult";
     public const string Message = "LP_Message";

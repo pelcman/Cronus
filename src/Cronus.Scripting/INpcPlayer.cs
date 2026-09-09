@@ -154,6 +154,16 @@ public interface INpcPlayer
 
     void setQuestData(int questId, string data);
 
+    // 武陵道場 (Mu Lung Dojo). Points persist in a quest record; the entrance NPC and the
+    // dojang_* portals drive the rest. Party play and the vanquisher medal are not wired yet.
+    int dojoPoints();
+    void setDojoPoints(int points);
+    bool dojoEnter(bool party, int fromStage);
+    void dojoNextStage();
+    bool dojoTeleportUp();
+    void dojoExit();
+    bool dojoTutorialExit();
+
     /// <summary>Opens the NPC shop with the given shop id (no-op when unknown).</summary>
     void openShop(int shopId);
 

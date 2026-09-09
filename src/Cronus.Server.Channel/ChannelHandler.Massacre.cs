@@ -154,6 +154,8 @@ public sealed partial class ChannelHandler : IMassacreHost
     /// </summary>
     private async ValueTask OnFieldEnteredAsync(int mapId)
     {
+        await OnDojoFieldEnteredAsync(mapId).ConfigureAwait(false);
+
         MapData? map = _maps.GetMap(mapId);
         bool massacreStage = map is not null && (map.OnUserEnter == "Massacre_first" || map.FieldType == MassacreEvent.FieldTypeMassacre);
         bool hadRun = _massacre is not null;

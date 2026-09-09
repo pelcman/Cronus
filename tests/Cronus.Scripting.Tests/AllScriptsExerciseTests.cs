@@ -135,6 +135,14 @@ public class AllScriptsExerciseTests
         public bool isPartyLeader() => true;
         public bool startSubwayMassacre() => true;
         public bool bonusSubwayMassacre() => true;
+
+        public int dojoPoints() => 0;
+        public void setDojoPoints(int points) { }
+        public bool dojoEnter(bool party, int fromStage) => false;
+        public void dojoNextStage() { }
+        public bool dojoTeleportUp() => false;
+        public void dojoExit() { }
+        public bool dojoTutorialExit() => false;
         public string? getQuestData(int questId) => _questData.TryGetValue(questId, out string? d) ? d : null;
         public void setQuestData(int questId, string data) => _questData[questId] = data;
     }

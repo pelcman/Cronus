@@ -41,6 +41,13 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Func<bool>? _bonusSubway;
     private readonly Func<int, string?>? _questData;
     private readonly Action<int, string>? _setQuestData;
+    private readonly Func<int>? _dojoPoints;
+    private readonly Action<int>? _setDojoPoints;
+    private readonly Func<bool, int, bool>? _dojoEnter;
+    private readonly Action? _dojoNext;
+    private readonly Func<bool>? _dojoUp;
+    private readonly Action? _dojoExit;
+    private readonly Func<bool>? _dojoTutorialExit;
 
     public ChannelPlayer(
         Character character,
@@ -69,7 +76,14 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<bool>? startSubway = null,
         Func<bool>? bonusSubway = null,
         Func<int, string?>? questData = null,
-        Action<int, string>? setQuestData = null)
+        Action<int, string>? setQuestData = null,
+        Func<int>? dojoPoints = null,
+        Action<int>? setDojoPoints = null,
+        Func<bool, int, bool>? dojoEnter = null,
+        Action? dojoNext = null,
+        Func<bool>? dojoUp = null,
+        Action? dojoExit = null,
+        Func<bool>? dojoTutorialExit = null)
     {
         _character = character;
         _characters = characters;
@@ -98,6 +112,13 @@ public sealed class ChannelPlayer : INpcPlayer
         _bonusSubway = bonusSubway;
         _questData = questData;
         _setQuestData = setQuestData;
+        _dojoPoints = dojoPoints;
+        _setDojoPoints = setDojoPoints;
+        _dojoEnter = dojoEnter;
+        _dojoNext = dojoNext;
+        _dojoUp = dojoUp;
+        _dojoExit = dojoExit;
+        _dojoTutorialExit = dojoTutorialExit;
     }
 
     public string getName() => _character.Name;
@@ -359,6 +380,20 @@ public sealed class ChannelPlayer : INpcPlayer
     public string? getQuestData(int questId) => _questData?.Invoke(questId);
 
     public void setQuestData(int questId, string data) => _setQuestData?.Invoke(questId, data);
+
+    public int dojoPoints() => _dojoPoints?.Invoke() ?? 0;
+
+    public void setDojoPoints(int points) => _setDojoPoints?.Invoke(points);
+
+    public bool dojoEnter(bool party, int fromStage) => _dojoEnter?.Invoke(party, fromStage) ?? false;
+
+    public void dojoNextStage() => _dojoNext?.Invoke();
+
+    public bool dojoTeleportUp() => _dojoUp?.Invoke() ?? false;
+
+    public void dojoExit() => _dojoExit?.Invoke();
+
+    public bool dojoTutorialExit() => _dojoTutorialExit?.Invoke() ?? false;
 
     public int getBuddyCapacity() => _character.BuddyCapacity;
 
