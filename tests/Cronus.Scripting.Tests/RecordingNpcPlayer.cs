@@ -32,7 +32,8 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public int getLuk() => 0;
     public int getFame() => 0;
     public int getAp() => 0;
-    public int getSp() => 0;
+    public int Sp;
+    public int getSp() => Sp;
     public int getHair() => 0;
     public int getFace() => 0;
     public int getSkin() => 0;
@@ -56,7 +57,11 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public void gainAp(int amount) { }
     public void gainSp(int amount) { }
     public void gainFame(int amount) { }
-    public void setJob(int job) { }
+    public void setJob(int job) => Job = job;
+    public readonly System.Collections.Generic.List<int> JobChanges = new();
+    public void changeJob(int job) { Job = job; JobChanges.Add(job); }
+    public bool StatsReset;
+    public void resetStatsForJob() => StatsReset = true;
     public void gainMaxHp(int amount) { }
     public void gainMaxMp(int amount) { }
     public bool hasQuest(int questId) => StartedQuests.Contains(questId);

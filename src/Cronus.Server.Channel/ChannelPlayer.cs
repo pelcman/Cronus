@@ -51,6 +51,8 @@ public sealed class ChannelPlayer : INpcPlayer
     private readonly Action<int>? _openNpc;
     private readonly Func<int, ValueTask>? _startQuest;
     private readonly Func<int, ValueTask>? _completeQuest;
+    private readonly Action<int>? _changeJob;
+    private readonly Action? _resetStats;
 
     public ChannelPlayer(
         Character character,
@@ -89,7 +91,9 @@ public sealed class ChannelPlayer : INpcPlayer
         Func<bool>? dojoTutorialExit = null,
         Action<int>? openNpc = null,
         Func<int, ValueTask>? startQuest = null,
-        Func<int, ValueTask>? completeQuest = null)
+        Func<int, ValueTask>? completeQuest = null,
+        Action<int>? changeJob = null,
+        Action? resetStats = null)
     {
         _character = character;
         _characters = characters;
@@ -128,6 +132,8 @@ public sealed class ChannelPlayer : INpcPlayer
         _openNpc = openNpc;
         _startQuest = startQuest;
         _completeQuest = completeQuest;
+        _changeJob = changeJob;
+        _resetStats = resetStats;
     }
 
     public string getName() => _character.Name;
@@ -308,6 +314,19 @@ public sealed class ChannelPlayer : INpcPlayer
         _characters.Save(_character);
         Send(_packets.StatChanged(_character, StatFlag.Job));
     }
+
+    public void changeJob(int job)
+    {
+        if (_changeJob is null)
+        {
+            setJob(job); // no channel hooks (tests): the bare job
+            return;
+        }
+
+        _changeJob(job);
+    }
+
+    public void resetStatsForJob() => _resetStats?.Invoke();
 
     public void gainMaxHp(int amount)
     {

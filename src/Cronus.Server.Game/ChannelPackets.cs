@@ -2762,6 +2762,9 @@ public sealed class ChannelPackets
 
     public const byte UserEffectQuestComplete = 12;
 
+    /// <summary>User effect type: the job-advancement flash (v186 table: 11).</summary>
+    public const byte UserEffectJobChanged = 11;
+
     /// <summary>User effect type: the Monster Book card-registered flash (v186 table: 16).</summary>
     public const byte UserEffectMonsterBookCardGet = 16;
 

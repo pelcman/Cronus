@@ -9,9 +9,7 @@ function start() {
         return;
     }
     if (cm.askYesNo("弓使いへの転職を望むか?")) {
-        player.setJob(300);
-        player.gainMaxHp(100);
-        player.gainSp(1);
+        player.changeJob(300);
         cm.sendOk("おめでとう!今日からあなたは弓使いだ。SPを大切に使いなさい。");
     } else {
         cm.sendOk("焦ることはない。心が決まったらまた来なさい。");

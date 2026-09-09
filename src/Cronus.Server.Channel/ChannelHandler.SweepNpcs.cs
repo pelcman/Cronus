@@ -88,6 +88,8 @@ public sealed partial class ChannelHandler
         public void gainAp(int amount) { }
         public void gainSp(int amount) { }
         public void gainFame(int amount) { }
+        public void changeJob(int job) => setJob(job);
+        public void resetStatsForJob() { }
         public void setJob(int job) { }
         public void gainMaxHp(int amount) { }
         public void gainMaxMp(int amount) { }
