@@ -4,9 +4,9 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 
 | | Cosmic | Cronus | gap (JMS-relevant) |
 |---|---|---|---|
-| NPC scripts | 682 | 257 | 404 (on JMS maps: 290) |
-| quest scripts | 250 | 1 | 220 |
-| portal scripts | 458 | 33 | 314 (+208 JMS portal scripts neither has) |
+| NPC scripts | 682 | 261 | 402 (on JMS maps: 289) |
+| quest scripts | 250 | 75 | 146 |
+| portal scripts | 458 | 38 | 311 (+206 JMS portal scripts neither has) |
 | reactor scripts | 292 | 1 | 235 |
 | event scripts (PQ / boss / ride) | 108 | — | 85 reference JMS maps |
 
@@ -45,7 +45,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 1061018 | ムヨン | 2: 105100300 バルログの墓, 105100400 イージーモード_バルログの墓 | `Reference/Cosmic/scripts/npc/1061018.js` |
 | 1102003 | キダン | 2: 130000100 騎士の殿堂, 130000101 騎士の殿堂 | `Reference/Cosmic/scripts/npc/1102003.js` |
 | 1202010 | プディン | 2: 140010110 英雄の殿堂, 140010111 英雄の殿堂 | `Reference/Cosmic/scripts/npc/1202010.js` |
-| 1300014 | セルフ | 2: 106020500 城壁の端, 106021500 結婚式場入口 | `Reference/Cosmic/scripts/npc/1300014.js` |
 | 2013000 | 妖精ウィンキー | 2: 200080101 見知らぬ塔, 920010000 入口 | `Reference/Cosmic/scripts/npc/2013000.js` |
 | 2081010 | ムス(FieldsetEnterance) | 2: 924000000 修練場への道, 924000002 修練場出口 | `Reference/Cosmic/scripts/npc/2081010.js` |
 | 2112007 | 調査結果 | 2: 926100000 怪しい研究室, 926100203 ユレテの研究室 | `Reference/Cosmic/scripts/npc/2112007.js` |
@@ -371,7 +370,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2101006 | プリンス | 0:  | `Reference/Cosmic/scripts/npc/2101006.js` |
 | 2101013 | カルタサ | 0:  | `Reference/Cosmic/scripts/npc/2101013.js` |
 | 2110005 | ラクダ | 0:  | `Reference/Cosmic/scripts/npc/2110005.js` |
-| 2111006 | ファウェン | 0:  | `Reference/Cosmic/scripts/npc/2111006.js` |
 | 2111015 | ラセルロンの机(透明) | 0:  | `Reference/Cosmic/scripts/npc/2111015.js` |
 | 2111025 | 制御装置 | 0:  | `Reference/Cosmic/scripts/npc/2111025.js` |
 | 2111026 | 未完成魔法陣 | 0:  | `Reference/Cosmic/scripts/npc/2111026.js` |
@@ -426,46 +424,13 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 
 | quest | Cosmic file |
 |---|---|
-| 1021 | `Reference/Cosmic/scripts/quest/1021.js` |
 | 2001 | `Reference/Cosmic/scripts/quest/2001.js` |
 | 2034 | `Reference/Cosmic/scripts/quest/2034.js` |
-| 2124 | `Reference/Cosmic/scripts/quest/2124.js` |
-| 2126 | `Reference/Cosmic/scripts/quest/2126.js` |
-| 2127 | `Reference/Cosmic/scripts/quest/2127.js` |
-| 2148 | `Reference/Cosmic/scripts/quest/2148.js` |
-| 2149 | `Reference/Cosmic/scripts/quest/2149.js` |
-| 2150 | `Reference/Cosmic/scripts/quest/2150.js` |
-| 2151 | `Reference/Cosmic/scripts/quest/2151.js` |
-| 2152 | `Reference/Cosmic/scripts/quest/2152.js` |
-| 2186 | `Reference/Cosmic/scripts/quest/2186.js` |
-| 2197 | `Reference/Cosmic/scripts/quest/2197.js` |
-| 2214 | `Reference/Cosmic/scripts/quest/2214.js` |
-| 2215 | `Reference/Cosmic/scripts/quest/2215.js` |
-| 2216 | `Reference/Cosmic/scripts/quest/2216.js` |
-| 2217 | `Reference/Cosmic/scripts/quest/2217.js` |
-| 2218 | `Reference/Cosmic/scripts/quest/2218.js` |
-| 2219 | `Reference/Cosmic/scripts/quest/2219.js` |
-| 2228 | `Reference/Cosmic/scripts/quest/2228.js` |
 | 2230 | `Reference/Cosmic/scripts/quest/2230.js` |
 | 2232 | `Reference/Cosmic/scripts/quest/2232.js` |
 | 2238 | `Reference/Cosmic/scripts/quest/2238.js` |
 | 2245 | `Reference/Cosmic/scripts/quest/2245.js` |
-| 2251 | `Reference/Cosmic/scripts/quest/2251.js` |
-| 2257 | `Reference/Cosmic/scripts/quest/2257.js` |
 | 2258 | `Reference/Cosmic/scripts/quest/2258.js` |
-| 2259 | `Reference/Cosmic/scripts/quest/2259.js` |
-| 2260 | `Reference/Cosmic/scripts/quest/2260.js` |
-| 2300 | `Reference/Cosmic/scripts/quest/2300.js` |
-| 2301 | `Reference/Cosmic/scripts/quest/2301.js` |
-| 2302 | `Reference/Cosmic/scripts/quest/2302.js` |
-| 2303 | `Reference/Cosmic/scripts/quest/2303.js` |
-| 2304 | `Reference/Cosmic/scripts/quest/2304.js` |
-| 2305 | `Reference/Cosmic/scripts/quest/2305.js` |
-| 2306 | `Reference/Cosmic/scripts/quest/2306.js` |
-| 2307 | `Reference/Cosmic/scripts/quest/2307.js` |
-| 2308 | `Reference/Cosmic/scripts/quest/2308.js` |
-| 2309 | `Reference/Cosmic/scripts/quest/2309.js` |
-| 2310 | `Reference/Cosmic/scripts/quest/2310.js` |
 | 2312 | `Reference/Cosmic/scripts/quest/2312.js` |
 | 2313 | `Reference/Cosmic/scripts/quest/2313.js` |
 | 2314 | `Reference/Cosmic/scripts/quest/2314.js` |
@@ -477,50 +442,22 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2320 | `Reference/Cosmic/scripts/quest/2320.js` |
 | 2321 | `Reference/Cosmic/scripts/quest/2321.js` |
 | 2322 | `Reference/Cosmic/scripts/quest/2322.js` |
-| 2325 | `Reference/Cosmic/scripts/quest/2325.js` |
-| 2327 | `Reference/Cosmic/scripts/quest/2327.js` |
 | 2332 | `Reference/Cosmic/scripts/quest/2332.js` |
 | 2333 | `Reference/Cosmic/scripts/quest/2333.js` |
 | 2334 | `Reference/Cosmic/scripts/quest/2334.js` |
 | 2335 | `Reference/Cosmic/scripts/quest/2335.js` |
-| 2338 | `Reference/Cosmic/scripts/quest/2338.js` |
 | 2342 | `Reference/Cosmic/scripts/quest/2342.js` |
-| 3108 | `Reference/Cosmic/scripts/quest/3108.js` |
 | 3239 | `Reference/Cosmic/scripts/quest/3239.js` |
-| 3301 | `Reference/Cosmic/scripts/quest/3301.js` |
-| 3303 | `Reference/Cosmic/scripts/quest/3303.js` |
-| 3305 | `Reference/Cosmic/scripts/quest/3305.js` |
-| 3306 | `Reference/Cosmic/scripts/quest/3306.js` |
 | 3314 | `Reference/Cosmic/scripts/quest/3314.js` |
-| 3320 | `Reference/Cosmic/scripts/quest/3320.js` |
-| 3321 | `Reference/Cosmic/scripts/quest/3321.js` |
-| 3353 | `Reference/Cosmic/scripts/quest/3353.js` |
-| 3354 | `Reference/Cosmic/scripts/quest/3354.js` |
-| 3360 | `Reference/Cosmic/scripts/quest/3360.js` |
-| 3382 | `Reference/Cosmic/scripts/quest/3382.js` |
 | 3414 | `Reference/Cosmic/scripts/quest/3414.js` |
 | 3437 | `Reference/Cosmic/scripts/quest/3437.js` |
-| 3452 | `Reference/Cosmic/scripts/quest/3452.js` |
 | 3454 | `Reference/Cosmic/scripts/quest/3454.js` |
 | 3507 | `Reference/Cosmic/scripts/quest/3507.js` |
 | 3514 | `Reference/Cosmic/scripts/quest/3514.js` |
-| 3523 | `Reference/Cosmic/scripts/quest/3523.js` |
-| 3524 | `Reference/Cosmic/scripts/quest/3524.js` |
-| 3525 | `Reference/Cosmic/scripts/quest/3525.js` |
-| 3526 | `Reference/Cosmic/scripts/quest/3526.js` |
-| 3527 | `Reference/Cosmic/scripts/quest/3527.js` |
-| 3529 | `Reference/Cosmic/scripts/quest/3529.js` |
-| 3539 | `Reference/Cosmic/scripts/quest/3539.js` |
-| 3714 | `Reference/Cosmic/scripts/quest/3714.js` |
-| 3833 | `Reference/Cosmic/scripts/quest/3833.js` |
 | 3933 | `Reference/Cosmic/scripts/quest/3933.js` |
 | 3941 | `Reference/Cosmic/scripts/quest/3941.js` |
-| 3953 | `Reference/Cosmic/scripts/quest/3953.js` |
 | 4647 | `Reference/Cosmic/scripts/quest/4647.js` |
 | 4659 | `Reference/Cosmic/scripts/quest/4659.js` |
-| 6030 | `Reference/Cosmic/scripts/quest/6030.js` |
-| 6031 | `Reference/Cosmic/scripts/quest/6031.js` |
-| 6032 | `Reference/Cosmic/scripts/quest/6032.js` |
 | 6033 | `Reference/Cosmic/scripts/quest/6033.js` |
 | 6036 | `Reference/Cosmic/scripts/quest/6036.js` |
 | 7103 | `Reference/Cosmic/scripts/quest/7103.js` |
@@ -633,19 +570,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 22503 | `Reference/Cosmic/scripts/quest/22503.js` |
 | 22504 | `Reference/Cosmic/scripts/quest/22504.js` |
 | 22507 | `Reference/Cosmic/scripts/quest/22507.js` |
-| 29900 | `Reference/Cosmic/scripts/quest/29900.js` |
-| 29901 | `Reference/Cosmic/scripts/quest/29901.js` |
-| 29902 | `Reference/Cosmic/scripts/quest/29902.js` |
-| 29903 | `Reference/Cosmic/scripts/quest/29903.js` |
-| 29906 | `Reference/Cosmic/scripts/quest/29906.js` |
-| 29907 | `Reference/Cosmic/scripts/quest/29907.js` |
-| 29908 | `Reference/Cosmic/scripts/quest/29908.js` |
-| 29909 | `Reference/Cosmic/scripts/quest/29909.js` |
-| 29924 | `Reference/Cosmic/scripts/quest/29924.js` |
-| 29925 | `Reference/Cosmic/scripts/quest/29925.js` |
-| 29926 | `Reference/Cosmic/scripts/quest/29926.js` |
-| 29927 | `Reference/Cosmic/scripts/quest/29927.js` |
-| 29928 | `Reference/Cosmic/scripts/quest/29928.js` |
 
 ## Portal scripts JMS maps use, that Cosmic has and Cronus lacks
 
@@ -681,7 +605,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | mc_out | 2: 980000000 モンスターカーニバル入口, 980030000 シュピゲルマンの事務室 | `Reference/Cosmic/scripts/portal/mc_out.js` |
 | minar_elli | 2: 101010000 エリニアの北側フィールド, 240010100 ミナル西側の境界 | `Reference/Cosmic/scripts/portal/minar_elli.js` |
 | rnj_exit | 2: 926100700 出口, 926110700 出口 | `Reference/Cosmic/scripts/portal/rnj_exit.js` |
-| secretDoor | 2: 261010000 研究所1階廊下, 261020200 研究所B-1区域 | `Reference/Cosmic/scripts/portal/secretDoor.js` |
 | undodraco | 2: 200090500 時間の神殿への道, 200090510 ミナルへの道 | `Reference/Cosmic/scripts/portal/undodraco.js` |
 | Depart_ToKerning | 1: 103000310 カニングスクエア駅 | `Reference/Cosmic/scripts/portal/Depart_ToKerning.js` |
 | Depart_goBack00 | 1: 103040420 7階 8階 C区域 | `Reference/Cosmic/scripts/portal/Depart_goBack00.js` |
@@ -811,7 +734,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | glpqPortal5 | 1: 803001100 統一の試練 | `Reference/Cosmic/scripts/portal/glpqPortal5.js` |
 | glpqPortal6 | 1: 803001200 全知全能の間 | `Reference/Cosmic/scripts/portal/glpqPortal6.js` |
 | go_secretroom | 1: 106021000 摩天楼3 | `Reference/Cosmic/scripts/portal/go_secretroom.js` |
-| gotocastle | 1: 106020400 分かれ道 | `Reference/Cosmic/scripts/portal/gotocastle.js` |
 | gryphius | 1: 240020100 火と闇の戦場 | `Reference/Cosmic/scripts/portal/gryphius.js` |
 | guild1F00 | 1: 990000700 シャレン3世の墓 | `Reference/Cosmic/scripts/portal/guild1F00.js` |
 | guild1F01 | 1: 990000611 迷路の終りA | `Reference/Cosmic/scripts/portal/guild1F01.js` |
@@ -862,7 +784,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | move_elin | 1: 222020400 時間制御室 | `Reference/Cosmic/scripts/portal/move_elin.js` |
 | nets_in | 1: 260020500 サヘル地帯3 | `Reference/Cosmic/scripts/portal/nets_in.js` |
 | nets_out | 1: 926010000 ピラミッドの丘 | `Reference/Cosmic/scripts/portal/nets_out.js` |
-| obstacle | 1: 106020300 奥深きキノコの森 | `Reference/Cosmic/scripts/portal/obstacle.js` |
 | outChild | 1: 914000300 森の最奥 | `Reference/Cosmic/scripts/portal/outChild.js` |
 | outDarkEreb | 1: 913030000 エレヴ | `Reference/Cosmic/scripts/portal/outDarkEreb.js` |
 | outMagiclib | 1: 910110000 魔法図書館 | `Reference/Cosmic/scripts/portal/outMagiclib.js` |
@@ -1137,8 +1058,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | hwqout | 1: 229030300 執事の部屋 |
 | hwtool | 1: 229000310 人形工房 |
 | inhalloween | 1: 229010000 庭園 |
-| investigate1 | 1: 106020300 奥深きキノコの森 |
-| investigate2 | 1: 106020500 城壁の端 |
 | jnr6_act | 1: 926110203 ユレテの研究室 |
 | mapleTree_out | 1: 970010000 紅葉の木の庭園 |
 | move_RitSDI | 1: 200090080 용이 잠든 섬으로 |
