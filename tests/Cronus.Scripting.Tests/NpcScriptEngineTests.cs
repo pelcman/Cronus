@@ -261,6 +261,7 @@ public class NpcScriptEngineTests
         public void dojoExit() { }
         public bool dojoTutorialExit() => false;
         public void openNpc(int npcId) { }
+        public int hourOfDay() => 12;
 
         public string? getQuestData(int questId) => null;
 

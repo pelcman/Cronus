@@ -144,6 +144,7 @@ public class AllScriptsExerciseTests
         public void dojoExit() { }
         public bool dojoTutorialExit() => false;
         public void openNpc(int npcId) { }
+        public int hourOfDay() => 12;
         public string? getQuestData(int questId) => _questData.TryGetValue(questId, out string? d) ? d : null;
         public void setQuestData(int questId, string data) => _questData[questId] = data;
     }

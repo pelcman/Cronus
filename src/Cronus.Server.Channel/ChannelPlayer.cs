@@ -423,6 +423,8 @@ public sealed class ChannelPlayer : INpcPlayer
 
     public void openNpc(int npcId) => _openNpc?.Invoke(npcId);
 
+    public int hourOfDay() => DateTime.Now.Hour;
+
     public int getBuddyCapacity() => _character.BuddyCapacity;
 
     public void gainBuddyCapacity(int amount)
