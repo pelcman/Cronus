@@ -29,21 +29,6 @@ public class WanderingAlchemistTests
         public void OpenRps(int npcId) { }
     }
 
-    private sealed class WalletPlayer : StubNpcPlayer
-    {
-        private readonly Dictionary<int, int> _inv;
-        public WalletPlayer(int meso, Dictionary<int, int> inv) { Meso = meso; _inv = inv; }
-        public int Meso { get; private set; }
-        public int Count(int id) => _inv.GetValueOrDefault(id);
-        public override int getMeso() => Meso;
-        public override void gainMeso(int amount) => Meso += amount;
-        public override int getLevel() => 70;
-        public override int itemQuantity(int itemId) => _inv.GetValueOrDefault(itemId);
-        public override bool haveItem(int itemId) => _inv.GetValueOrDefault(itemId) > 0;
-        public override void gainItem(int itemId, int quantity)
-            => _inv[itemId] = _inv.GetValueOrDefault(itemId) + quantity;
-    }
-
     private static string RepoRoot()
     {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
@@ -67,10 +52,8 @@ public class WanderingAlchemistTests
     public void CraftingMagicRock_ConsumesTheRecipe_AndYieldsFive()
     {
         // Recipe 0 for Magic Rock: 20×4000046, 20×4000027, 1×4021001, +4000 meso → 5×4006000.
-        var player = new WalletPlayer(10_000, new Dictionary<int, int>
-        {
-            [4000046] = 30, [4000027] = 25, [4021001] = 2,
-        });
+        var player = new RecordingNpcPlayer { Meso = 10_000 };
+        foreach (var kv in new Dictionary<int,int>{[4000046]=30,[4000027]=25,[4021001]=2}) player.Inventory[kv.Key]=kv.Value;
         var dialog = new Dialog();
         using var cts = new CancellationTokenSource(Timeout);
         NpcConversation cm = Start(dialog, player);
@@ -87,17 +70,18 @@ public class WanderingAlchemistTests
         cm.Advance(0, 1, -1, string.Empty);
 
         WaitUntilEnded(cm, cts.Token);
-        Assert.Equal(10, player.Count(4000046));  // 30 - 20
-        Assert.Equal(5, player.Count(4000027));   // 25 - 20
-        Assert.Equal(1, player.Count(4021001));   // 2 - 1
+        Assert.Equal(10, player.Inventory.GetValueOrDefault(4000046));  // 30 - 20
+        Assert.Equal(5, player.Inventory.GetValueOrDefault(4000027));   // 25 - 20
+        Assert.Equal(1, player.Inventory.GetValueOrDefault(4021001));   // 2 - 1
         Assert.Equal(6_000, player.Meso);         // 10000 - 4000
-        Assert.Equal(5, player.Count(4006000));   // five Magic Rocks
+        Assert.Equal(5, player.Inventory.GetValueOrDefault(4006000));   // five Magic Rocks
     }
 
     [Fact]
     public void WithoutTheMaterials_NothingIsConsumed()
     {
-        var player = new WalletPlayer(10_000, new Dictionary<int, int> { [4000046] = 1 });
+        var player = new RecordingNpcPlayer { Meso = 10_000 };
+        player.Inventory[4000046] = 1;
         var dialog = new Dialog();
         using var cts = new CancellationTokenSource(Timeout);
         NpcConversation cm = Start(dialog, player);
@@ -114,9 +98,9 @@ public class WanderingAlchemistTests
         cm.Advance(0, 1, -1, string.Empty);
 
         WaitUntilEnded(cm, cts.Token);
-        Assert.Equal(1, player.Count(4000046));   // untouched
+        Assert.Equal(1, player.Inventory.GetValueOrDefault(4000046));   // untouched
         Assert.Equal(10_000, player.Meso);        // untouched
-        Assert.Equal(0, player.Count(4006000));   // nothing made
+        Assert.Equal(0, player.Inventory.GetValueOrDefault(4006000));   // nothing made
     }
 
     private static void WaitUntilEnded(NpcConversation cm, CancellationToken ct)

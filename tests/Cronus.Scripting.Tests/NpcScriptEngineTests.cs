@@ -189,8 +189,7 @@ public class NpcScriptEngineTests
         public int Remembered;
         public void rememberMap() => Remembered = getMapId();
         public void warpToRememberedMap(int fallbackMapId) => warp(Remembered > 0 ? Remembered : fallbackMapId, 0);
-        public void warp(int mapId) => warp(mapId, 0);
-        public void warp(int mapId, int portal) => WarpedTo = mapId;
+        public void warp(int mapId, int portal = 0) => WarpedTo = mapId;
         public void gainAp(int amount) => Ap = Math.Max(0, Ap + amount);
         public void gainSp(int amount) => Sp = Math.Max(0, Sp + amount);
         public void gainFame(int amount) => Fame = Math.Clamp(Fame + amount, -30000, 30000);

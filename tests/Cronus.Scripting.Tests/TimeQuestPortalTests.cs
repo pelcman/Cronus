@@ -12,25 +12,12 @@ namespace Cronus.Scripting.Tests;
 /// </summary>
 public class TimeQuestPortalTests
 {
-    private sealed class FakePlayer : StubNpcPlayer
+    private static RecordingNpcPlayer Player(int map, IEnumerable<int> questsDone, IEnumerable<int>? items = null)
     {
-        private readonly int _map;
-        private readonly HashSet<int> _done;
-        private readonly HashSet<int> _items;
-
-        public FakePlayer(int map, IEnumerable<int> questsDone, IEnumerable<int>? items = null)
-        {
-            _map = map;
-            _done = new HashSet<int>(questsDone);
-            _items = new HashSet<int>(items ?? Array.Empty<int>());
-        }
-
-        public (int Map, string Portal)? Warp { get; private set; }
-
-        public override int getMapId() => _map;
-        public override bool isQuestDone(int questId) => _done.Contains(questId);
-        public override bool haveItem(int itemId) => _items.Contains(itemId);
-        public override void warpPortal(int mapId, string portalName) => Warp = (mapId, portalName);
+        var p = new RecordingNpcPlayer { MapId = map };
+        p.SetQuestDone(questsDone.ToArray());
+        foreach (int i in items ?? Array.Empty<int>()) p.Inventory[i] = 1;
+        return p;
     }
 
     private static PortalScriptEngine Engine()
@@ -68,9 +55,9 @@ public class TimeQuestPortalTests
     [InlineData(270040000, 3522, 270040100)]
     public void WithTheGateQuestDone_ItAdvancesToTheNextLane(int map, int gateQuest, int forward)
     {
-        var player = new FakePlayer(map, new[] { gateQuest });
+        var player = Player(map, new[] { gateQuest });
         Engine().Run("timeQuest", player);
-        Assert.Equal((forward, "out00"), player.Warp);
+        Assert.Equal((forward, "out00"), player.WarpedNamed);
     }
 
     [Theory]
@@ -80,9 +67,9 @@ public class TimeQuestPortalTests
     [InlineData(270040000, 270030000)] // temple corridor, gate not met → zone 3 entry
     public void WithoutTheGateQuest_ItBouncesToTheZoneSafeLane(int map, int safeLane)
     {
-        var player = new FakePlayer(map, Array.Empty<int>());
+        var player = Player(map, Array.Empty<int>());
         Engine().Run("timeQuest", player);
-        Assert.Equal((safeLane, "in00"), player.Warp);
+        Assert.Equal((safeLane, "in00"), player.WarpedNamed);
     }
 
     [Theory]
@@ -90,16 +77,16 @@ public class TimeQuestPortalTests
     [InlineData(270040100)] // a warp target, not a lane map
     public void OffTheRoadOfTime_ItDoesNothing_EvenWithEveryQuestDone(int map)
     {
-        var player = new FakePlayer(map, Enumerable.Range(3400, 200));
+        var player = Player(map, Enumerable.Range(3400, 200));
         Engine().Run("timeQuest", player);
-        Assert.Null(player.Warp);
+        Assert.Null(player.WarpedNamed);
     }
 
     [Fact]
     public void TheTempleCorridorAlsoOpensWithThePass_4032002()
     {
-        var player = new FakePlayer(270040000, Array.Empty<int>(), items: new[] { 4032002 });
+        var player = Player(270040000, Array.Empty<int>(), items: new[] { 4032002 });
         Engine().Run("timeQuest", player);
-        Assert.Equal((270040100, "out00"), player.Warp);
+        Assert.Equal((270040100, "out00"), player.WarpedNamed);
     }
 }
