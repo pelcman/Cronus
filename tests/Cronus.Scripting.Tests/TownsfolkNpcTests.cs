@@ -178,11 +178,10 @@ public class TownsfolkNpcTests
         var player = new RecordingNpcPlayer();
         player.StartedQuests.Add(2186);
         Run(1094004, player);
-        Assert.Equal(1, player.Inventory.Count);
-        Assert.Contains(player.Inventory.Keys.Single(), new[] { 4031853, 4031854, 4031855 });
+        Assert.Contains(Assert.Single(player.Inventory).Key, new[] { 4031853, 4031854, 4031855 });
 
-        Run(1094005, player);
-        Assert.Equal(1, player.Inventory.Count);
+        Run(1094005, player);   // a second pile hands out nothing while one pair is carried
+        Assert.Single(player.Inventory);
 
         var other = new RecordingNpcPlayer();
         Run(1094002, other);

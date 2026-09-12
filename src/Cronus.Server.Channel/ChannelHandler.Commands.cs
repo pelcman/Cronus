@@ -204,6 +204,8 @@ public sealed partial class ChannelHandler
                 // last line names the map; /sweep resume continues from the one after it.
                 //   /sweep maps [from] [to] [seconds]   every map in [from, to] (defaults: all, 3s)
                 //   /sweep resume [seconds]             from the map after the last logged one
+                //   /sweep npcs [fromNpc] [seconds]     every scripted NPC's first dialog page
+                //   /sweep quests [fromQuest] [seconds] every quest script's first page, both sides
                 //   /sweep stop
                 string sub = parts.Length >= 2 ? parts[1].ToLowerInvariant() : string.Empty;
                 if (sub == "stop")
@@ -240,9 +242,35 @@ public sealed partial class ChannelHandler
                     break;
                 }
 
+                if (sub == "quests")
+                {
+                    // /sweep quests [開始クエストID] [秒/ページ]: every quest script's first page, both sides.
+                    if (_npcScripts is null)
+                    {
+                        await ReplyAsync(session, NpcConversation.DevPrefix + "クエストスクリプトが読み込まれていません").ConfigureAwait(false);
+                        break;
+                    }
+
+                    int fromQuest = parts.Length >= 3 && int.TryParse(parts[2], out int fq) ? fq : 0;
+                    double questPerPage = parts.Length >= 4 && double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double qpp) ? qpp : 1.5;
+                    List<int> questIds = _npcScripts.ScriptedQuestIds.Where(id => id >= fromQuest).OrderBy(id => id).ToList();
+                    if (questIds.Count == 0)
+                    {
+                        await ReplyAsync(session, "sweep: 対象のクエストがありません").ConfigureAwait(false);
+                        break;
+                    }
+
+                    _sweep?.Cancel();
+                    var questCts = new CancellationTokenSource();
+                    _sweep = questCts;
+                    await ReplyAsync(session, $"sweep: {questIds.Count} 件のクエスト会話を {questPerPage:0.##} 秒/ページで流します。落ちたら {Path.GetFileName(SweepProgressFile)} の最終 quest 行が原因、/sweep quests <次のID> で続き、/sweep stop で停止").ConfigureAwait(false);
+                    _ = RunQuestSweepAsync(session, questIds, TimeSpan.FromSeconds(Math.Clamp(questPerPage, 0.2, 30)), questCts.Token);
+                    break;
+                }
+
                 if (sub is not ("maps" or "resume"))
                 {
-                    await ReplyAsync(session, "使い方: /sweep maps [開始ID] [終了ID] [秒]  /sweep resume [秒]  /sweep npcs [開始NPC] [秒/ページ]  /sweep stop").ConfigureAwait(false);
+                    await ReplyAsync(session, "使い方: /sweep maps [開始ID] [終了ID] [秒]  /sweep resume [秒]  /sweep npcs [開始NPC] [秒/ページ]  /sweep quests [開始クエストID] [秒/ページ]  /sweep stop").ConfigureAwait(false);
                     break;
                 }
 
