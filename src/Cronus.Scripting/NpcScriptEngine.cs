@@ -27,6 +27,9 @@ public sealed class NpcScriptEngine
     /// <summary>Every NPC id that has a script (for /sweep npcs and the exerciser).</summary>
     public IEnumerable<int> ScriptedNpcIds => _scripts.Ids();
 
+    /// <summary>Every quest id that has a script (for /sweep quests and the exerciser).</summary>
+    public IEnumerable<int> ScriptedQuestIds => _questScripts?.Ids() ?? Enumerable.Empty<int>();
+
     /// <summary>
     /// Starts the script for <paramref name="npcId"/>, returning the live conversation (whose
     /// answers the caller routes via <see cref="NpcConversation.Advance"/>), or null if the NPC

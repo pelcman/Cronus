@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+using Cronus.Data;
 using Cronus.Domain;
 using Cronus.Network;
 using Cronus.Scripting;
@@ -7,7 +8,7 @@ using Cronus.Scripting;
 namespace Cronus.Server.Channel;
 
 /// <summary>
-/// <c>/sweep npcs</c>: the real-client half of "talk to every NPC". The headless exerciser
+/// <c>/sweep npcs</c> and <c>/sweep quests</c>: the real-client half of "open every script". The headless exerciser
 /// (AllScriptsExerciseTests) already runs every script's every branch; what it cannot see is the
 /// client rendering the pages — a dialog tag the client's data lacks kills it. So the sweep
 /// starts each scripted NPC's conversation server-side (the client shows a dialog it never
@@ -212,6 +213,105 @@ public sealed partial class ChannelHandler
         catch (Exception ex)
         {
             Console.WriteLine($"[sweep] npcs stopped: {ex.Message}");
+        }
+    }
+
+    /// <summary>The quest script page on the client right now ("2300 start"), empty between quests.</summary>
+    private string _sweepCurrentQuest = string.Empty;
+
+    /// <summary>
+    /// <c>/sweep quests</c>: the same rendering check for quest scripts. A quest script is not
+    /// reachable by clicking — the client opens it from the journal — so neither /talk nor the NPC
+    /// sweep ever draws one. This walks both sides (start() and end()) of every scripted quest,
+    /// drawing each first page under the NPC the JMS Check data names for that side, so a dialog
+    /// tag or an item/map token the client cannot render shows up here rather than in a player's
+    /// session. Read-only: the stand-in character drops every grant, warp and quest record.
+    /// </summary>
+    private async Task RunQuestSweepAsync(MapleSession session, List<int> questIds, TimeSpan dwell, CancellationToken ct)
+    {
+        try
+        {
+            AppendSweepLine($"# sweep quests {DateTime.Now:yyyy-MM-dd HH:mm:ss} — {questIds.Count} scripted quests, {dwell.TotalSeconds:0.##}s per page");
+            int shown = 0;
+            for (int i = 0; i < questIds.Count && !ct.IsCancellationRequested && _player is not null; i++)
+            {
+                int questId = questIds[i];
+                QuestData? quest = _quests.GetQuest(questId);
+                foreach (bool ending in new[] { false, true })
+                {
+                    if (ct.IsCancellationRequested || _player is null)
+                    {
+                        break;
+                    }
+
+                    string side = ending ? "end" : "start";
+                    int npcId = (ending ? quest?.EndCheck?.Npc : quest?.StartCheck?.Npc) ?? 0;
+                    if (npcId == 0 || (_npcNames is not null && !_npcNames.HasImage(npcId)))
+                    {
+                        // The page needs a portrait the client has; without one the dialog kills it.
+                        // A quest side with no script at all is skipped silently by StartQuest below.
+                        continue;
+                    }
+
+                    _conversation?.End();
+                    var dialog = new SweepNpcDialog(new ChannelNpcDialog(session, _packets));
+                    NpcConversation? qm = _npcScripts?.StartQuest(questId, npcId, dialog, new SweepScriptPlayer(_player.Character), ending);
+                    if (qm is null)
+                    {
+                        continue;   // this quest scripts only the other side
+                    }
+
+                    shown++;
+                    _sweepCurrentQuest = $"{questId} {side}";
+                    AppendSweepLine($"quest\t{questId}\t{side}\t{npcId}\t{DateTime.Now:HH:mm:ss}");
+                    Console.WriteLine($"[sweep] quest {i + 1}/{questIds.Count} {questId} {side} (npc {npcId})");
+                    await ReplyAsync(session, $"[sweep quest {i + 1}/{questIds.Count}] {questId} {side}").ConfigureAwait(false);
+
+                    // First page only, for the reason RunNpcSweepAsync documents: a second script
+                    // message over an unanswered dialog makes the client close its socket.
+                    _conversation = qm;
+                    var idle = System.Diagnostics.Stopwatch.StartNew();
+                    SweepPrompt? first = null;
+                    while (!ct.IsCancellationRequested && first is null && !qm.IsEnded && idle.Elapsed < TimeSpan.FromSeconds(5))
+                    {
+                        dialog.Prompts.TryTake(out first, 50);
+                    }
+
+                    if (first is not null)
+                    {
+                        await Task.Delay(dwell, ct).ConfigureAwait(false);   // the client draws the page
+                    }
+
+                    qm.End();
+                    _conversation = null;
+                    if (qm.Error is not null)
+                    {
+                        AppendSweepLine($"# script error quest {questId} {side}: {qm.Error.Message}");
+                    }
+
+                    if (first is not null && _player is not null)
+                    {
+                        await MovePlayerToMapAsync(session, _player.Character.MapId, spawnPortal: 0).ConfigureAwait(false);
+                        await Task.Delay(TimeSpan.FromMilliseconds(700), ct).ConfigureAwait(false);   // let the field reload
+                    }
+                }
+            }
+
+            _sweepCurrentQuest = string.Empty;
+            if (!ct.IsCancellationRequested)
+            {
+                AppendSweepLine("# quests done");
+                Console.WriteLine($"[sweep] quests done — {shown} quest pages rendered without losing the client");
+                await ReplyAsync(session, $"sweep: 全クエスト会話完了（{shown} ページ）。落ちたクエストはありません").ConfigureAwait(false);
+                _sweep = null;   // finished: a later logout is a logout, not a crash
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[sweep] quests stopped: {ex.Message}");
         }
     }
 }
