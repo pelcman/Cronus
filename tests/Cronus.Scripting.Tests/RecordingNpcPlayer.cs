@@ -24,7 +24,8 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public void setHp(int hp) => Hp = hp;
     public int getMaxHp() => 0;
     public int getExp() => 0;
-    public int getGender() => 0;
+    public int Gender;
+    public int getGender() => Gender;
     public int getJob() => Job;
     public int getStr() => 0;
     public int getDex() => 0;
@@ -96,7 +97,8 @@ public class RecordingNpcPlayer : Cronus.Scripting.INpcPlayer
     public bool dojoTeleportUp() => false;
     public void dojoExit() { }
     public bool dojoTutorialExit() => false;
-    public void openShop(int shopId) { }
+    public readonly System.Collections.Generic.List<int> Shops = new();
+    public void openShop(int shopId) => Shops.Add(shopId);
     public void openStorage() { }
     public void spawnMob(int mobId, int count) { }
     public int mobCount() => 0;
