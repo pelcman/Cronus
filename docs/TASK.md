@@ -317,6 +317,12 @@ Cronus は 2026-09-09 まで `Cronus.Server.Host` 1プロセスに Login + N チ
       910320000 と合わない)、magatia_dark0(クエスト 7770 が JMS に無い)、skyrom/enterNepenthes/enterRider/enterMCave/enterPort/enterInfo/
       enterMagiclibrar/dragonNest/Zakum03/05(インスタンス・イベント)、undodraco/templeenter/outTemple(ミニドラゴン変身 2210016 の
       useItem/cancelItem API が未実装)、thief_in1/enterDollcave(パスワード NPC 1063011)、highposition(runMapScript)、DragonEggNotice/evan*(エヴァン)。
+      **案内・サービス NPC 11 体**(2026-09-12、`feat/npc-maple-island-and-victoria-services`、キュー #24): シャンクス 22000(船、推薦書 4031801)、
+      ロビン 2003、セーラ 2100/ヒナ 2101(JMS に講習所マップ 1・3 は無い)、レイン 12101、ジェーン 1002100(個数選択 [DEV])、石像 1061006、
+      ホテルガイド 1061100、シェイン 1032003、妖精アルウェン 1032100(黒い羽 4031042)、ヘンケル 1012119(910060001〜004 は空の複製枠)。
+      見送り: シード 11000(JMS の shops に 11000 が無い)、チェフ 1002006(JMS では bookPrize = モンスターブック景品、Cosmic は一言のみ)、
+      ヘネシス草むら 1012116(blackShadowHene2 クエスト用)、精錬 NPC ゼイエム 1052002/クリシュラマ 1061000/エトラン 1032002(装備製作の
+      大表: JMS のアイテム ID・材料表を別途突き合わせる)、ウサチャン/ウサクン(ヘネシス PQ)。
       残る最上位:
       モンスターカーニバル(シュピゲルマン 2042000〜2042007 + 助手)、月うさぎ 9001102(ヘネシス PQ、19 町)、
       帰還碑/名誉の石碑 9040004/9040005、忍耐の森 1061007、timeQuest(思い出の道 16)、rankRoom/tutorialNPC
