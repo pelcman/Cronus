@@ -4,10 +4,10 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 
 | | Cosmic | Cronus | gap (JMS-relevant) |
 |---|---|---|---|
-| NPC scripts | 682 | 261 | 402 (on JMS maps: 289) |
-| quest scripts | 250 | 75 | 146 |
-| portal scripts | 458 | 38 | 311 (+206 JMS portal scripts neither has) |
-| reactor scripts | 292 | 1 | 235 |
+| NPC scripts | 682 | 341 | 322 (on JMS maps: 209) |
+| quest scripts | 250 | 141 | 80 |
+| portal scripts | 458 | 83 | 266 (+206 JMS portal scripts neither has) |
+| reactor scripts | 292 | 21 | 215 |
 | event scripts (PQ / boss / ride) | 108 | — | 85 reference JMS maps |
 
 ## NPCs Cosmic scripts and Cronus does not (with a JMS image), most-placed first
@@ -39,7 +39,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2103013 | デュアート | 3: 926010000 ピラミッドの丘, 926010001 ネトのピラミッド, 926020001 ピラミッドの陰 | `Reference/Cosmic/scripts/npc/2103013.js` |
 | 2112013 | 調査結果 | 3: 926110000 怪しい研究室, 926110001 暗い通路, 926110203 ユレテの研究室 | `Reference/Cosmic/scripts/npc/2112013.js` |
 | 9201022 | トーマス | 3: 680000500 出口, 680000501 出口, 680000502 出口 | `Reference/Cosmic/scripts/npc/9201022.js` |
-| 22000 | シャンクス | 2: 2000000 サウスペリ, 104000000 港口 | `Reference/Cosmic/scripts/npc/22000.js` |
 | 1012113 | ウサクン | 2: 910010100 近道, 910010300 村への帰り道 | `Reference/Cosmic/scripts/npc/1012113.js` |
 | 1013200 | 赤ちゃんオオカミ | 2: 900020100 鬱蒼とした森, 900020110 鬱蒼とした森 | `Reference/Cosmic/scripts/npc/1013200.js` |
 | 1061018 | ムヨン | 2: 105100300 バルログの墓, 105100400 イージーモード_バルログの墓 | `Reference/Cosmic/scripts/npc/1061018.js` |
@@ -61,64 +60,31 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 9201110 | マスターシーフ | 2: 803001100 統一の試練, 803011100 統一の試練 | `Reference/Cosmic/scripts/npc/9201110.js` |
 | 9201111 | マスターパイレーツ | 2: 803001100 統一の試練, 803011100 統一の試練 | `Reference/Cosmic/scripts/npc/9201111.js` |
 | 9201112 | ジャック | 2: 803000502 クリムゾン砦3, 803000505 永遠の警戒地 | `Reference/Cosmic/scripts/npc/9201112.js` |
-| 2003 | ロビン | 1: 50000 危険な森 | `Reference/Cosmic/scripts/npc/2003.js` |
-| 2100 | セーラ | 1: 10000 キノコの丘 | `Reference/Cosmic/scripts/npc/2100.js` |
-| 2101 | ヒナ | 1: 10000 キノコの丘 | `Reference/Cosmic/scripts/npc/2101.js` |
 | 11000 | シード | 1: 1000001 アムホストの武器屋 | `Reference/Cosmic/scripts/npc/11000.js` |
-| 12101 | レイン | 1: 1000000 アムホスト | `Reference/Cosmic/scripts/npc/12101.js` |
 | 1002006 | チェフ | 1: 104000000 港口 | `Reference/Cosmic/scripts/npc/1002006.js` |
-| 1002100 | ジェーン | 1: 104000000 港口 | `Reference/Cosmic/scripts/npc/1002100.js` |
 | 1012006 | バルトス | 1: 100000202 ペットの散歩路 | `Reference/Cosmic/scripts/npc/1012006.js` |
 | 1012007 | プロド | 1: 100000202 ペットの散歩路 | `Reference/Cosmic/scripts/npc/1012007.js` |
 | 1012116 | ヘネシス草むら | 1: 100020000 東の草むら | `Reference/Cosmic/scripts/npc/1012116.js` |
-| 1012119 | ヘンケル | 1: 100010000 東の丘 | `Reference/Cosmic/scripts/npc/1012119.js` |
 | 1013002 | ドラゴンの巣 | 1: 900020220 忘れてしまった森 | `Reference/Cosmic/scripts/npc/1013002.js` |
 | 1013104 | 卵の箱 | 1: 100030102 前庭 | `Reference/Cosmic/scripts/npc/1013104.js` |
 | 1032002 | エトラン | 1: 101000000 エリニア | `Reference/Cosmic/scripts/npc/1032002.js` |
-| 1032003 | シェイン | 1: 101000000 エリニア | `Reference/Cosmic/scripts/npc/1032003.js` |
-| 1032100 | 妖精アルウェン | 1: 101000000 エリニア | `Reference/Cosmic/scripts/npc/1032100.js` |
 | 1032102 | 妖精マル | 1: 101000200 マルの森 | `Reference/Cosmic/scripts/npc/1032102.js` |
 | 1032109 | 魔法図書館隈 | 1: 910110000 魔法図書館 | `Reference/Cosmic/scripts/npc/1032109.js` |
-| 1032110 | 魔法図書館隈 | 1: 910110000 魔法図書館 | `Reference/Cosmic/scripts/npc/1032110.js` |
-| 1032111 | 小さい切り株 | 1: 101010103 渓流&lt;バンジージャンプ台&gt; | `Reference/Cosmic/scripts/npc/1032111.js` |
 | 1043000 | 花の摘み | 1: 101000101 忍耐の森-2段階 | `Reference/Cosmic/scripts/npc/1043000.js` |
 | 1043001 | 薬草の藪 | 1: 101000104 忍耐の森-5段階 | `Reference/Cosmic/scripts/npc/1043001.js` |
 | 1052002 | 裏通りのゼイエム | 1: 103000000 カニングシティー | `Reference/Cosmic/scripts/npc/1052002.js` |
 | 1052013 | パソコン | 1: 193000000 ネットカフェ | `Reference/Cosmic/scripts/npc/1052013.js` |
 | 1052014 | 自販機 | 1: 193000000 ネットカフェ | `Reference/Cosmic/scripts/npc/1052014.js` |
-| 1052109 | 地下鉄のゴミ箱 | 1: 103000101 1号線-1区 | `Reference/Cosmic/scripts/npc/1052109.js` |
-| 1052111 | 地下鉄のゴミ箱 | 1: 103000101 1号線-1区 | `Reference/Cosmic/scripts/npc/1052111.js` |
-| 1052112 | 地下鉄のゴミ箱 | 1: 103000101 1号線-1区 | `Reference/Cosmic/scripts/npc/1052112.js` |
 | 1061000 | クリシュラマ | 1: 105040300 スリーピーウッド | `Reference/Cosmic/scripts/npc/1061000.js` |
-| 1061006 | 変な形の石像 | 1: 105040300 スリーピーウッド | `Reference/Cosmic/scripts/npc/1061006.js` |
 | 1061009 | 次元の扉 | 1: 105070001 アリの巣-広場 | `Reference/Cosmic/scripts/npc/1061009.js` |
 | 1061012 | 亡霊 | 1: 105090200 別世界への扉 | `Reference/Cosmic/scripts/npc/1061012.js` |
 | 1061014 | ムヨン | 1: 105100100 神殿の底 | `Reference/Cosmic/scripts/npc/1061014.js` |
 | 1061016 | 怪しい男 | 1: 105100000 地下への下り道 | `Reference/Cosmic/scripts/npc/1061016.js` |
-| 1061100 | ホテルガイド | 1: 105040400 スリーピーホテルロビー | `Reference/Cosmic/scripts/npc/1061100.js` |
-| 1063000 | 桃色の花山 | 1: 105040311 忍耐の森「2段階」 | `Reference/Cosmic/scripts/npc/1063000.js` |
-| 1063001 | 青色の花山 | 1: 105040313 忍耐の森「4段階」 | `Reference/Cosmic/scripts/npc/1063001.js` |
-| 1063002 | 白色の花山 | 1: 105040316 忍耐の森「7段階」 | `Reference/Cosmic/scripts/npc/1063002.js` |
 | 1063013 | 霊験な石2 | 1: 105090000 光を失った洞窟1 | `Reference/Cosmic/scripts/npc/1063013.js` |
 | 1063017 | 不思議な石像 | 1: 910510100 人形使いの秘密通路 | `Reference/Cosmic/scripts/npc/1063017.js` |
-| 1092000 | タンユン | 1: 120000103 食堂 | `Reference/Cosmic/scripts/npc/1092000.js` |
-| 1092007 | ムラト | 1: 120000100 上階廊下 | `Reference/Cosmic/scripts/npc/1092007.js` |
 | 1092008 | シュリンツ | 1: 120000104 訓練場 | `Reference/Cosmic/scripts/npc/1092008.js` |
 | 1092010 | ジャック | 1: 120000100 上階廊下 | `Reference/Cosmic/scripts/npc/1092010.js` |
-| 1092015 | 浄水器 | 1: 120000202 寝室 | `Reference/Cosmic/scripts/npc/1092015.js` |
-| 1092016 | 輝く石 | 1: 120000301 動力室 | `Reference/Cosmic/scripts/npc/1092016.js` |
-| 1092018 | ゴミ箱 | 1: 120000100 上階廊下 | `Reference/Cosmic/scripts/npc/1092018.js` |
 | 1092019 | ジョナサン | 1: 120000102 ジョナサンの部屋 | `Reference/Cosmic/scripts/npc/1092019.js` |
-| 1092090 | 母牛 | 1: 912000100 ノーチラスの牛小屋 | `Reference/Cosmic/scripts/npc/1092090.js` |
-| 1092091 | 母牛 | 1: 912000100 ノーチラスの牛小屋 | `Reference/Cosmic/scripts/npc/1092091.js` |
-| 1092094 | 子牛 | 1: 912000100 ノーチラスの牛小屋 | `Reference/Cosmic/scripts/npc/1092094.js` |
-| 1092095 | 子牛 | 1: 912000100 ノーチラスの牛小屋 | `Reference/Cosmic/scripts/npc/1092095.js` |
-| 1094000 | バト | 1: 120000000 ノーチラス | `Reference/Cosmic/scripts/npc/1094000.js` |
-| 1094002 | 草原 | 1: 120000000 ノーチラス | `Reference/Cosmic/scripts/npc/1094002.js` |
-| 1094003 | 草原 | 1: 120000000 ノーチラス | `Reference/Cosmic/scripts/npc/1094003.js` |
-| 1094004 | 草原 | 1: 120000000 ノーチラス | `Reference/Cosmic/scripts/npc/1094004.js` |
-| 1094005 | 草原 | 1: 120000000 ノーチラス | `Reference/Cosmic/scripts/npc/1094005.js` |
-| 1094006 | 草原 | 1: 120000000 ノーチラス | `Reference/Cosmic/scripts/npc/1094006.js` |
 | 1101001 | 神獣 | 1: 130000000 エレヴ | `Reference/Cosmic/scripts/npc/1101001.js` |
 | 1102002 | キリド | 1: 130010220 孵化場 | `Reference/Cosmic/scripts/npc/1102002.js` |
 | 1103000 | デュナミス | 1: 924010200 暗黒の魔女の洞窟 | `Reference/Cosmic/scripts/npc/1103000.js` |
@@ -145,8 +111,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 1300013 | マックフィンイブグ | 1: 106021402 最後の城塔 | `Reference/Cosmic/scripts/npc/1300013.js` |
 | 2010000 | チャーリー軍曹 | 1: 200000000 オルビス | `Reference/Cosmic/scripts/npc/2010000.js` |
 | 2010003 | ネーブ | 1: 200000200 オルビス公園 | `Reference/Cosmic/scripts/npc/2010003.js` |
-| 2012012 | リーサ | 1: 200000000 オルビス | `Reference/Cosmic/scripts/npc/2012012.js` |
-| 2012023 | 紅葉玉 | 1: 200000300 出会いの丘 | `Reference/Cosmic/scripts/npc/2012023.js` |
 | 2012027 | ヒューズ | 1: 920020000 エリジャーの庭園 | `Reference/Cosmic/scripts/npc/2012027.js` |
 | 2012028 | ハープ弦&lt;レ&gt; | 1: 920020000 エリジャーの庭園 | `Reference/Cosmic/scripts/npc/2012028.js` |
 | 2012029 | ハープ弦&lt;ミ&gt; | 1: 920020000 エリジャーの庭園 | `Reference/Cosmic/scripts/npc/2012029.js` |
@@ -155,54 +119,30 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2012032 | ハープ弦&lt;ラ&gt; | 1: 920020000 エリジャーの庭園 | `Reference/Cosmic/scripts/npc/2012032.js` |
 | 2012033 | ハープ弦&lt;シ&gt; | 1: 920020000 エリジャーの庭園 | `Reference/Cosmic/scripts/npc/2012033.js` |
 | 2013002 | 女神ミネルバ | 1: 920011300 女神の祝福 | `Reference/Cosmic/scripts/npc/2013002.js` |
-| 2020005 | アルケスタ | 1: 211000100 市場 | `Reference/Cosmic/scripts/npc/2020005.js` |
 | 2030008 | アドビス | 1: 211042300 ジャクムへの門 | `Reference/Cosmic/scripts/npc/2030008.js` |
-| 2030014 | 古代氷石 | 1: 921100100 氷の谷 | `Reference/Cosmic/scripts/npc/2030014.js` |
 | 2032001 | スピルナ | 1: 200050001 老婆の家 | `Reference/Cosmic/scripts/npc/2032001.js` |
 | 2040002 | レフトくん | 1: 221024400 エオス塔100階 | `Reference/Cosmic/scripts/npc/2040002.js` |
 | 2040020 | ジロクン | 1: 220000303 ジロクンとペイの家 | `Reference/Cosmic/scripts/npc/2040020.js` |
 | 2040021 | ペイ | 1: 220000303 ジロクンとペイの家 | `Reference/Cosmic/scripts/npc/2040021.js` |
-| 2040024 | 一番目のエオス石 | 1: 221024400 エオス塔100階 | `Reference/Cosmic/scripts/npc/2040024.js` |
-| 2040026 | 三番目のエオス石 | 1: 221021700 エオス塔41階 | `Reference/Cosmic/scripts/npc/2040026.js` |
 | 2040030 | ウィスブ | 1: 220000400 エオス塔入口 | `Reference/Cosmic/scripts/npc/2040030.js` |
-| 2040031 | 文書束 | 1: 220000304 クロイの家 | `Reference/Cosmic/scripts/npc/2040031.js` |
 | 2040032 | ウィーバー | 1: 220000006 ルディブリアムの散歩路 | `Reference/Cosmic/scripts/npc/2040032.js` |
 | 2040033 | ネル | 1: 220000006 ルディブリアムの散歩路 | `Reference/Cosmic/scripts/npc/2040033.js` |
 | 2040052 | 司書ウィズ | 1: 222020000 ヘリオス塔の図書館 | `Reference/Cosmic/scripts/npc/2040052.js` |
 | 2041023 | プロ | 1: 220050300 時間の通路 | `Reference/Cosmic/scripts/npc/2041023.js` |
-| 2041024 | 造形物 | 1: 220080000 時計塔の奥 | `Reference/Cosmic/scripts/npc/2041024.js` |
-| 2041029 | カレン | 1: 222020400 時間制御室 | `Reference/Cosmic/scripts/npc/2041029.js` |
 | 2042005 | シュピゲルマン | 1: 980030000 シュピゲルマンの事務室 | `Reference/Cosmic/scripts/npc/2042005.js` |
-| 2043000 | ビシャスプラント | 1: 922020300 時計塔の深層部 | `Reference/Cosmic/scripts/npc/2043000.js` |
 | 2060100 | 海の魔女カルタ | 1: 230040001 カルタの洞窟 | `Reference/Cosmic/scripts/npc/2060100.js` |
 | 2071012 | 見覚えがある少女(キツネ) | 1: 922220000 冷たく寒い森 | `Reference/Cosmic/scripts/npc/2071012.js` |
 | 2080000 | モス | 1: 240000000 リプレ | `Reference/Cosmic/scripts/npc/2080000.js` |
 | 2082003 | コルバ | 1: 240000110 ステーション&lt;オルビス行き&gt; | `Reference/Cosmic/scripts/npc/2082003.js` |
-| 2083005 | 生命の泉 | 1: 240050400 ホーンテイルの洞窟入口 | `Reference/Cosmic/scripts/npc/2083005.js` |
 | 2090004 | チエル | 1: 250000000 武陵 | `Reference/Cosmic/scripts/npc/2090004.js` |
 | 2094000 | キキョウコライ | 1: 251010404 海賊船の向こう | `Reference/Cosmic/scripts/npc/2094000.js` |
 | 2094001 | キキョウニジン | 1: 925100600 キキョウニジンの感謝 | `Reference/Cosmic/scripts/npc/2094001.js` |
 | 2095000 | デリー | 1: 925010400 ノーチラス避難所 | `Reference/Cosmic/scripts/npc/2095000.js` |
 | 2100001 | ムハマード | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/npc/2100001.js` |
-| 2100002 | ザーイド | 1: 260000000 アリアント | `Reference/Cosmic/scripts/npc/2100002.js` |
-| 2100003 | ヤスミン | 1: 260000000 アリアント | `Reference/Cosmic/scripts/npc/2100003.js` |
-| 2101000 | シリン | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/npc/2101000.js` |
-| 2101001 | ジユル | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/npc/2101001.js` |
-| 2101002 | エレスカ | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/npc/2101002.js` |
-| 2101003 | アディン | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/npc/2101003.js` |
-| 2101004 | ティガン | 1: 260000300 アリアント宮殿 | `Reference/Cosmic/scripts/npc/2101004.js` |
-| 2101005 | バイラン | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/npc/2101005.js` |
-| 2101007 | アレダ | 1: 260000303 アリアント宮殿&lt;王室&gt; | `Reference/Cosmic/scripts/npc/2101007.js` |
-| 2101008 | シェヘラザード | 1: 260000303 アリアント宮殿&lt;王室&gt; | `Reference/Cosmic/scripts/npc/2101008.js` |
-| 2101009 | アプドラ８世 | 1: 260000303 アリアント宮殿&lt;王室&gt; | `Reference/Cosmic/scripts/npc/2101009.js` |
 | 2101010 | ジャノ | 1: 260000201 古い空き家 | `Reference/Cosmic/scripts/npc/2101010.js` |
-| 2101011 | セザン | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/npc/2101011.js` |
 | 2101014 | セザール | 1: 980010000 闘技場の控え室 | `Reference/Cosmic/scripts/npc/2101014.js` |
 | 2101015 | アブドラ８世 | 1: 980010010 王の部屋 | `Reference/Cosmic/scripts/npc/2101015.js` |
 | 2101016 | アレダ | 1: 980010010 王の部屋 | `Reference/Cosmic/scripts/npc/2101016.js` |
-| 2103000 | 王宮オアシス | 1: 260000300 アリアント宮殿 | `Reference/Cosmic/scripts/npc/2103000.js` |
-| 2103001 | 秘密の壁 | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/npc/2103001.js` |
-| 2103002 | 王妃の飾り棚 | 1: 260000303 アリアント宮殿&lt;王室&gt; | `Reference/Cosmic/scripts/npc/2103002.js` |
 | 2103003 | アリアント民家1 | 1: 260000202 民家1 | `Reference/Cosmic/scripts/npc/2103003.js` |
 | 2103004 | アリアント民家2 | 1: 260000203 民家2 | `Reference/Cosmic/scripts/npc/2103004.js` |
 | 2103005 | アリアント民家4 | 1: 260000205 民家4 | `Reference/Cosmic/scripts/npc/2103005.js` |
@@ -212,19 +152,7 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2103011 | 民家4収納場所(透明) | 1: 260000205 民家4 | `Reference/Cosmic/scripts/npc/2103011.js` |
 | 2103012 | 民家7収納場所(透明) | 1: 260000207 民家6 | `Reference/Cosmic/scripts/npc/2103012.js` |
 | 2110002 | キオル | 1: 261000002 マレンの作業室 | `Reference/Cosmic/scripts/npc/2110002.js` |
-| 2111000 | カソン | 1: 261000010 ジェニミスト協会 | `Reference/Cosmic/scripts/npc/2111000.js` |
-| 2111001 | マッド | 1: 261000020 アルカドノ協会 | `Reference/Cosmic/scripts/npc/2111001.js` |
-| 2111003 | ヒュモノイドA | 1: 261000000 マガティア | `Reference/Cosmic/scripts/npc/2111003.js` |
-| 2111004 | フィリア | 1: 261000000 マガティア | `Reference/Cosmic/scripts/npc/2111004.js` |
-| 2111005 | キニ | 1: 261000000 マガティア | `Reference/Cosmic/scripts/npc/2111005.js` |
-| 2111007 | ブローカーハン | 1: 261000000 マガティア | `Reference/Cosmic/scripts/npc/2111007.js` |
-| 2111008 | ベディン | 1: 261010000 研究所1階廊下 | `Reference/Cosmic/scripts/npc/2111008.js` |
-| 2111009 | ラセルロン | 1: 261020000 研究所中央ゲート | `Reference/Cosmic/scripts/npc/2111009.js` |
-| 2111010 | アルカドノの本棚 | 1: 926120000 光が消えた研究室 | `Reference/Cosmic/scripts/npc/2111010.js` |
-| 2111011 | 失踪した錬金術師の家の壁(透明) | 1: 261000001 失踪した錬金術師の家 | `Reference/Cosmic/scripts/npc/2111011.js` |
 | 2111012 | 失踪した錬金術師の家の本棚(透明) | 1: 261000001 失踪した錬金術師の家 | `Reference/Cosmic/scripts/npc/2111012.js` |
-| 2111013 | 失踪した錬金術師の家の額縁(透明) | 1: 261000001 失踪した錬金術師の家 | `Reference/Cosmic/scripts/npc/2111013.js` |
-| 2111014 | 失踪した錬金術師の家の机(透明) | 1: 261000001 失踪した錬金術師の家 | `Reference/Cosmic/scripts/npc/2111014.js` |
 | 2111016 | ドランの秘密本 | 1: 261000001 失踪した錬金術師の家 | `Reference/Cosmic/scripts/npc/2111016.js` |
 | 2111017 | 一番目のパイプ取っ手(透明) | 1: 261000001 失踪した錬金術師の家 | `Reference/Cosmic/scripts/npc/2111017.js` |
 | 2111018 | 二番目のパイプ取っ手(透明) | 1: 261000001 失踪した錬金術師の家 | `Reference/Cosmic/scripts/npc/2111018.js` |
@@ -234,12 +162,8 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2111022 | 三番目の魔法陣(透明) | 1: 261040000 暗黒の魔法使いの研究室 | `Reference/Cosmic/scripts/npc/2111022.js` |
 | 2111023 | 魔法陣中央(透明) | 1: 261040000 暗黒の魔法使いの研究室 | `Reference/Cosmic/scripts/npc/2111023.js` |
 | 2112016 | 隠された文書 | 1: 926130102 ユレテの実験室2 | `Reference/Cosmic/scripts/npc/2112016.js` |
-| 2120003 | メイド | 1: 229000000 中央ホール | `Reference/Cosmic/scripts/npc/2120003.js` |
-| 2131000 | ヘレナ | 1: 300000010 キャンプ会議場 | `Reference/Cosmic/scripts/npc/2131000.js` |
 | 2131001 | ペルゼン | 1: 300000000 森のキャンプ | `Reference/Cosmic/scripts/npc/2131001.js` |
-| 2131002 | ユリス | 1: 300000000 森のキャンプ | `Reference/Cosmic/scripts/npc/2131002.js` |
 | 2131003 | ロハ | 1: 300000000 森のキャンプ | `Reference/Cosmic/scripts/npc/2131003.js` |
-| 2131004 | 寝ている赤ちゃん | 1: 300000002 テント2 | `Reference/Cosmic/scripts/npc/2131004.js` |
 | 2131005 | シオン | 1: 300000001 テント1 | `Reference/Cosmic/scripts/npc/2131005.js` |
 | 2131006 | ドル | 1: 300000000 森のキャンプ | `Reference/Cosmic/scripts/npc/2131006.js` |
 | 2131007 | テス | 1: 300000000 森のキャンプ | `Reference/Cosmic/scripts/npc/2131007.js` |
@@ -268,16 +192,12 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 9103002 | ガイドララ | 1: 809050016 商品交換所 | `Reference/Cosmic/scripts/npc/9103002.js` |
 | 9103003 | ガイドルル | 1: 809050017 イベント出口 | `Reference/Cosmic/scripts/npc/9103003.js` |
 | 9110002 | 木野子のこ | 1: 800000000 キノコ神社 | `Reference/Cosmic/scripts/npc/9110002.js` |
-| 9120003 | ヒカリ | 1: 801000000 ショーワ町 | `Reference/Cosmic/scripts/npc/9120003.js` |
 | 9120010 | ファイト | 1: 801000300 ショーワ町通り | `Reference/Cosmic/scripts/npc/9120010.js` |
 | 9120013 | ボス猫 | 1: 801000000 ショーワ町 | `Reference/Cosmic/scripts/npc/9120013.js` |
-| 9120015 | コンペイ | 1: 801000000 ショーワ町 | `Reference/Cosmic/scripts/npc/9120015.js` |
 | 9120023 | ヨコヨコ | 1: 801000300 ショーワ町通り | `Reference/Cosmic/scripts/npc/9120023.js` |
 | 9120101 | 助手みどり | 1: 801000001 美容院 | `Reference/Cosmic/scripts/npc/9120101.js` |
 | 9120102 | ヒゲクロ先生 | 1: 801000002 整形外科 | `Reference/Cosmic/scripts/npc/9120102.js` |
 | 9120103 | 助手サエコ | 1: 801000002 整形外科 | `Reference/Cosmic/scripts/npc/9120103.js` |
-| 9120200 | コンペイ | 1: 801040000 アジト前 | `Reference/Cosmic/scripts/npc/9120200.js` |
-| 9120203 | コンペイ | 1: 801040101 アジト前(天晴れ) | `Reference/Cosmic/scripts/npc/9120203.js` |
 | 9201000 | ムーニ | 1: 680000000 ウェディングタウン | `Reference/Cosmic/scripts/npc/9201000.js` |
 | 9201004 | 聖賢エームズ | 1: 680000000 ウェディングタウン | `Reference/Cosmic/scripts/npc/9201004.js` |
 | 9201007 | ナンシー | 1: 680000210 ウェディング(大聖堂) | `Reference/Cosmic/scripts/npc/9201007.js` |
@@ -458,8 +378,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 3941 | `Reference/Cosmic/scripts/quest/3941.js` |
 | 4647 | `Reference/Cosmic/scripts/quest/4647.js` |
 | 4659 | `Reference/Cosmic/scripts/quest/4659.js` |
-| 6033 | `Reference/Cosmic/scripts/quest/6033.js` |
-| 6036 | `Reference/Cosmic/scripts/quest/6036.js` |
 | 7103 | `Reference/Cosmic/scripts/quest/7103.js` |
 | 8185 | `Reference/Cosmic/scripts/quest/8185.js` |
 | 8189 | `Reference/Cosmic/scripts/quest/8189.js` |
@@ -474,89 +392,25 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 20016 | `Reference/Cosmic/scripts/quest/20016.js` |
 | 20017 | `Reference/Cosmic/scripts/quest/20017.js` |
 | 20020 | `Reference/Cosmic/scripts/quest/20020.js` |
-| 20100 | `Reference/Cosmic/scripts/quest/20100.js` |
-| 20101 | `Reference/Cosmic/scripts/quest/20101.js` |
-| 20102 | `Reference/Cosmic/scripts/quest/20102.js` |
-| 20103 | `Reference/Cosmic/scripts/quest/20103.js` |
-| 20104 | `Reference/Cosmic/scripts/quest/20104.js` |
-| 20105 | `Reference/Cosmic/scripts/quest/20105.js` |
-| 20200 | `Reference/Cosmic/scripts/quest/20200.js` |
-| 20201 | `Reference/Cosmic/scripts/quest/20201.js` |
-| 20202 | `Reference/Cosmic/scripts/quest/20202.js` |
-| 20203 | `Reference/Cosmic/scripts/quest/20203.js` |
-| 20204 | `Reference/Cosmic/scripts/quest/20204.js` |
-| 20205 | `Reference/Cosmic/scripts/quest/20205.js` |
-| 20311 | `Reference/Cosmic/scripts/quest/20311.js` |
-| 20312 | `Reference/Cosmic/scripts/quest/20312.js` |
-| 20313 | `Reference/Cosmic/scripts/quest/20313.js` |
-| 20314 | `Reference/Cosmic/scripts/quest/20314.js` |
-| 20315 | `Reference/Cosmic/scripts/quest/20315.js` |
-| 20400 | `Reference/Cosmic/scripts/quest/20400.js` |
-| 20401 | `Reference/Cosmic/scripts/quest/20401.js` |
-| 20405 | `Reference/Cosmic/scripts/quest/20405.js` |
-| 20406 | `Reference/Cosmic/scripts/quest/20406.js` |
-| 20408 | `Reference/Cosmic/scripts/quest/20408.js` |
-| 20520 | `Reference/Cosmic/scripts/quest/20520.js` |
 | 20522 | `Reference/Cosmic/scripts/quest/20522.js` |
 | 20526 | `Reference/Cosmic/scripts/quest/20526.js` |
 | 20527 | `Reference/Cosmic/scripts/quest/20527.js` |
-| 20600 | `Reference/Cosmic/scripts/quest/20600.js` |
-| 20610 | `Reference/Cosmic/scripts/quest/20610.js` |
-| 20700 | `Reference/Cosmic/scripts/quest/20700.js` |
-| 20710 | `Reference/Cosmic/scripts/quest/20710.js` |
-| 20720 | `Reference/Cosmic/scripts/quest/20720.js` |
 | 21000 | `Reference/Cosmic/scripts/quest/21000.js` |
 | 21001 | `Reference/Cosmic/scripts/quest/21001.js` |
 | 21010 | `Reference/Cosmic/scripts/quest/21010.js` |
 | 21011 | `Reference/Cosmic/scripts/quest/21011.js` |
 | 21012 | `Reference/Cosmic/scripts/quest/21012.js` |
 | 21013 | `Reference/Cosmic/scripts/quest/21013.js` |
-| 21015 | `Reference/Cosmic/scripts/quest/21015.js` |
-| 21016 | `Reference/Cosmic/scripts/quest/21016.js` |
-| 21017 | `Reference/Cosmic/scripts/quest/21017.js` |
-| 21018 | `Reference/Cosmic/scripts/quest/21018.js` |
-| 21100 | `Reference/Cosmic/scripts/quest/21100.js` |
-| 21101 | `Reference/Cosmic/scripts/quest/21101.js` |
-| 21200 | `Reference/Cosmic/scripts/quest/21200.js` |
-| 21201 | `Reference/Cosmic/scripts/quest/21201.js` |
-| 21202 | `Reference/Cosmic/scripts/quest/21202.js` |
-| 21300 | `Reference/Cosmic/scripts/quest/21300.js` |
-| 21301 | `Reference/Cosmic/scripts/quest/21301.js` |
-| 21302 | `Reference/Cosmic/scripts/quest/21302.js` |
-| 21303 | `Reference/Cosmic/scripts/quest/21303.js` |
 | 21400 | `Reference/Cosmic/scripts/quest/21400.js` |
 | 21401 | `Reference/Cosmic/scripts/quest/21401.js` |
-| 21600 | `Reference/Cosmic/scripts/quest/21600.js` |
 | 21604 | `Reference/Cosmic/scripts/quest/21604.js` |
 | 21613 | `Reference/Cosmic/scripts/quest/21613.js` |
 | 21618 | `Reference/Cosmic/scripts/quest/21618.js` |
-| 21700 | `Reference/Cosmic/scripts/quest/21700.js` |
-| 21703 | `Reference/Cosmic/scripts/quest/21703.js` |
-| 21704 | `Reference/Cosmic/scripts/quest/21704.js` |
-| 21712 | `Reference/Cosmic/scripts/quest/21712.js` |
-| 21716 | `Reference/Cosmic/scripts/quest/21716.js` |
 | 21719 | `Reference/Cosmic/scripts/quest/21719.js` |
-| 21720 | `Reference/Cosmic/scripts/quest/21720.js` |
-| 21729 | `Reference/Cosmic/scripts/quest/21729.js` |
 | 21733 | `Reference/Cosmic/scripts/quest/21733.js` |
-| 21734 | `Reference/Cosmic/scripts/quest/21734.js` |
-| 21735 | `Reference/Cosmic/scripts/quest/21735.js` |
-| 21736 | `Reference/Cosmic/scripts/quest/21736.js` |
-| 21738 | `Reference/Cosmic/scripts/quest/21738.js` |
-| 21739 | `Reference/Cosmic/scripts/quest/21739.js` |
-| 21740 | `Reference/Cosmic/scripts/quest/21740.js` |
-| 21741 | `Reference/Cosmic/scripts/quest/21741.js` |
 | 21742 | `Reference/Cosmic/scripts/quest/21742.js` |
 | 21746 | `Reference/Cosmic/scripts/quest/21746.js` |
 | 21747 | `Reference/Cosmic/scripts/quest/21747.js` |
-| 21748 | `Reference/Cosmic/scripts/quest/21748.js` |
-| 21749 | `Reference/Cosmic/scripts/quest/21749.js` |
-| 21750 | `Reference/Cosmic/scripts/quest/21750.js` |
-| 21753 | `Reference/Cosmic/scripts/quest/21753.js` |
-| 21754 | `Reference/Cosmic/scripts/quest/21754.js` |
-| 21757 | `Reference/Cosmic/scripts/quest/21757.js` |
-| 21766 | `Reference/Cosmic/scripts/quest/21766.js` |
-| 21767 | `Reference/Cosmic/scripts/quest/21767.js` |
 | 22000 | `Reference/Cosmic/scripts/quest/22000.js` |
 | 22001 | `Reference/Cosmic/scripts/quest/22001.js` |
 | 22002 | `Reference/Cosmic/scripts/quest/22002.js` |
@@ -586,22 +440,9 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | party3_jailin | 3: 920010910 監獄１, 920010920 監獄2, 920010930 監獄3 | `Reference/Cosmic/scripts/portal/party3_jailin.js` |
 | Depart_goBack01 | 2: 103040420 7階 8階 C区域, 103040430 7階 8階 D区域 | `Reference/Cosmic/scripts/portal/Depart_goBack01.js` |
 | Depart_goFoward1 | 2: 103040410 7階 8階 B区域, 103040420 7階 8階 C区域 | `Reference/Cosmic/scripts/portal/Depart_goFoward1.js` |
-| MD_drakeroom | 2: 105090311 冷たい揺りかご, 105090320 ドレイクの青い洞窟 | `Reference/Cosmic/scripts/portal/MD_drakeroom.js` |
-| MD_error | 2: 261020300 研究所C-1区域, 261020301 禁断の実験室 | `Reference/Cosmic/scripts/portal/MD_error.js` |
-| MD_golem | 2: 105040304 スリーピーダンジョン4, 105040320 崩れたゴーレムの城跡 | `Reference/Cosmic/scripts/portal/MD_golem.js` |
-| MD_mushroom | 2: 105050100 アリの巣2, 105050101 キノコ栽培洞窟 | `Reference/Cosmic/scripts/portal/MD_mushroom.js` |
-| MD_pig | 2: 100020000 東の草むら, 100020100 豚農場 | `Reference/Cosmic/scripts/portal/MD_pig.js` |
-| MD_protect | 2: 240040520 壊れた龍の巣, 240040900 ニュート保護区域 | `Reference/Cosmic/scripts/portal/MD_protect.js` |
-| MD_rabbit | 2: 221023400 エオス塔76階-90階, 221023401 ビートラビットの隠れ家 | `Reference/Cosmic/scripts/portal/MD_rabbit.js` |
-| MD_remember | 2: 240040511 残された龍の巣, 240040800 復活する記憶 | `Reference/Cosmic/scripts/portal/MD_remember.js` |
-| MD_roundTable | 2: 240020500 火と水の戦場, 240020501 ケンタウロスの円卓 | `Reference/Cosmic/scripts/portal/MD_roundTable.js` |
-| MD_sand | 2: 260020600 サヘル地帯2, 260020630 砂塵の吹く丘 | `Reference/Cosmic/scripts/portal/MD_sand.js` |
-| MD_treasure | 2: 251010402 赤鼻海賊団の盗掘2, 251010410 宝島の掠奪 | `Reference/Cosmic/scripts/portal/MD_treasure.js` |
 | balog_end | 2: 105100301 バルログが消えた場所, 105100401 イージーモード_バルログが消えた場所 | `Reference/Cosmic/scripts/portal/balog_end.js` |
 | elevator | 2: 222020100 ヘリオス塔2階, 222020200 ヘリオス塔99階 | `Reference/Cosmic/scripts/portal/elevator.js` |
 | hontale_BR | 2: 240060000 試験の洞窟1, 240060100 試験の洞窟2 | `Reference/Cosmic/scripts/portal/hontale_BR.js` |
-| inNix1 | 2: 240020101 グリフォンの森, 240020102 グリフォンの森2 | `Reference/Cosmic/scripts/portal/inNix1.js` |
-| inNix2 | 2: 240020401 ドラゴンの森, 240020402 レッドドラゴンの森 | `Reference/Cosmic/scripts/portal/inNix2.js` |
 | mc_out | 2: 980000000 モンスターカーニバル入口, 980030000 シュピゲルマンの事務室 | `Reference/Cosmic/scripts/portal/mc_out.js` |
 | minar_elli | 2: 101010000 エリニアの北側フィールド, 240010100 ミナル西側の境界 | `Reference/Cosmic/scripts/portal/minar_elli.js` |
 | rnj_exit | 2: 926100700 出口, 926110700 出口 | `Reference/Cosmic/scripts/portal/rnj_exit.js` |
@@ -619,7 +460,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | MCrevive5 | 1: 980000502 カーニバルフィールド5&lt;再生の間&gt; | `Reference/Cosmic/scripts/portal/MCrevive5.js` |
 | MCrevive6 | 1: 980000602 カーニバルフィールド6&lt;再生の間&gt; | `Reference/Cosmic/scripts/portal/MCrevive6.js` |
 | PPinkOut | 1: 270050300 黄昏の黎明の間 | `Reference/Cosmic/scripts/portal/PPinkOut.js` |
-| Pianus | 1: 230040410 危険な洞窟 | `Reference/Cosmic/scripts/portal/Pianus.js` |
 | Pinkin | 1: 270050200 失われた黄昏 | `Reference/Cosmic/scripts/portal/Pinkin.js` |
 | Populatus00 | 1: 220080000 時計塔の奥 | `Reference/Cosmic/scripts/portal/Populatus00.js` |
 | Spacegaga_out0 | 1: 922240000 ガガを救出せよ！ | `Reference/Cosmic/scripts/portal/Spacegaga_out0.js` |
@@ -652,13 +492,8 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | aranTutorOut3 | 1: 914000210 燃える森2 | `Reference/Cosmic/scripts/portal/aranTutorOut3.js` |
 | ariantMout | 1: 980010010 王の部屋 | `Reference/Cosmic/scripts/portal/ariantMout.js` |
 | ariantMout2 | 1: 980010020 闘技場出口 | `Reference/Cosmic/scripts/portal/ariantMout2.js` |
-| ariant_Agit | 1: 260000200 アリアント集落地 | `Reference/Cosmic/scripts/portal/ariant_Agit.js` |
-| ariant_castle | 1: 260000300 アリアント宮殿 | `Reference/Cosmic/scripts/portal/ariant_castle.js` |
 | babyPigOut | 1: 900020110 鬱蒼とした森 | `Reference/Cosmic/scripts/portal/babyPigOut.js` |
-| balogTemple | 1: 105090200 別世界への扉 | `Reference/Cosmic/scripts/portal/balogTemple.js` |
-| catPriest_map | 1: 250010504 妖怪の森2 | `Reference/Cosmic/scripts/portal/catPriest_map.js` |
 | contactDragon | 1: 900010100 夢見る一本道 | `Reference/Cosmic/scripts/portal/contactDragon.js` |
-| curseforest | 1: 100040105 邪気の森1 | `Reference/Cosmic/scripts/portal/curseforest.js` |
 | davy2_hd1 | 1: 925100200 甲板突破1 | `Reference/Cosmic/scripts/portal/davy2_hd1.js` |
 | davy3_hd1 | 1: 925100300 甲板突破2 | `Reference/Cosmic/scripts/portal/davy3_hd1.js` |
 | davy_next0 | 1: 925100000 海賊船への道 | `Reference/Cosmic/scripts/portal/davy_next0.js` |
@@ -666,12 +501,8 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | davy_next2 | 1: 925100200 甲板突破1 | `Reference/Cosmic/scripts/portal/davy_next2.js` |
 | davy_next3 | 1: 925100300 甲板突破2 | `Reference/Cosmic/scripts/portal/davy_next3.js` |
 | davy_next4 | 1: 925100400 海賊退治! | `Reference/Cosmic/scripts/portal/davy_next4.js` |
-| dracoout | 1: 240000110 ステーション&lt;オルビス行き&gt; | `Reference/Cosmic/scripts/portal/dracoout.js` |
 | dragonNest | 1: 240040610 危険な巣の下 | `Reference/Cosmic/scripts/portal/dragonNest.js` |
 | dragoneyes | 1: 900010200 夢見る森 | `Reference/Cosmic/scripts/portal/dragoneyes.js` |
-| eliza_Garden | 1: 200010300 空の階段2 | `Reference/Cosmic/scripts/portal/eliza_Garden.js` |
-| end_cow | 1: 912000100 ノーチラスの牛小屋 | `Reference/Cosmic/scripts/portal/end_cow.js` |
-| enterAchter | 1: 100000200 広場 | `Reference/Cosmic/scripts/portal/enterAchter.js` |
 | enterDisguise0 | 1: 130000200 エレヴの分かれ道 | `Reference/Cosmic/scripts/portal/enterDisguise0.js` |
 | enterDisguise1 | 1: 130010000 修行の森1 | `Reference/Cosmic/scripts/portal/enterDisguise1.js` |
 | enterDisguise2 | 1: 130010000 修行の森1 | `Reference/Cosmic/scripts/portal/enterDisguise2.js` |
@@ -682,22 +513,15 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | enterDollcave | 1: 105070300 エビルアイの巣３ | `Reference/Cosmic/scripts/portal/enterDollcave.js` |
 | enterEvanRoom | 1: 100030101 一軒家 | `Reference/Cosmic/scripts/portal/enterEvanRoom.js` |
 | enterFirstDH | 1: 130020000 訓練場の入口 | `Reference/Cosmic/scripts/portal/enterFirstDH.js` |
-| enterGym | 1: 140010100 リエン修行場入口 | `Reference/Cosmic/scripts/portal/enterGym.js` |
 | enterInfo | 1: 104000000 港口 | `Reference/Cosmic/scripts/portal/enterInfo.js` |
 | enterMCave | 1: 140030000 鏡洞窟 | `Reference/Cosmic/scripts/portal/enterMCave.js` |
 | enterMagiclibrar | 1: 101000000 エリニア | `Reference/Cosmic/scripts/portal/enterMagiclibrar.js` |
 | enterNepenthes | 1: 200060000 散歩道2 | `Reference/Cosmic/scripts/portal/enterNepenthes.js` |
 | enterPort | 1: 140020200 雪に覆われた原野 3 | `Reference/Cosmic/scripts/portal/enterPort.js` |
 | enterRider | 1: 211050000 凍てつく野原 | `Reference/Cosmic/scripts/portal/enterRider.js` |
-| enterRienFirst | 1: 140010000 リエン西のフィールド | `Reference/Cosmic/scripts/portal/enterRienFirst.js` |
 | enterSecondDH | 1: 130020000 訓練場の入口 | `Reference/Cosmic/scripts/portal/enterSecondDH.js` |
-| enterWarehouse | 1: 300000010 キャンプ会議場 | `Reference/Cosmic/scripts/portal/enterWarehouse.js` |
-| enterWitch | 1: 240040510 死んだ龍の巣 | `Reference/Cosmic/scripts/portal/enterWitch.js` |
-| enter_earth00 | 1: 120000101 航海室 | `Reference/Cosmic/scripts/portal/enter_earth00.js` |
-| enter_earth01 | 1: 221000300 司令室 | `Reference/Cosmic/scripts/portal/enter_earth01.js` |
 | enterfourthDH | 1: 130020000 訓練場の入口 | `Reference/Cosmic/scripts/portal/enterfourthDH.js` |
 | enterthirdDH | 1: 130020000 訓練場の入口 | `Reference/Cosmic/scripts/portal/enterthirdDH.js` |
-| entertraining | 1: 1010000 冒険者の修練場入口 | `Reference/Cosmic/scripts/portal/entertraining.js` |
 | evanEntrance | 1: 100030320 大きい一本道 2 | `Reference/Cosmic/scripts/portal/evanEntrance.js` |
 | evanFall | 1: 900020100 鬱蒼とした森 | `Reference/Cosmic/scripts/portal/evanFall.js` |
 | evanFarmCT | 1: 100030300 ウェタンギル中心地 | `Reference/Cosmic/scripts/portal/evanFarmCT.js` |
@@ -718,7 +542,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | evantalk42 | 1: 900020200 忘れてしまった森入口 | `Reference/Cosmic/scripts/portal/evantalk42.js` |
 | evantalk50 | 1: 900020210 忘れてしまった一本道 | `Reference/Cosmic/scripts/portal/evantalk50.js` |
 | evantalk60 | 1: 900020220 忘れてしまった森 | `Reference/Cosmic/scripts/portal/evantalk60.js` |
-| foxLaidy_map | 1: 222010300 狐の丘 | `Reference/Cosmic/scripts/portal/foxLaidy_map.js` |
 | gaga_success | 1: 922240000 ガガを救出せよ！ | `Reference/Cosmic/scripts/portal/gaga_success.js` |
 | ghostgate_open | 1: 990000700 シャレン3世の墓 | `Reference/Cosmic/scripts/portal/ghostgate_open.js` |
 | glpqPortal0 | 1: 803000700 最奥への通路 | `Reference/Cosmic/scripts/portal/glpqPortal0.js` |
@@ -734,7 +557,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | glpqPortal5 | 1: 803001100 統一の試練 | `Reference/Cosmic/scripts/portal/glpqPortal5.js` |
 | glpqPortal6 | 1: 803001200 全知全能の間 | `Reference/Cosmic/scripts/portal/glpqPortal6.js` |
 | go_secretroom | 1: 106021000 摩天楼3 | `Reference/Cosmic/scripts/portal/go_secretroom.js` |
-| gryphius | 1: 240020100 火と闇の戦場 | `Reference/Cosmic/scripts/portal/gryphius.js` |
 | guild1F00 | 1: 990000700 シャレン3世の墓 | `Reference/Cosmic/scripts/portal/guild1F00.js` |
 | guild1F01 | 1: 990000611 迷路の終りA | `Reference/Cosmic/scripts/portal/guild1F01.js` |
 | guild1F02 | 1: 990000620 水路の迷路2 | `Reference/Cosmic/scripts/portal/guild1F02.js` |
@@ -768,28 +590,18 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | jnr_202 | 1: 926110202 暗い研究室2 | `Reference/Cosmic/scripts/portal/jnr_202.js` |
 | kinggate2_open | 1: 990000800 王の回廊 | `Reference/Cosmic/scripts/portal/kinggate2_open.js` |
 | kinggate_open | 1: 990000800 王の回廊 | `Reference/Cosmic/scripts/portal/kinggate_open.js` |
-| ludi021 | 1: 922000009 秘密通路 | `Reference/Cosmic/scripts/portal/ludi021.js` |
 | magatia_dark0 | 1: 261020600 研究所B-3区域 | `Reference/Cosmic/scripts/portal/magatia_dark0.js` |
-| mayong | 1: 240020400 フリーズケンタウロスの領域 | `Reference/Cosmic/scripts/portal/mayong.js` |
 | met_in | 1: 102040000 工事現場-北 | `Reference/Cosmic/scripts/portal/met_in.js` |
 | met_out | 1: 910320000 捨てられた地下鉄の歴史 | `Reference/Cosmic/scripts/portal/met_out.js` |
 | metalgate_open | 1: 990000430 信念の部屋 | `Reference/Cosmic/scripts/portal/metalgate_open.js` |
 | metro_Chat00 | 1: 910320000 捨てられた地下鉄の歴史 | `Reference/Cosmic/scripts/portal/metro_Chat00.js` |
 | metro_in00 | 1: 910320000 捨てられた地下鉄の歴史 | `Reference/Cosmic/scripts/portal/metro_in00.js` |
-| minar_job4 | 1: 240010500 動物の谷 | `Reference/Cosmic/scripts/portal/minar_job4.js` |
 | mirtalk00 | 1: 900010000 夢見る森入口 | `Reference/Cosmic/scripts/portal/mirtalk00.js` |
 | mirtalk01 | 1: 900010100 夢見る一本道 | `Reference/Cosmic/scripts/portal/mirtalk01.js` |
-| moveBefore | 1: 108000710 鍛冶屋外部 | `Reference/Cosmic/scripts/portal/moveBefore.js` |
-| moveNext | 1: 108000700 大将翁の鍛冶屋 | `Reference/Cosmic/scripts/portal/moveNext.js` |
-| move_elin | 1: 222020400 時間制御室 | `Reference/Cosmic/scripts/portal/move_elin.js` |
-| nets_in | 1: 260020500 サヘル地帯3 | `Reference/Cosmic/scripts/portal/nets_in.js` |
-| nets_out | 1: 926010000 ピラミッドの丘 | `Reference/Cosmic/scripts/portal/nets_out.js` |
 | outChild | 1: 914000300 森の最奥 | `Reference/Cosmic/scripts/portal/outChild.js` |
 | outDarkEreb | 1: 913030000 エレヴ | `Reference/Cosmic/scripts/portal/outDarkEreb.js` |
 | outMagiclib | 1: 910110000 魔法図書館 | `Reference/Cosmic/scripts/portal/outMagiclib.js` |
 | outMaha | 1: 914020000 マッハとの対峙 | `Reference/Cosmic/scripts/portal/outMaha.js` |
-| outNix1 | 1: 240020600 人里離れた森 | `Reference/Cosmic/scripts/portal/outNix1.js` |
-| outNix2 | 1: 240020600 人里離れた森 | `Reference/Cosmic/scripts/portal/outNix2.js` |
 | outTemple | 1: 270000100 時間の神殿 | `Reference/Cosmic/scripts/portal/outTemple.js` |
 | out_pepeking | 1: 106021500 結婚式場入口 | `Reference/Cosmic/scripts/portal/out_pepeking.js` |
 | outtestWolf | 1: 914030000 オオカミの試験 | `Reference/Cosmic/scripts/portal/outtestWolf.js` |
@@ -823,7 +635,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | party6_stage514 | 1: 930000300 霧の森 | `Reference/Cosmic/scripts/portal/party6_stage514.js` |
 | party6_stage515 | 1: 930000300 霧の森 | `Reference/Cosmic/scripts/portal/party6_stage515.js` |
 | party6_stage800 | 1: 930000800 森出口 | `Reference/Cosmic/scripts/portal/party6_stage800.js` |
-| q2073 | 1: 100030000 東の森 | `Reference/Cosmic/scripts/portal/q2073.js` |
 | q3366in | 1: 926130100 実験室の入口 | `Reference/Cosmic/scripts/portal/q3366in.js` |
 | q3366out | 1: 926130200 実験室の出口 | `Reference/Cosmic/scripts/portal/q3366out.js` |
 | q3367in | 1: 926130100 実験室の入口 | `Reference/Cosmic/scripts/portal/q3367in.js` |
@@ -876,11 +687,9 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | speargate_open | 1: 990000400 騎士のホール | `Reference/Cosmic/scripts/portal/speargate_open.js` |
 | statuegate_open | 1: 990000300 シャレニアン城門 | `Reference/Cosmic/scripts/portal/statuegate_open.js` |
 | stonegate_open | 1: 990000400 騎士のホール | `Reference/Cosmic/scripts/portal/stonegate_open.js` |
-| subway_in2 | 1: 103000100 切符売り場 | `Reference/Cosmic/scripts/portal/subway_in2.js` |
 | tamepig_out2 | 1: 923010100 飼育室通路 | `Reference/Cosmic/scripts/portal/tamepig_out2.js` |
 | templeenter | 1: 200090510 ミナルへの道 | `Reference/Cosmic/scripts/portal/templeenter.js` |
 | thief_in1 | 1: 260010401 岩坂 | `Reference/Cosmic/scripts/portal/thief_in1.js` |
-| tristanEnter | 1: 105100100 神殿の底 | `Reference/Cosmic/scripts/portal/tristanEnter.js` |
 | tutoChatNPC | 1: 10000 キノコの丘 | `Reference/Cosmic/scripts/portal/tutoChatNPC.js` |
 | tutorHelper | 1: 130030000 開始の森1 | `Reference/Cosmic/scripts/portal/tutorHelper.js` |
 | tutorMinimap | 1: 130030001 開始の森2 | `Reference/Cosmic/scripts/portal/tutorMinimap.js` |
@@ -1106,10 +915,7 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2112012 | 23: 280010000 知られざる閉鉱, 280010010 1-1区域, 280010011 1-2区域 … | `Reference/Cosmic/scripts/reactor/2112012.js` |
 | 2402000 | 16: 240010000 リプレ西側の森, 240010100 ミナル西側の境界, 240010101 毛玉の森 … | `Reference/Cosmic/scripts/reactor/2402000.js` |
 | 2402001 | 16: 240010000 リプレ西側の森, 240010100 ミナル西側の境界, 240010101 毛玉の森 … | `Reference/Cosmic/scripts/reactor/2402001.js` |
-| 2110000 | 15: 280010011 1-2区域, 280010031 3-2区域, 280010041 4-2区域 … | `Reference/Cosmic/scripts/reactor/2110000.js` |
 | 8098000 | 15: 809050000 迷路, 809050001 迷路, 809050002 迷路 … | `Reference/Cosmic/scripts/reactor/8098000.js` |
-| 2111000 | 14: 280010031 3-2区域, 280010041 4-2区域, 280010050 5-1区域 … | `Reference/Cosmic/scripts/reactor/2111000.js` |
-| 2202002 | 13: 220020000 オモチャ工場-1工程&lt;1区域&gt;, 220020100 オモチャ工場-1工程&lt;2区域&gt;, 220020200 オモチャ工場-1工程&lt;3区域&gt; … | `Reference/Cosmic/scripts/reactor/2202002.js` |
 | 2302000 | 11: 230010000 海の道, 230010001 ペンギンの遊び場, 230010100 水晶の峡谷 … | `Reference/Cosmic/scripts/reactor/2302000.js` |
 | 1072000 | 8: 107000000 さまよい沼1, 107000100 さまよい沼2, 107000200 さまよい沼3 … | `Reference/Cosmic/scripts/reactor/1072000.js` |
 | 2112013 | 8: 280010000 知られざる閉鉱, 280010011 1-2区域, 280010040 4-1区域 … | `Reference/Cosmic/scripts/reactor/2112013.js` |
@@ -1129,12 +935,9 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2302002 | 4: 230030000 青い海草の道, 230030001 魚達の憩いの広場, 230030100 キノコ珊瑚の丘 … | `Reference/Cosmic/scripts/reactor/2302002.js` |
 | 2408002 | 4: 240050101 一番目の迷路部屋, 240050102 二番目の迷路部屋, 240050103 三番目の迷路部屋 … | `Reference/Cosmic/scripts/reactor/2408002.js` |
 | 2612003 | 4: 926100201 暗い研究室1, 926100202 暗い研究室2, 926110201 暗い研究室1 … | `Reference/Cosmic/scripts/reactor/2612003.js` |
-| 1021000 | 3: 910200000 未公開の遺跡１, 910200001 未公開の遺跡２, 910200002 未公開の遺跡３ | `Reference/Cosmic/scripts/reactor/1021000.js` |
-| 1021001 | 3: 910200000 未公開の遺跡１, 910200001 未公開の遺跡２, 910200002 未公開の遺跡３ | `Reference/Cosmic/scripts/reactor/1021001.js` |
 | 1022000 | 3: 910200000 未公開の遺跡１, 910200001 未公開の遺跡２, 910200002 未公開の遺跡３ | `Reference/Cosmic/scripts/reactor/1022000.js` |
 | 2002018 | 3: 920010912 監獄倉庫1, 920010922 監獄倉庫2, 920010932 監獄倉庫3 | `Reference/Cosmic/scripts/reactor/2002018.js` |
 | 2112003 | 3: 280010081 8-2区域, 280011000 16区域&lt;どこかにある閉鉱&gt;, 280011005 16区域5 | `Reference/Cosmic/scripts/reactor/2112003.js` |
-| 2200001 | 3: 220030200 オモチャ工場-メイン工程2, 220030300 オモチャ工場-2工程&lt;3 区域&gt;, 220030400 オモチャ工場-2工程&lt;4 区域&gt; | `Reference/Cosmic/scripts/reactor/2200001.js` |
 | 2502000 | 3: 250010500 天桃の果樹園1, 250010600 天桃の果樹園2, 250010700 天桃の果樹園3 | `Reference/Cosmic/scripts/reactor/2502000.js` |
 | 2502001 | 3: 250010500 天桃の果樹園1, 250010600 天桃の果樹園2, 250010700 天桃の果樹園3 | `Reference/Cosmic/scripts/reactor/2502001.js` |
 | 2512000 | 3: 925100000 海賊船への道, 925100200 甲板突破1, 925100300 甲板突破2 | `Reference/Cosmic/scripts/reactor/2512000.js` |
@@ -1171,12 +974,8 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 9208000 | 2: 910210000 シャレニアン城門, 990000300 シャレニアン城門 | `Reference/Cosmic/scripts/reactor/9208000.js` |
 | 9208001 | 2: 910210000 シャレニアン城門, 990000300 シャレニアン城門 | `Reference/Cosmic/scripts/reactor/9208001.js` |
 | 2000 | 1: 200000300 出会いの丘 | `Reference/Cosmic/scripts/reactor/2000.js` |
-| 1020000 | 1: 910200000 未公開の遺跡１ | `Reference/Cosmic/scripts/reactor/1020000.js` |
-| 1020001 | 1: 910200000 未公開の遺跡１ | `Reference/Cosmic/scripts/reactor/1020001.js` |
-| 1020002 | 1: 910200000 未公開の遺跡１ | `Reference/Cosmic/scripts/reactor/1020002.js` |
 | 1022001 | 1: 101030101 遺跡発掘地1 | `Reference/Cosmic/scripts/reactor/1022001.js` |
 | 1029000 | 1: 101040001 ワイルドボアの棲みか | `Reference/Cosmic/scripts/reactor/1029000.js` |
-| 1050000 | 1: 910500200 忘れられた神殿 | `Reference/Cosmic/scripts/reactor/1050000.js` |
 | 1052000 | 1: 910500200 忘れられた神殿 | `Reference/Cosmic/scripts/reactor/1052000.js` |
 | 1052001 | 1: 105100301 バルログが消えた場所 | `Reference/Cosmic/scripts/reactor/1052001.js` |
 | 1052002 | 1: 105100401 イージーモード_バルログが消えた場所 | `Reference/Cosmic/scripts/reactor/1052002.js` |
@@ -1233,9 +1032,7 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2119004 | 1: 211010000 凍結注意！凍りの道1 | `Reference/Cosmic/scripts/reactor/2119004.js` |
 | 2119005 | 1: 211020000 凍結注意！凍りの道2 | `Reference/Cosmic/scripts/reactor/2119005.js` |
 | 2119006 | 1: 211050000 凍てつく野原 | `Reference/Cosmic/scripts/reactor/2119006.js` |
-| 2200000 | 1: 922000010 人形の家 | `Reference/Cosmic/scripts/reactor/2200000.js` |
 | 2200002 | 1: 922010200 放置された塔&lt;2段階&gt; | `Reference/Cosmic/scripts/reactor/2200002.js` |
-| 2201000 | 1: 922000020 秘密工程１ | `Reference/Cosmic/scripts/reactor/2201000.js` |
 | 2201001 | 1: 922010300 放置された塔&lt;3段階&gt; | `Reference/Cosmic/scripts/reactor/2201001.js` |
 | 2201002 | 1: 922010700 放置された塔&lt;7段階&gt; | `Reference/Cosmic/scripts/reactor/2201002.js` |
 | 2201003 | 1: 922010900 時空の亀裂 | `Reference/Cosmic/scripts/reactor/2201003.js` |
@@ -1249,17 +1046,10 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 2212003 | 1: 221040402 ドゴンス基地 | `Reference/Cosmic/scripts/reactor/2212003.js` |
 | 2212004 | 1: 221000200 格納庫 | `Reference/Cosmic/scripts/reactor/2212004.js` |
 | 2212005 | 1: 221040100 クーラン草原2 | `Reference/Cosmic/scripts/reactor/2212005.js` |
-| 2221000 | 1: 222010401 山奥の廃屋 | `Reference/Cosmic/scripts/reactor/2221000.js` |
-| 2221001 | 1: 222010401 山奥の廃屋 | `Reference/Cosmic/scripts/reactor/2221001.js` |
-| 2221002 | 1: 222010401 山奥の廃屋 | `Reference/Cosmic/scripts/reactor/2221002.js` |
-| 2221003 | 1: 222000000 下町 | `Reference/Cosmic/scripts/reactor/2221003.js` |
-| 2221004 | 1: 222000000 下町 | `Reference/Cosmic/scripts/reactor/2221004.js` |
 | 2229009 | 1: 222010300 狐の丘 | `Reference/Cosmic/scripts/reactor/2229009.js` |
 | 2302003 | 1: 923000100 冷たい祭壇 | `Reference/Cosmic/scripts/reactor/2302003.js` |
 | 2302005 | 1: 923010000 ケンタの飼育室 | `Reference/Cosmic/scripts/reactor/2302005.js` |
 | 2401000 | 1: 240060200 ホーンテイルの洞窟 | `Reference/Cosmic/scripts/reactor/2401000.js` |
-| 2401001 | 1: 924000100 空の巣の端 | `Reference/Cosmic/scripts/reactor/2401001.js` |
-| 2401002 | 1: 924000100 空の巣の端 | `Reference/Cosmic/scripts/reactor/2401002.js` |
 | 2402006 | 1: 240050310 闇の洞窟 | `Reference/Cosmic/scripts/reactor/2402006.js` |
 | 2406000 | 1: 240040611 ナインスピリット | `Reference/Cosmic/scripts/reactor/2406000.js` |
 | 2408004 | 1: 240040611 ナインスピリット | `Reference/Cosmic/scripts/reactor/2408004.js` |
@@ -1307,7 +1097,6 @@ Regenerate with `python DevTools/cosmic_gap.py`. Cosmic = GMS v83 content refere
 | 6109025 | 1: 803001000 機知の試練 | `Reference/Cosmic/scripts/reactor/6109025.js` |
 | 6109026 | 1: 803001000 機知の試練 | `Reference/Cosmic/scripts/reactor/6109026.js` |
 | 6109027 | 1: 803001000 機知の試練 | `Reference/Cosmic/scripts/reactor/6109027.js` |
-| 8001000 | 1: 801040100 悪夢の果て | `Reference/Cosmic/scripts/reactor/8001000.js` |
 | 9101000 | 1: 910010000 月見草の坂 | `Reference/Cosmic/scripts/reactor/9101000.js` |
 | 9102000 | 1: 200090011 船室&lt;オルビス行き&gt; | `Reference/Cosmic/scripts/reactor/9102000.js` |
 | 9102001 | 1: 101000003 魔法図書館 | `Reference/Cosmic/scripts/reactor/9102001.js` |
